@@ -21,7 +21,7 @@ export default function App() {
       name: "Chinh Ton",
       email: "cton@fcimg.com",
       password: "admin",
-      role: "admin",
+      role: "System Admin",
       approved: true
     }
   ]);
@@ -68,6 +68,9 @@ export default function App() {
   });
 
   const manualFileInputRef = useRef(null);
+
+  // Security Helper
+  const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
 
   useEffect(() => {
     fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
@@ -123,7 +126,7 @@ export default function App() {
       name: registerName.trim(), 
       email: authEmail.toLowerCase().trim(), 
       password: authPassword, 
-      role: "technician", 
+      role: "Operator", 
       approved: false 
     };
 
@@ -161,7 +164,7 @@ export default function App() {
       console.error("Failed to approve user in database:", err);
     }
 
-    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "Admin", email: "cton@fcimg.com", status: "Completed Pass", comments: `Admin approved corporate access token for user account: ${email}` };
+    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "System Admin", email: "cton@fcimg.com", status: "Completed Pass", comments: `System Admin approved corporate access token for user account: ${email}` };
     const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
     if (res.ok) {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
@@ -184,7 +187,6 @@ export default function App() {
     });
   };
 
-  // Revoke Access for an already active user
   const handleRevokeUser = (email) => {
     triggerModal("Revoke Corporate Access", `Are you sure you want to permanently terminate access credentials for ${email}?`, "confirm", async () => {
       const targetUser = users.find(u => u.email === email);
@@ -199,7 +201,7 @@ export default function App() {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           
-          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "Admin", email: "cton@fcimg.com", status: "Incomplete Log", comments: `Admin permanently revoked corporate access token for account: ${email}` };
+          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "System Admin", email: "cton@fcimg.com", status: "Incomplete Log", comments: `System Admin permanently revoked corporate access token for account: ${email}` };
           const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
           if (res.ok) {
             const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
@@ -293,6 +295,37 @@ export default function App() {
       closeModal(); setManualAssetId(""); setManualFile(null); setManualText(""); if (manualFileInputRef.current) manualFileInputRef.current.value = "";
       triggerModal("Success", `Manual successfully uploaded and attached to asset: ${targetAsset.name}`, "success");
     }
+  };
+
+  const handleRemoveManual = async (assetId) => {
+    triggerModal("Remove Manual", "Are you sure you want to permanently detach and delete this manual from the asset?", "confirm", async () => {
+      const targetAsset = assets.find(a => a.id === assetId);
+      const updatedAsset = { ...targetAsset, manual: null };
+      
+      try {
+        await fetch('/api/assets', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(updatedAsset) 
+        });
+        
+        setAssets(assets.map(a => a.id === assetId ? updatedAsset : a));
+        setViewingManualAsset(updatedAsset);
+        
+        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Manual Removal", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Completed Pass", comments: `Administrator securely detached manual documentation from asset.` };
+        const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
+        if (logRes.ok) {
+          const savedLog = await logRes.json();
+          setHistory([savedLog, ...history]);
+        }
+        
+        closeModal();
+        triggerModal("Success", "Manual successfully removed from the system.", "success");
+      } catch (err) {
+        closeModal();
+        triggerModal("Error", "Failed to remove manual from database.", "error");
+      }
+    });
   };
 
   const handleSubmitPm = (e) => {
@@ -481,7 +514,7 @@ export default function App() {
                 </div>
                 <button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans">Authorized Sign In</button>
                 <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
-                  New technician? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:underline font-bold">Request Account Access</button>
+                  New Operator? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:underline font-bold">Request Account Access</button>
                 </p>
               </form>
             ) : (
@@ -527,7 +560,7 @@ export default function App() {
           <div className="flex items-center space-x-4">
             <div className="text-right hidden sm:block">
               <span className="text-xs font-bold text-gray-900 block font-sans">{currentUser.name}</span>
-              <span className="text-[10px] text-gray-500 font-mono block capitalize">{currentUser.role} Account</span>
+              <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>{currentUser.role}</span>
             </div>
             <button onClick={handleLogout} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">Sign Out</button>
           </div>
@@ -568,8 +601,8 @@ export default function App() {
           <button onClick={() => setActiveTab("scheduler")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "scheduler" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📋 PM Execution & Sign-Off</button>
           <button onClick={() => setActiveTab("manuals")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "manuals" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📖 Equipment Manuals ({manualCount})</button>
           <button onClick={() => setActiveTab("templates")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "templates" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>⚙️ PM Task Configurations ({pmTemplates.length})</button>
-          <button onClick={() => setActiveTab("history")} className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "history" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📜 Audit Logs & History ({history.length})</button>
-          {currentUser.role === "admin" && <button onClick={() => setActiveTab("approvals")} className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "approvals" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-red-700 hover:border-gray-300"}`}>🔑 Account Approvals ({pendingApprovals.length})</button>}
+          <button onClick={() => setActiveTab("history")} className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "history" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📜 Audit Logs & PM History ({history.length})</button>
+          {isSystemAdmin && <button onClick={() => setActiveTab("approvals")} className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "approvals" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-red-700 hover:border-gray-300"}`}>🔑 Account Approvals ({pendingApprovals.length})</button>}
         </div>
 
         {activeTab === "dashboard" && (
@@ -632,7 +665,9 @@ export default function App() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
                   <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-3">Technician Duty Board</h4>
                   <div className="p-3 bg-gray-50 rounded border border-gray-100 flex items-center space-x-3">
-                    <div className="w-10 h-10 rounded-full bg-[#005596]/10 flex items-center justify-center font-bold text-[#005596] text-sm">SYS</div>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
+                      {isSystemAdmin ? 'SYS' : 'OP'}
+                    </div>
                     <div>
                       <span className="block text-xs font-bold text-gray-900 font-sans">{currentUser.name}</span>
                       <span className="text-[10px] text-gray-500 font-mono">{currentUser.email}</span>
@@ -720,7 +755,9 @@ export default function App() {
                         </td>
                         <td className="px-6 py-4 text-right space-x-4">
                           <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
-                          <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                          {isSystemAdmin && (
+                            <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -837,7 +874,12 @@ export default function App() {
                     <div className="p-6 space-y-5 flex-grow">
                       <div className="border-b border-gray-100 pb-3 flex justify-between items-start">
                         <div><h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4><span className="text-xs text-gray-500 block font-mono">SN: {viewingManualAsset.serial}</span></div>
-                        <a href={viewingManualAsset.manual.fileData} download={viewingManualAsset.manual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">📥 Download File</a>
+                        <div className="flex space-x-2">
+                          <a href={viewingManualAsset.manual.fileData} download={viewingManualAsset.manual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
+                          {isSystemAdmin && (
+                            <button onClick={() => handleRemoveManual(viewingManualAsset.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
+                          )}
+                        </div>
                       </div>
                       <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner">{viewingManualAsset.manual.manualText}</div>
                     </div>
@@ -885,7 +927,9 @@ export default function App() {
                   </div>
                   <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
                     <span className="text-gray-500">{template.checklist.length} individual tasks</span>
-                    <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
+                    {isSystemAdmin && (
+                      <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -895,7 +939,13 @@ export default function App() {
 
         {activeTab === "history" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between"><h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3><span className="text-xs text-gray-400 font-semibold">{history.length} operations on file</span></div>
+            <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3>
+              <span className="text-xs text-gray-400 font-semibold">{history.length} operations on file</span>
+            </div>
+            <div className="p-4 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+              This log officially timestamps and records all executed PMs, protocol sign-offs, and administrative actions performed within the system.
+            </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-left">
                 <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
@@ -911,7 +961,7 @@ export default function App() {
                         <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.assetName}</span><span className="text-[10px] text-gray-400 font-mono">{log.assetId}</span></td>
                         <td className="px-6 py-4"><span className="font-bold text-gray-800 block">{log.templateName}</span><span className="text-[10px] bg-blue-50 text-[#005596] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block">{log.interval} Cycle</span></td>
                         <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.technician}</span><span className="text-xs text-gray-500 font-mono block">{log.email}</span></td>
-                        <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{log.status}</span></td>
+                        <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : log.status === "Incomplete Log" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{log.status}</span></td>
                         <td className="px-6 py-4 text-gray-600 max-w-xs break-words">{log.comments}</td>
                       </tr>
                     ))
@@ -922,7 +972,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === "approvals" && currentUser.role === "admin" && (
+        {activeTab === "approvals" && isSystemAdmin && (
           <div className="space-y-8 max-w-3xl mx-auto">
             {/* CARD 1: PENDING ACCOUNT REQUESTS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -962,7 +1012,7 @@ export default function App() {
                       <div>
                         <div className="flex items-center space-x-2">
                           <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
-                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${u.role === 'admin' ? 'bg-blue-100 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${u.role === 'admin' || u.role === 'System Admin' ? 'bg-blue-100 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
                             {u.role}
                           </span>
                         </div>
