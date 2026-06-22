@@ -6,7 +6,6 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const client = new CosmosClient(process.env.CosmosDbConnectionString || "");
 const database = client.database("OmsDatabase");
 
-// Look for our custom variable name here!
 const blobConnectionString = process.env.OMS_BLOB_CONNECTION || "";
 let blobServiceClient;
 if (blobConnectionString) {
@@ -31,15 +30,16 @@ async function processRoute(request, containerId) {
         }
         if (method === 'POST') {
             const payload = await request.json();
-            const { resource } = await container.items.create(payload);
+            
+            // THE FIX: Changed .create() to .upsert() so it can overwrite existing records!
+            const { resource } = await container.items.upsert(payload);
+            
             return createResponse(201, resource);
         }
         if (method === 'DELETE') {
-            // Grab the ID from the URL query (e.g., /api/assets?id=123)
             const id = request.query.get('id');
             if (!id) return createResponse(400, { error: "Missing ID for deletion." });
             
-            // Tell Cosmos DB to permanently delete the item
             await container.item(id, id).delete();
             return createResponse(200, { message: "Item permanently deleted from database." });
         }
@@ -48,7 +48,7 @@ async function processRoute(request, containerId) {
     }
 }
 
-// --- COSMOS DB ENDPOINTS (Now accepting DELETE) ---
+// --- COSMOS DB ENDPOINTS ---
 app.http('assets', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'assets') });
 app.http('templates', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'templates') });
 app.http('history', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
