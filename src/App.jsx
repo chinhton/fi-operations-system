@@ -212,7 +212,6 @@ export default function App() {
       approved: false // Enforces Chinh Ton admin approval
     };
 
-    // Post new user registration credential array directly into Cosmos DB
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -243,7 +242,6 @@ export default function App() {
     const updatedUsers = users.map(u => u.email === email ? { ...u, approved: true } : u);
     setUsers(updatedUsers);
 
-    // Append to system logs
     const approvalLog = {
       id: `LOG-${Date.now().toString().slice(-4)}`,
       timestamp: new Date().toLocaleString(),
@@ -767,6 +765,30 @@ export default function App() {
               <span className="text-[10px] text-gray-500 font-mono block capitalize">{currentUser.role} Account</span>
             </div>
             <button onClick={handleLogout} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">Sign Out</button>
+
+            {(assets.length > 0 || pmTemplates.length > 0 || history.length > 0) && (
+              <button
+                onClick={() => {
+                  triggerModal(
+                    "Confirm Reset View",
+                    "This will clear the current local UI view tables. Your persistent operational data remains completely secure in your serverless Azure Cosmos DB containers.",
+                    "confirm",
+                    () => {
+                      setAssets([]);
+                      setPmTemplates([]);
+                      setHistory([]);
+                    }
+                  );
+                }}
+                className="px-3 py-1.5 border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 text-xs font-semibold rounded inline-flex items-center space-x-1 transition"
+                title="Reset session view containers"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                <span>Reset View</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -960,7 +982,7 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label><input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-blue-500 p-2.5 border bg-white" /></div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Initial Status</label>
-                    <select value={newAsset.status} onChange={(e) => setNewAsset({...newAsset, status: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] focus:ring p-2.5 bg-white border cursor-pointer">
+                    <select value={newAsset.status} onChange={(e) => setNewAsset({...newAsset, status: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 bg-white border cursor-pointer">
                       <option value="Operational">Operational (Ready)</option>
                       <option value="Maintenance Due">Maintenance Due (Alert)</option>
                       <option value="Out of Calibration">Out of Calibration (Lockout)</option>
@@ -1067,7 +1089,7 @@ export default function App() {
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">System Observations & Test Notes</label>
-                  <textarea value={pmComments} onChange={(e) => setPmComments(e.target.value)} rows="3" placeholder="Write precise diagnostic readouts..." className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white"></textarea>
+                  <textarea value={pmComments} onChange={(e) => setPmComments(e.target.value)} rows="3" placeholder="Write precise diagnostic readouts..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white"></textarea>
                 </div>
                 <div><button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 px-4 rounded text-xs font-bold uppercase tracking-widest shadow-sm transition-all">Authenticate and Commit Maintenance Action</button></div>
               </form>
