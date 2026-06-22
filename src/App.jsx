@@ -311,9 +311,9 @@ export default function App() {
         <style>{customStyles}</style>
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="bg-[#005596] px-8 py-8 text-center text-white relative">
-            <div className="mb-4 flex justify-center">
-                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-12 w-auto max-w-[220px] object-contain rounded bg-white p-1" />
-            </div>
+<div className="mb-4 flex justify-center">
+    <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded bg-white p-2" />
+</div>
             <h2 className="text-xl font-bold tracking-tight font-sans">FI-Operation Management System</h2>
           </div>
 
@@ -370,9 +370,10 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="flex-shrink-0 flex items-center">
-              <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-12 w-auto max-w-[200px] object-contain" />
-            </div>
+{/* Hardcoded Main Logo */}
+<div className="flex-shrink-0 flex items-center">
+  <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto max-w-[280px] object-contain" />
+</div>
             <span className="h-10 w-px bg-gray-200"></span>
             <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Operation Management System</h1></div>
           </div>
