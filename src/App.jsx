@@ -214,9 +214,19 @@ export default function App() {
       const savedLog = await logRes.json(); setHistory(prev => [savedLog, ...prev]);
       
       const updatedAsset = { ...targetAsset, manual: attachmentPayload };
-      setAssets(prevAssets => prevAssets.map(ast => ast.id === manualAssetId ? updatedAsset : ast));
       
-      // Automatically load the newly uploaded manual into the reader
+      // FIX: Tell Cosmos DB to permanently save the manual link!
+      try {
+        await fetch('/api/assets', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(updatedAsset) 
+        });
+      } catch (err) {
+        console.error("Failed to sync manual to database", err);
+      }
+
+      setAssets(prevAssets => prevAssets.map(ast => ast.id === manualAssetId ? updatedAsset : ast));
       setViewingManualAsset(updatedAsset);
       
       closeModal(); setManualAssetId(""); setManualFile(null); setManualText(""); if (manualFileInputRef.current) manualFileInputRef.current.value = "";
@@ -341,7 +351,6 @@ export default function App() {
 
   const actionQueue = assets.filter(a => a.status !== "Operational");
   
-  // New variable to easily find assets with manuals
   const assetsWithManuals = assets.filter(a => a.manual);
 
   if (!currentUser) {
