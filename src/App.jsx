@@ -144,7 +144,6 @@ export default function App() {
     setActiveTab("dashboard"); 
   };
 
-  // FIX: Permanently save user approval to database
   const handleApproveUser = async (email) => {
     const targetUser = users.find(u => u.email === email);
     if (!targetUser) return;
@@ -170,7 +169,6 @@ export default function App() {
     }
   };
 
-  // FIX: Permanently delete user from database
   const handleDenyUser = (email) => {
     triggerModal("Confirm Action", `Decline and remove the access request for ${email}?`, "confirm", async () => {
         const targetUser = users.find(u => u.email === email);
@@ -183,6 +181,35 @@ export default function App() {
                 console.error("Failed to delete user from database:", err);
             }
         }
+    });
+  };
+
+  // Revoke Access for an already active user
+  const handleRevokeUser = (email) => {
+    triggerModal("Revoke Corporate Access", `Are you sure you want to permanently terminate access credentials for ${email}?`, "confirm", async () => {
+      const targetUser = users.find(u => u.email === email);
+      if (targetUser.email === "cton@fcimg.com") {
+        triggerModal("Action Blocked", "System Admin account access restrictions cannot self-terminate.", "error");
+        return;
+      }
+
+      setUsers(prevUsers => prevUsers.filter(u => u.email !== email));
+
+      if (targetUser && targetUser.id) {
+        try {
+          await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
+          
+          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "Admin", email: "cton@fcimg.com", status: "Incomplete Log", comments: `Admin permanently revoked corporate access token for account: ${email}` };
+          const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
+          if (res.ok) {
+            const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
+          }
+          
+          triggerModal("Access Revoked", `Account credentials for ${email} have been purged from database configuration records.`, "success");
+        } catch (err) {
+          console.error("Failed to delete user from database:", err);
+        }
+      }
     });
   };
 
@@ -246,7 +273,7 @@ export default function App() {
 
     const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
     if (logRes.ok) {
-      const savedLog = await logRes.json(); setHistory(prev => [savedLog, ...prev]);
+      const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
       
       const updatedAsset = { ...targetAsset, manual: attachmentPayload };
       
@@ -419,10 +446,11 @@ export default function App() {
   const correctiveCount = assets.filter(a => a.status === "Corrective Maintenance").length;
   const manualCount = assets.filter(a => a.manual).length;
   const complianceRate = (() => { if (assets.length === 0) return 100; const nonCompliant = overdueCount + calibrationCount + correctiveCount; return Math.round(((assets.length - nonCompliant) / assets.length) * 100); })();
+  
   const pendingApprovals = users.filter(u => !u.approved);
+  const activeAccounts = users.filter(u => u.approved);
 
   const actionQueue = assets.filter(a => a.status !== "Operational");
-  
   const assetsWithManuals = assets.filter(a => a.manual);
 
   if (!currentUser) {
@@ -895,14 +923,17 @@ export default function App() {
         )}
 
         {activeTab === "approvals" && currentUser.role === "admin" && (
-          <div className="space-y-6 max-w-3xl mx-auto">
+          <div className="space-y-8 max-w-3xl mx-auto">
+            {/* CARD 1: PENDING ACCOUNT REQUESTS */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">🔑 Pending Account Approvals</h3></div>
+              <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between">
+                <h3 className="font-bold text-sm tracking-wide uppercase">🔑 Pending Account Approvals</h3>
+                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold">{pendingApprovals.length} Gate Requests</span>
+              </div>
               <div className="p-6">
-                <p className="text-xs text-gray-600 leading-relaxed mb-6">Review access tokens for verification operations.</p>
                 <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
                   {pendingApprovals.length === 0 ? (
-                    <div className="p-8 text-center text-gray-400 text-xs font-sans">🎉 No pending registration requests found. All user accounts are current.</div>
+                    <div className="p-6 text-center text-gray-400 text-xs font-sans">No pending registration requests. All tokens are processed.</div>
                   ) : (
                     pendingApprovals.map((u) => (
                       <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -914,6 +945,40 @@ export default function App() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* CARD 2: ACTIVE AUTHORIZED USERS DIRECTORY */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+                <h3 className="font-bold text-sm tracking-wide uppercase">🟢 Active Authorized Accounts</h3>
+                <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full font-bold">{activeAccounts.length} Total Users</span>
+              </div>
+              <div className="p-6">
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                  {activeAccounts.map((u) => (
+                    <div key={u.email} className="p-4 bg-white hover:bg-gray-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${u.role === 'admin' ? 'bg-blue-100 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
+                            {u.role}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
+                      </div>
+                      <div>
+                        {u.email === "cton@fcimg.com" ? (
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider px-3 py-1.5 block">Root Immutable</span>
+                        ) : (
+                          <button onClick={() => handleRevokeUser(u.email)} className="text-xs font-bold text-red-600 hover:text-red-800 transition py-1.5 px-3 uppercase tracking-wider">
+                            Revoke Access
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
