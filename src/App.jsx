@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-// Custom Style Block to guarantee exact Verdana typography and corporate colors
 const customStyles = `
   body {
     font-family: 'Verdana', Geneva, sans-serif !important;
@@ -16,7 +15,6 @@ const customStyles = `
 `;
 
 export default function App() {
-  // User Management State
   const [users, setUsers] = useState([
     {
       name: "Chinh Ton",
@@ -27,7 +25,6 @@ export default function App() {
     }
   ]);
 
-  // PERSISTENT SESSION: Check local storage on load
   const [currentUser, setCurrentUser] = useState(() => {
     const savedSession = localStorage.getItem('fi_oms_session');
     return savedSession ? JSON.parse(savedSession) : null;
@@ -40,35 +37,29 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   
-  // Data States (Synched with Cosmos DB via Managed API)
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
   const [emailLogs, setEmailLogs] = useState([]);
 
-  // UI Interactive States
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [completedSteps, setCompletedSteps] = useState({});
   const [pmComments, setPmComments] = useState("");
 
-  // New Asset Form
   const [newAsset, setNewAsset] = useState({
     name: "", model: "", serial: "", location: "", category: "", status: "Operational"
   });
 
-  // New PM Template Form
   const [newTemplate, setNewTemplate] = useState({
     name: "", interval: "Monthly", department: "", checklistInput: ""
   });
 
-  // Manual Tab Form States
   const [manualAssetId, setManualAssetId] = useState("");
   const [manualFile, setManualFile] = useState(null);
   const [manualText, setManualText] = useState("");
   const [viewingManualAsset, setViewingManualAsset] = useState(null);
 
-  // Custom Email Reminder Workspace States
   const [reminderAssetId, setReminderAssetId] = useState("");
   const [reminderRecipientEmail, setReminderRecipientEmail] = useState("");
   const [reminderSubject, setReminderSubject] = useState("");
@@ -77,14 +68,12 @@ export default function App() {
   const [validationError, setValidationError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard"); 
 
-  // Custom Modal State
   const [customModal, setCustomModal] = useState({
     show: false, title: "", message: "", type: "info", onConfirm: null
   });
 
   const manualFileInputRef = useRef(null);
 
-  // --- DYNAMIC AZURE COSMOS DB DATA SYNCHRONIZATION ---
   useEffect(() => {
     fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
     fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(data || [])).catch(err => console.error("Error pulling templates:", err));
@@ -117,7 +106,6 @@ export default function App() {
     if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid corporate email or security password."); return; }
     if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
     
-    // SAVE SESSION TO LOCAL STORAGE
     localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
     
     setCurrentUser(matchedUser); 
@@ -148,7 +136,6 @@ export default function App() {
   };
 
   const handleLogout = () => { 
-    // CLEAR SESSION ON LOGOUT
     localStorage.removeItem('fi_oms_session');
     setCurrentUser(null); 
     setActiveTab("dashboard"); 
@@ -313,8 +300,37 @@ export default function App() {
     }
   };
 
-  const deleteAsset = (id) => { triggerModal("Confirm Removal", "Confirm removal of this asset?", "confirm", () => { setAssets(assets.filter(a => a.id !== id)); if (manualAssetId === id) setManualAssetId(""); }); };
-  const deleteTemplate = (id) => { triggerModal("Confirm Deletion", "Confirm deletion of this standard protocol template?", "confirm", () => { setPmTemplates(pmTemplates.filter(t => t.id !== id)); }); };
+  // --- NEW PERSISTENT DELETE FUNCTIONS ---
+  const deleteAsset = (id) => { 
+    triggerModal("Confirm Removal", "Confirm permanent removal of this asset from the database?", "confirm", async () => { 
+      try {
+        const res = await fetch(`/api/assets?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setAssets(assets.filter(a => a.id !== id)); 
+          if (manualAssetId === id) setManualAssetId(""); 
+        } else {
+          triggerModal("Error", "Failed to delete asset from Azure Cosmos DB.", "error");
+        }
+      } catch (err) {
+        triggerModal("Error", "Network error while deleting.", "error");
+      }
+    }); 
+  };
+  
+  const deleteTemplate = (id) => { 
+    triggerModal("Confirm Deletion", "Confirm permanent deletion of this template from the database?", "confirm", async () => { 
+      try {
+        const res = await fetch(`/api/templates?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setPmTemplates(pmTemplates.filter(t => t.id !== id)); 
+        } else {
+          triggerModal("Error", "Failed to delete template from Azure Cosmos DB.", "error");
+        }
+      } catch (err) {
+        triggerModal("Error", "Network error while deleting.", "error");
+      }
+    }); 
+  };
 
   const operationalCount = assets.filter(a => a.status === "Operational").length;
   const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
@@ -324,7 +340,6 @@ export default function App() {
   const complianceRate = (() => { if (assets.length === 0) return 100; const nonCompliant = overdueCount + calibrationCount + correctiveCount; return Math.round(((assets.length - nonCompliant) / assets.length) * 100); })();
   const pendingApprovals = users.filter(u => !u.approved);
 
-  // GUEST LOGIN SCREEN
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#F4F6F8] flex flex-col justify-center items-center px-4 py-12 antialiased">
@@ -382,7 +397,6 @@ export default function App() {
     );
   }
 
-  // MAIN DASHBOARD LAYOUT
   return (
     <div className="min-h-screen bg-[#F4F6F8] flex flex-col antialiased">
       <style>{customStyles}</style>
@@ -594,9 +608,45 @@ export default function App() {
         )}
 
         {activeTab === "templates" && (
-          <div className="p-8 bg-white border rounded-xl shadow-sm text-center">
-            <h3 className="font-bold text-gray-700 text-sm">Template Builder</h3>
-            <p className="text-xs text-gray-500 mt-2">Construct interval-based checklist protocols for the engineering teams.</p>
+          <div className="space-y-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
+              <form onSubmit={handleAddTemplateSubmit} className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label><input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white" /></div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
+                    <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer">
+                      <option value="Weekly">Weekly Cycle</option><option value="Monthly">Monthly Cycle</option><option value="Quarterly">Quarterly Cycle</option><option value="Semi-Annually">Semi-Annually Cycle</option><option value="Annually">Annually Cycle</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label><input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
+                  <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label><textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea></div>
+                </div>
+                <div className="mt-6 flex justify-end"><button type="submit" className="bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all">Generate Protocol</button></div>
+              </form>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {pmTemplates.map((template) => (
+                <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between">
+                  <div className="p-5">
+                    <div className="flex items-start justify-between">
+                      <div><span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span><h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4></div>
+                      <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
+                    </div>
+                    <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
+                    <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
+                      {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
+                    </ul>
+                  </div>
+                  <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
+                    <span className="text-gray-500">{template.checklist.length} individual tasks</span>
+                    <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
