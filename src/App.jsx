@@ -17,6 +17,7 @@ const customStyles = `
 export default function App() {
   const [users, setUsers] = useState([
     {
+      id: "USER-ADMIN",
       name: "Chinh Ton",
       email: "cton@fcimg.com",
       password: "admin",
@@ -117,7 +118,15 @@ export default function App() {
     const alreadyExists = users.some(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
     if (alreadyExists) { setAuthError("An account with this email address already exists."); return; }
 
-    const newUser = { name: registerName.trim(), email: authEmail.toLowerCase().trim(), password: authPassword, role: "technician", approved: false };
+    const newUser = { 
+      id: `USER-${Date.now().toString().slice(-4)}`, 
+      name: registerName.trim(), 
+      email: authEmail.toLowerCase().trim(), 
+      password: authPassword, 
+      role: "technician", 
+      approved: false 
+    };
+
     const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) });
 
     if (res.ok) {
@@ -135,19 +144,45 @@ export default function App() {
     setActiveTab("dashboard"); 
   };
 
+  // FIX: Permanently save user approval to database
   const handleApproveUser = async (email) => {
-    const updatedUsers = users.map(u => u.email === email ? { ...u, approved: true } : u);
-    setUsers(updatedUsers);
+    const targetUser = users.find(u => u.email === email);
+    if (!targetUser) return;
+    
+    const updatedUser = { ...targetUser, approved: true };
+    setUsers(users.map(u => u.email === email ? updatedUser : u));
+
+    try {
+      await fetch('/api/users', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(updatedUser) 
+      });
+    } catch (err) {
+      console.error("Failed to approve user in database:", err);
+    }
+
     const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "Admin", email: "cton@fcimg.com", status: "Completed Pass", comments: `Admin approved corporate access token for user account: ${email}` };
     const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
     if (res.ok) {
-      const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); triggerModal("Account Approved", `Access granted successfully for ${email}.`, "success");
+      const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
+      triggerModal("Account Approved", `Access granted successfully for ${email}.`, "success");
     }
   };
 
+  // FIX: Permanently delete user from database
   const handleDenyUser = (email) => {
-    triggerModal("Confirm Action", `Decline and remove the access request for ${email}?`, "confirm", () => {
+    triggerModal("Confirm Action", `Decline and remove the access request for ${email}?`, "confirm", async () => {
+        const targetUser = users.find(u => u.email === email);
         setUsers(prevUsers => prevUsers.filter(u => u.email !== email));
+
+        if (targetUser && targetUser.id) {
+            try {
+                await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
+            } catch (err) {
+                console.error("Failed to delete user from database:", err);
+            }
+        }
     });
   };
 
@@ -291,7 +326,6 @@ export default function App() {
     }
   };
 
-  // RESTORED: Custom SOP Template Creation Handler 
   const handleAddTemplateSubmit = async (e) => {
     e.preventDefault();
     if (!newTemplate.name) { triggerModal("Error", "SOP Template Title is strictly required.", "info"); return; }
