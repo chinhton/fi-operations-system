@@ -212,7 +212,13 @@ export default function App() {
     const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
     if (logRes.ok) {
       const savedLog = await logRes.json(); setHistory(prev => [savedLog, ...prev]);
-      setAssets(prevAssets => prevAssets.map(ast => ast.id === manualAssetId ? { ...ast, manual: attachmentPayload } : ast));
+      
+      const updatedAsset = { ...targetAsset, manual: attachmentPayload };
+      setAssets(prevAssets => prevAssets.map(ast => ast.id === manualAssetId ? updatedAsset : ast));
+      
+      // Automatically load the newly uploaded manual into the reader
+      setViewingManualAsset(updatedAsset);
+      
       closeModal(); setManualAssetId(""); setManualFile(null); setManualText(""); if (manualFileInputRef.current) manualFileInputRef.current.value = "";
       triggerModal("Success", `Manual successfully uploaded and attached to asset: ${targetAsset.name}`, "success");
     }
@@ -334,6 +340,9 @@ export default function App() {
   const pendingApprovals = users.filter(u => !u.approved);
 
   const actionQueue = assets.filter(a => a.status !== "Operational");
+  
+  // New variable to easily find assets with manuals
+  const assetsWithManuals = assets.filter(a => a.manual);
 
   if (!currentUser) {
     return (
@@ -656,6 +665,33 @@ export default function App() {
         {activeTab === "manuals" && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-5 space-y-6">
+              
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
+                  <h3 className="font-bold text-xs uppercase tracking-wider">📚 Document Library</h3>
+                  <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assetsWithManuals.length} files</span>
+                </div>
+                <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                  {assetsWithManuals.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500 text-xs">No documentation manuals currently attached to any systems. Use the upload tool to attach a file.</div>
+                  ) : (
+                    assetsWithManuals.map(asset => (
+                      <div 
+                        key={asset.id} 
+                        onClick={() => setViewingManualAsset(asset)}
+                        className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManualAsset?.id === asset.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
+                      >
+                        <div>
+                          <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
+                          <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">{asset.manual.fileName}</span>
+                        </div>
+                        <span className="text-[#005596] text-lg font-bold">➔</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Attach Documentation Manual</h3></div>
                 <form onSubmit={handleAttachManualSubmit} className="p-5 space-y-5">
@@ -683,21 +719,21 @@ export default function App() {
             </div>
 
             <div className="lg:col-span-7 space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px] flex flex-col justify-between">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px] flex flex-col justify-between h-full">
                 <div>
                   <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
                     <h3 className="font-bold text-xs uppercase tracking-wider">Embedded Manual / SOP Guidelines Reader</h3>
                   </div>
                   {viewingManualAsset && viewingManualAsset.manual ? (
-                    <div className="p-6 space-y-5">
+                    <div className="p-6 space-y-5 flex-grow">
                       <div className="border-b border-gray-100 pb-3 flex justify-between items-start">
                         <div><h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4><span className="text-xs text-gray-500 block font-mono">SN: {viewingManualAsset.serial}</span></div>
                         <a href={viewingManualAsset.manual.fileData} download={viewingManualAsset.manual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">📥 Download File</a>
                       </div>
-                      <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg text-xs font-mono whitespace-pre-wrap">{viewingManualAsset.manual.manualText}</div>
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner">{viewingManualAsset.manual.manualText}</div>
                     </div>
                   ) : (
-                    <div className="p-12 text-center text-gray-400"><span className="text-3xl block mb-2">📖</span><p className="text-xs">Select a device template manual from the directory to inspect blueprint layouts.</p></div>
+                    <div className="p-12 text-center text-gray-400 mt-20"><span className="text-4xl block mb-3">📖</span><p className="text-sm font-semibold">Select an asset from the Document Library<br/>to inspect its attached manuals.</p></div>
                   )}
                 </div>
               </div>
