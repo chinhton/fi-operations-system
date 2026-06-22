@@ -27,7 +27,12 @@ export default function App() {
     }
   ]);
 
-  const [currentUser, setCurrentUser] = useState(null);
+  // PERSISTENT SESSION: Check local storage on load
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedSession = localStorage.getItem('fi_oms_session');
+    return savedSession ? JSON.parse(savedSession) : null;
+  });
+
   const [authMode, setAuthMode] = useState("signin"); 
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -106,10 +111,19 @@ export default function App() {
     e.preventDefault();
     setAuthError(""); setAuthSuccess("");
     if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Email and password fields are required."); return; }
+    
     const matchedUser = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
+    
     if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid corporate email or security password."); return; }
-    if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from System Admin."); return; }
-    setCurrentUser(matchedUser); setAuthEmail(""); setAuthPassword(""); setActiveTab("dashboard");
+    if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
+    
+    // SAVE SESSION TO LOCAL STORAGE
+    localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
+    
+    setCurrentUser(matchedUser); 
+    setAuthEmail(""); 
+    setAuthPassword(""); 
+    setActiveTab("dashboard");
   };
 
   const handleRegister = async (e) => {
@@ -117,6 +131,7 @@ export default function App() {
     setAuthError(""); setAuthSuccess("");
     if (!registerName.trim() || !authEmail.trim() || !authPassword.trim()) { setAuthError("All registration fields are required."); return; }
     if (!authEmail.toLowerCase().endsWith("@fcimg.com")) { setAuthError("Registration blocked: Only verified @fcimg.com emails are authorized."); return; }
+    
     const alreadyExists = users.some(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
     if (alreadyExists) { setAuthError("An account with this email address already exists."); return; }
 
@@ -132,7 +147,12 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => { setCurrentUser(null); setActiveTab("dashboard"); };
+  const handleLogout = () => { 
+    // CLEAR SESSION ON LOGOUT
+    localStorage.removeItem('fi_oms_session');
+    setCurrentUser(null); 
+    setActiveTab("dashboard"); 
+  };
 
   const handleApproveUser = async (email) => {
     const updatedUsers = users.map(u => u.email === email ? { ...u, approved: true } : u);
@@ -311,9 +331,9 @@ export default function App() {
         <style>{customStyles}</style>
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
           <div className="bg-[#005596] px-8 py-8 text-center text-white relative">
-<div className="mb-4 flex justify-center">
-    <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded bg-white p-2" />
-</div>
+            <div className="mb-4 flex justify-center">
+                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded bg-white p-2" />
+            </div>
             <h2 className="text-xl font-bold tracking-tight font-sans">FI-Operation Management System</h2>
           </div>
 
@@ -370,10 +390,9 @@ export default function App() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-{/* Hardcoded Main Logo */}
-<div className="flex-shrink-0 flex items-center">
-  <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto max-w-[280px] object-contain" />
-</div>
+            <div className="flex-shrink-0 flex items-center">
+              <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto max-w-[280px] object-contain" />
+            </div>
             <span className="h-10 w-px bg-gray-200"></span>
             <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Operation Management System</h1></div>
           </div>
