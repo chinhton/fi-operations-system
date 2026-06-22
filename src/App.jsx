@@ -47,7 +47,7 @@ export default function App() {
   const [pmComments, setPmComments] = useState("");
 
   const [newAsset, setNewAsset] = useState({
-    name: "", model: "", serial: "", location: "", category: "", status: "Operational"
+    name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly"
   });
 
   const [newTemplate, setNewTemplate] = useState({
@@ -155,14 +155,21 @@ export default function App() {
     setSelectedAssetId(assetId); setSelectedTemplateId(templateId || ""); setCompletedSteps({}); setValidationError(""); setActiveTab("scheduler");
   };
 
-  const handleReturnToService = async (assetId) => {
+  const handleUpdateAssetStatus = async (assetId, newStatus) => {
     const targetAsset = assets.find(a => a.id === assetId);
     if (!targetAsset) return;
-    const recoveryLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Corrective Action Log-out Recovery", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "cton@fcimg.com", status: "Completed Pass", comments: `Manual operational override. Equipment status updated to Operational.` };
-    const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recoveryLog) });
-    if (res.ok) {
-      const savedLog = await res.json(); setHistory(prevHistory => [savedLog, ...prevHistory]);
-      setAssets(prevAssets => prevAssets.map(ast => ast.id === assetId ? { ...ast, status: "Operational" } : ast));
+
+    const updatedAsset = { ...targetAsset, status: newStatus };
+    setAssets(assets.map(ast => ast.id === assetId ? updatedAsset : ast));
+
+    try {
+      await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedAsset)
+      });
+    } catch (err) {
+      console.error("Failed to update status in DB:", err);
     }
   };
 
@@ -232,7 +239,17 @@ export default function App() {
     const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newLog) });
     if (res.ok) {
       const savedLog = await res.json(); setHistory([savedLog, ...history]);
-      setAssets(assets.map(ast => ast.id === selectedAsset.id ? { ...ast, status: statusState === "Completed Pass" ? "Operational" : "Under Service Review" } : ast));
+      
+      const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
+      const updatedAsset = { ...selectedAsset, status: finalStatus, lastPmDate: new Date().toISOString() };
+      
+      try {
+        await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+      } catch (err) {
+        console.error("Failed to update asset PM date in DB", err);
+      }
+
+      setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
       setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
       triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully.", "success"); setActiveTab("dashboard");
     }
@@ -241,25 +258,21 @@ export default function App() {
   const handleAddAssetSubmit = async (e) => {
     e.preventDefault();
     if (!newAsset.name || !newAsset.serial) { triggerModal("Error", "Asset name and Serial Number are strictly required.", "info"); return; }
-    const created = { id: `FI-${Date.now().toString().slice(-3)}`, ...newAsset, category: newAsset.category.trim() || "Uncategorized", manual: null };
+    
+    const created = { 
+      id: `FI-${Date.now().toString().slice(-3)}`, 
+      ...newAsset, 
+      category: newAsset.category.trim() || "Uncategorized", 
+      status: "Operational", 
+      lastPmDate: new Date().toISOString(),
+      manual: null 
+    };
+
     const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
     if (res.ok) {
       const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
-      setNewAsset({ name: "", model: "", serial: "", location: "", category: "", status: "Operational" });
+      setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly" });
       triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
-    }
-  };
-
-  const handleAddTemplateSubmit = async (e) => {
-    e.preventDefault();
-    if (!newTemplate.name || !newTemplate.checklistInput) { triggerModal("Error", "Template title and Checklist lines are required.", "info"); return; }
-    const items = newTemplate.checklistInput.split("\n").map(item => item.trim()).filter(item => item.length > 0);
-    const created = { id: `PMT-${Date.now().toString().slice(-3)}`, name: newTemplate.name, interval: newTemplate.interval, department: newTemplate.department.trim() || "General", checklist: items };
-    const res = await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
-    if (res.ok) {
-      const savedTemplate = await res.json(); setPmTemplates([...pmTemplates, savedTemplate]);
-      setNewTemplate({ name: "", interval: "Monthly", department: "", checklistInput: "" });
-      triggerModal("SOP Initialized", "New SOP preventative standard configuration template integrated.", "success"); setActiveTab("dashboard");
     }
   };
 
@@ -292,6 +305,24 @@ export default function App() {
         triggerModal("Error", "Network error while deleting.", "error");
       }
     }); 
+  };
+
+  const calculateDaysRemaining = (lastDateStr, frequency) => {
+    if (!lastDateStr || frequency === "None" || !frequency) return null;
+    const lastDate = new Date(lastDateStr);
+    const now = new Date();
+    const daysPassed = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+    let cycleDays = 0;
+    
+    switch(frequency) {
+      case "Weekly": cycleDays = 7; break;
+      case "Monthly": cycleDays = 30; break;
+      case "Quarterly": cycleDays = 90; break;
+      case "Semi-Annually": cycleDays = 182; break;
+      case "Annually": cycleDays = 365; break;
+      default: return null;
+    }
+    return cycleDays - daysPassed;
   };
 
   const operationalCount = assets.filter(a => a.status === "Operational").length;
@@ -507,12 +538,14 @@ export default function App() {
                   <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label><input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
                   <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label><input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Initial Status</label>
-                    <select value={newAsset.status} onChange={(e) => setNewAsset({...newAsset, status: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                      <option value="Operational">Operational (Ready)</option>
-                      <option value="Maintenance Due">Maintenance Due (Alert)</option>
-                      <option value="Out of Calibration">Out of Calibration (Lockout)</option>
-                      <option value="Corrective Maintenance">Corrective Maintenance (Down)</option>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequency</label>
+                    <select value={newAsset.pmFrequency} onChange={(e) => setNewAsset({...newAsset, pmFrequency: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                      <option value="None">None (Run to Fail)</option>
+                      <option value="Weekly">Weekly Cycle</option>
+                      <option value="Monthly">Monthly Cycle</option>
+                      <option value="Quarterly">Quarterly Cycle</option>
+                      <option value="Semi-Annually">Semi-Annually Cycle</option>
+                      <option value="Annually">Annually Cycle</option>
                     </select>
                   </div>
                 </div>
@@ -525,7 +558,7 @@ export default function App() {
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-left">
                   <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                    <tr><th className="px-6 py-3.5">Asset Name</th><th className="px-6 py-3.5">Model / Serial No</th><th className="px-6 py-3.5">Category</th><th className="px-6 py-3.5">Status</th><th className="px-6 py-3.5 text-right">Actions</th></tr>
+                    <tr><th className="px-6 py-3.5">Asset Name</th><th className="px-6 py-3.5">Model / Serial No</th><th className="px-6 py-3.5">Category</th><th className="px-6 py-3.5">Status & PM Cycle</th><th className="px-6 py-3.5 text-right">Actions</th></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
                     {assets.map((asset) => (
@@ -533,7 +566,40 @@ export default function App() {
                         <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{asset.name}</span></td>
                         <td className="px-6 py-4 font-mono"><span className="block text-gray-700">Mod: {asset.model}</span><span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span></td>
                         <td className="px-6 py-4"><span className="text-xs font-semibold px-2 py-1 rounded bg-blue-50 text-[#005596] border inline-block">{asset.category}</span></td>
-                        <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${asset.status === "Operational" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{asset.status}</span></td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={asset.status}
+                            onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
+                              asset.status === "Operational" ? "bg-green-100 text-green-800" :
+                              asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
+                              asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
+                              "bg-orange-100 text-orange-800"
+                            }`}
+                          >
+                            <option value="Operational">Operational</option>
+                            <option value="Maintenance Due">Maintenance Due</option>
+                            <option value="Out of Calibration">Out of Calibration</option>
+                            <option value="Corrective Maintenance">Corrective Action</option>
+                          </select>
+                          <div className="flex flex-col mt-2 space-y-1.5">
+                            <div className="text-[9px] text-gray-500 font-bold uppercase pl-1">Cycle: <span className="text-[#005596]">{asset.pmFrequency || "None"}</span></div>
+                            {(() => {
+                              const daysRemaining = calculateDaysRemaining(asset.lastPmDate, asset.pmFrequency);
+                              if (asset.pmFrequency && asset.pmFrequency !== "None" && daysRemaining === null) {
+                                return <div className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-gray-100 text-gray-600 inline-block w-max">⏳ Needs Initial PM Baseline</div>;
+                              }
+                              if (daysRemaining !== null) {
+                                return (
+                                  <div className={`text-[10px] font-bold px-2 py-0.5 rounded-sm inline-block w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                    ⏳ {daysRemaining < 0 ? `Overdue by ${Math.abs(daysRemaining)} days` : `Due in ${daysRemaining} days`}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-right space-x-4">
                           <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                           <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
