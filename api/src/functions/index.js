@@ -6,7 +6,8 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const client = new CosmosClient(process.env.CosmosDbConnectionString || "");
 const database = client.database("OmsDatabase");
 
-const blobConnectionString = process.env.AzureWebJobsStorage || "";
+// Look for our custom variable name here!
+const blobConnectionString = process.env.OMS_BLOB_CONNECTION || "";
 let blobServiceClient;
 if (blobConnectionString) {
     blobServiceClient = BlobServiceClient.fromConnectionString(blobConnectionString);
@@ -44,32 +45,32 @@ app.http('templates', { methods: ['GET', 'POST'], authLevel: 'anonymous', handle
 app.http('history', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
 app.http('users', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
 
-// --- NEW BLOB STORAGE UPLOAD ENDPOINT ---
+// --- BLOB STORAGE UPLOAD ENDPOINT ---
 app.http('upload', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
             if (!blobServiceClient) {
-                return createResponse(500, { error: "Blob storage connection string missing in environment variables." });
+                return createResponse(500, { error: "Blob storage connection string missing from OMS_BLOB_CONNECTION." });
             }
 
             const payload = await request.json();
             const { fileName, fileData } = payload;
 
-            // Extract the base64 data and mime type from the React FileReader string
-            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            if (!matches || matches.length !== 3) {
-                return createResponse(400, { error: "Invalid Base64 file format." });
+            // Bulletproof Base64 parsing (avoids Regex failures on weird mimetypes)
+            if (!fileData || !fileData.includes(',')) {
+                return createResponse(400, { error: "Invalid file format received." });
             }
-
-            const mimeType = matches[1];
-            const buffer = Buffer.from(matches[2], 'base64');
             
-            // Clean the filename and add a timestamp to prevent overwriting identical names
+            const mimeType = fileData.split(';')[0].split(':')[1];
+            const base64String = fileData.split(',')[1];
+            const buffer = Buffer.from(base64String, 'base64');
+            
+            // Clean the filename
             const cleanFileName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '_')}`;
 
-            // Connect to the public container you just made
+            // Connect to the public container
             const containerClient = blobServiceClient.getContainerClient('equipment-manuals');
             const blockBlobClient = containerClient.getBlockBlobClient(cleanFileName);
 
