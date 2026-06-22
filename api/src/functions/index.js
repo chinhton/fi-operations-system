@@ -1,102 +1,88 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
+const { BlobServiceClient } = require('@azure/storage-blob');
 
-// Fallback gracefully if connection string is updating in the portal settings
-const connectionString = process.env.CosmosDbConnectionString || "";
-const client = new CosmosClient(connectionString);
+// 1. Database & Blob Connections
+const client = new CosmosClient(process.env.CosmosDbConnectionString || "");
 const database = client.database("OmsDatabase");
 
-// Universal Error/Response Formatter Helper
-const createResponse = (status, body) => ({
+const blobConnectionString = process.env.AzureWebJobsStorage || "";
+let blobServiceClient;
+if (blobConnectionString) {
+    blobServiceClient = BlobServiceClient.fromConnectionString(blobConnectionString);
+}
+
+// 2. Response Formatter
+const createResponse = (status, data) => ({
     status: status,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(data)
 });
 
-// 🏭 HARDWARE ASSET INTERFACE DEFINITION
-app.http('assets', {
-    methods: ['GET', 'POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        const container = database.container('assets');
-        try {
-            if (request.method === 'GET') {
-                const { resources } = await container.items.readAll().fetchAll();
-                return createResponse(200, resources);
-            }
-            if (request.method === 'POST') {
-                const payload = await request.json();
-                const { resource } = await container.items.create(payload);
-                return createResponse(201, resource);
-            }
-        } catch (error) {
-            return createResponse(500, { error: "Assets container action failure", details: error.message });
+// 3. Standard Cosmos DB Router
+async function processRoute(request, containerId) {
+    const method = request.method;
+    const container = database.container(containerId);
+    try {
+        if (method === 'GET') {
+            const { resources } = await container.items.readAll().fetchAll();
+            return createResponse(200, resources);
         }
-    }
-});
-
-// ⚙️ SOP TASK LAYOUT CONFIGURATOR INTERFACE
-app.http('templates', {
-    methods: ['GET', 'POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        const container = database.container('templates');
-        try {
-            if (request.method === 'GET') {
-                const { resources } = await container.items.readAll().fetchAll();
-                return createResponse(200, resources);
-            }
-            if (request.method === 'POST') {
-                const payload = await request.json();
-                const { resource } = await container.items.create(payload);
-                return createResponse(201, resource);
-            }
-        } catch (error) {
-            return createResponse(500, { error: "Templates container action failure", details: error.message });
+        if (method === 'POST') {
+            const payload = await request.json();
+            const { resource } = await container.items.create(payload);
+            return createResponse(201, resource);
         }
+    } catch (error) {
+        return createResponse(500, { error: `Cosmos DB error on ${containerId}`, message: error.message });
     }
-});
+}
 
-// 📜 AUDIT TRAIL RECORD STACK INTERFACE
-app.http('history', {
-    methods: ['GET', 'POST'],
+// --- COSMOS DB ENDPOINTS ---
+app.http('assets', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'assets') });
+app.http('templates', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'templates') });
+app.http('history', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
+app.http('users', { methods: ['GET', 'POST'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
+
+// --- NEW BLOB STORAGE UPLOAD ENDPOINT ---
+app.http('upload', {
+    methods: ['POST'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
-        const container = database.container('history');
         try {
-            if (request.method === 'GET') {
-                const { resources } = await container.items.readAll().fetchAll();
-                return createResponse(200, resources);
+            if (!blobServiceClient) {
+                return createResponse(500, { error: "Blob storage connection string missing in environment variables." });
             }
-            if (request.method === 'POST') {
-                const payload = await request.json();
-                const { resource } = await container.items.create(payload);
-                return createResponse(201, resource);
-            }
-        } catch (error) {
-            return createResponse(500, { error: "History container action failure", details: error.message });
-        }
-    }
-});
 
-// 🔑 PROVISIONED USER ACCESS ROSTER INTERFACE
-app.http('users', {
-    methods: ['GET', 'POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        const container = database.container('users');
-        try {
-            if (request.method === 'GET') {
-                const { resources } = await container.items.readAll().fetchAll();
-                return createResponse(200, resources);
+            const payload = await request.json();
+            const { fileName, fileData } = payload;
+
+            // Extract the base64 data and mime type from the React FileReader string
+            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+                return createResponse(400, { error: "Invalid Base64 file format." });
             }
-            if (request.method === 'POST') {
-                const payload = await request.json();
-                const { resource } = await container.items.create(payload);
-                return createResponse(201, resource);
-            }
+
+            const mimeType = matches[1];
+            const buffer = Buffer.from(matches[2], 'base64');
+            
+            // Clean the filename and add a timestamp to prevent overwriting identical names
+            const cleanFileName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+
+            // Connect to the public container you just made
+            const containerClient = blobServiceClient.getContainerClient('equipment-manuals');
+            const blockBlobClient = containerClient.getBlockBlobClient(cleanFileName);
+
+            // Upload the file to Azure
+            await blockBlobClient.uploadData(buffer, {
+                blobHTTPHeaders: { blobContentType: mimeType }
+            });
+
+            // Return the permanent public URL to React
+            return createResponse(201, { url: blockBlobClient.url, fileName: cleanFileName });
+
         } catch (error) {
-            return createResponse(500, { error: "Users container action failure", details: error.message });
+            return createResponse(500, { error: "Blob upload failure", details: error.message });
         }
     }
 });
