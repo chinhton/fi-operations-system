@@ -402,10 +402,12 @@ export default function App() {
             <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{overdueCount + calibrationCount}</div>
             <div className="text-[11px] text-blue-200 mt-1">Schedules in queue</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
+          <div 
+            onClick={() => setActiveTab('history')} 
+            className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20 cursor-pointer hover:bg-white/20 transition-all">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Executed Audits</span>
             <div className="text-2xl sm:text-3xl font-black mt-1">{history.length}</div>
-            <div className="text-[11px] text-blue-200 mt-1">Traceable sign-off operations</div>
+            <div className="text-[11px] text-blue-200 mt-1">Traceable sign-off operations &rarr;</div>
           </div>
         </div>
       </section>
@@ -586,9 +588,54 @@ export default function App() {
         )}
 
         {activeTab === "manuals" && (
-          <div className="p-8 bg-white border rounded-xl shadow-sm text-center">
-             <h3 className="font-bold text-gray-700 text-sm">Azure Blob Storage Gateway</h3>
-             <p className="text-xs text-gray-500 mt-2">Connect PDF manuals and diagrams directly to equipment assets to support SOP execution.</p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Attach Documentation Manual</h3></div>
+                <form onSubmit={handleAttachManualSubmit} className="p-5 space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Equipment Asset</label>
+                    <select value={manualAssetId} onChange={(e) => setManualAssetId(e.target.value)} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer" required>
+                      <option value="">-- Choose Asset from Directory --</option>
+                      {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload Manual File</label>
+                    <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-slate-50 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100" onClick={() => manualFileInputRef.current.click()}>
+                      <span className="text-2xl mb-1">📁</span><span className="text-[11px] text-gray-500 font-semibold uppercase">{manualFile ? manualFile.name : "Select manual file"}</span>
+                      <input type="file" ref={manualFileInputRef} onChange={handleManualFileChange} className="hidden" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Quick Manual SOP Text Layout</label>
+                    <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
+                  </div>
+                  <button type="submit" className="w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all">Attach Manual to Asset</button>
+                </form>
+              </div>
+            </div>
+
+            <div className="lg:col-span-7 space-y-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px] flex flex-col justify-between">
+                <div>
+                  <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
+                    <h3 className="font-bold text-xs uppercase tracking-wider">Embedded Manual / SOP Guidelines Reader</h3>
+                  </div>
+                  {viewingManualAsset && viewingManualAsset.manual ? (
+                    <div className="p-6 space-y-5">
+                      <div className="border-b border-gray-100 pb-3 flex justify-between items-start">
+                        <div><h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4><span className="text-xs text-gray-500 block font-mono">SN: {viewingManualAsset.serial}</span></div>
+                        <a href={viewingManualAsset.manual.fileData} download={viewingManualAsset.manual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">📥 Download File</a>
+                      </div>
+                      <div className="p-4 bg-gray-50 border border-gray-100 rounded-lg text-xs font-mono whitespace-pre-wrap">{viewingManualAsset.manual.manualText}</div>
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center text-gray-400"><span className="text-3xl block mb-2">📖</span><p className="text-xs">Select a device template manual from the directory to inspect blueprint layouts.</p></div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -636,16 +683,57 @@ export default function App() {
         )}
 
         {activeTab === "history" && (
-          <div className="p-8 bg-white border rounded-xl shadow-sm text-center">
-            <h3 className="font-bold text-gray-700 text-sm">System Audit Log</h3>
-            <p className="text-xs text-gray-500 mt-2">Immutable ledger of all verified operations processed through the application.</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between"><h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3><span className="text-xs text-gray-400 font-semibold">{history.length} operations on file</span></div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-left">
+                <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                  <tr><th className="px-6 py-3.5">Timestamp</th><th className="px-6 py-3.5">Asset & Category</th><th className="px-6 py-3.5">Executed Protocol</th><th className="px-6 py-3.5">Technician / Inspector</th><th className="px-6 py-3.5">Execution Status</th><th className="px-6 py-3.5">Operating Notes</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {history.length === 0 ? (
+                    <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-400 text-xs">No historical log entries found.</td></tr>
+                  ) : (
+                    history.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50/50 transition">
+                        <td className="px-6 py-4 text-gray-500 font-mono whitespace-nowrap">{log.timestamp}</td>
+                        <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.assetName}</span><span className="text-[10px] text-gray-400 font-mono">{log.assetId}</span></td>
+                        <td className="px-6 py-4"><span className="font-bold text-gray-800 block">{log.templateName}</span><span className="text-[10px] bg-blue-50 text-[#005596] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block">{log.interval} Cycle</span></td>
+                        <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.technician}</span><span className="text-xs text-gray-500 font-mono block">{log.email}</span></td>
+                        <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{log.status}</span></td>
+                        <td className="px-6 py-4 text-gray-600 max-w-xs break-words">{log.comments}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {activeTab === "approvals" && currentUser.role === "admin" && (
-          <div className="p-8 bg-white border rounded-xl shadow-sm text-center">
-            <h3 className="font-bold text-gray-700 text-sm">Access Control Roster</h3>
-            <p className="text-xs text-gray-500 mt-2">Approve incoming security requests for internal network routing.</p>
+          <div className="space-y-6 max-w-3xl mx-auto">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">🔑 Pending Account Approvals</h3></div>
+              <div className="p-6">
+                <p className="text-xs text-gray-600 leading-relaxed mb-6">Review access tokens for verification operations.</p>
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+                  {pendingApprovals.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-xs font-sans">🎉 No pending registration requests found. All user accounts are current.</div>
+                  ) : (
+                    pendingApprovals.map((u) => (
+                      <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div><h4 className="font-bold text-xs text-gray-900">{u.name}</h4><span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span></div>
+                        <div className="flex space-x-2">
+                          <button onClick={() => handleApproveUser(u.email)} className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold uppercase py-1.5 px-3 rounded shadow transition">Approve Access</button>
+                          <button onClick={() => handleDenyUser(u.email)} className="border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold uppercase py-1.5 px-3 rounded transition">Decline</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
