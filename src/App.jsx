@@ -40,7 +40,6 @@ export default function App() {
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
-  const [emailLogs, setEmailLogs] = useState([]);
 
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -59,11 +58,6 @@ export default function App() {
   const [manualFile, setManualFile] = useState(null);
   const [manualText, setManualText] = useState("");
   const [viewingManualAsset, setViewingManualAsset] = useState(null);
-
-  const [reminderAssetId, setReminderAssetId] = useState("");
-  const [reminderRecipientEmail, setReminderRecipientEmail] = useState("");
-  const [reminderSubject, setReminderSubject] = useState("");
-  const [reminderBody, setReminderBody] = useState("");
 
   const [validationError, setValidationError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard"); 
@@ -159,37 +153,6 @@ export default function App() {
 
   const handleSelectAssetAndTemplate = (assetId, templateId) => {
     setSelectedAssetId(assetId); setSelectedTemplateId(templateId || ""); setCompletedSteps({}); setValidationError(""); setActiveTab("scheduler");
-  };
-
-  const handleInitiateEmailReminder = (assetId) => {
-    const targetAsset = assets.find(a => a.id === assetId);
-    if (!targetAsset) return;
-    setReminderAssetId(assetId);
-    const otherTech = users.find(u => u.email !== "cton@fcimg.com" && u.approved);
-    setReminderRecipientEmail(otherTech ? otherTech.email : "");
-    setReminderSubject(`[ACTION REQUIRED] Urgent SOP/PM Pending: ${targetAsset.name} (${targetAsset.serial})`);
-    setReminderBody(`Dear Team Member,\n\nThis is an automated system reminder regarding ${targetAsset.name}.\n\nAccording to the FI-Operation Management System, this equipment currently has an active status of: [${targetAsset.status}]. Please log in to your account, review the linked equipment manual, and execute the standard sign-off checklists to update compliance metrics.\n\nS/N: ${targetAsset.serial}\nModel: ${targetAsset.model}\nLocation: ${targetAsset.location}\n\nBest regards,\n\nSystem Administrator`);
-    setActiveTab("reminders");
-  };
-
-  const handleDispatchEmailReminder = async (e) => {
-    e.preventDefault();
-    if (!reminderAssetId || !reminderRecipientEmail.trim() || !reminderSubject.trim() || !reminderBody.trim()) { triggerModal("Input Error", "Please fill in all email reminder fields.", "info"); return; }
-    const targetAsset = assets.find(a => a.id === reminderAssetId);
-    if (!targetAsset) return;
-
-    const newMailLog = { id: `EML-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetName: targetAsset.name, recipient: reminderRecipientEmail, subject: reminderSubject, body: reminderBody };
-    setEmailLogs([newMailLog, ...emailLogs]);
-
-    const systemLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Email Reminder Dispatched", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "cton@fcimg.com", status: "Completed Pass", comments: `Dispatched compliance warning email to ${reminderRecipientEmail}` };
-    const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(systemLog) });
-
-    if (res.ok) {
-      const savedLog = await res.json(); setHistory([savedLog, ...history]);
-      const mailtoLink = `mailto:${encodeURIComponent(reminderRecipientEmail)}?subject=${encodeURIComponent(reminderSubject)}&body=${encodeURIComponent(reminderBody)}`;
-      triggerModal("Reminder Sent", "Email reminder successfully logged inside OMS database! Click Confirm below to launch Outlook/Native Mail.", "confirm", () => { window.location.href = mailtoLink; });
-      setReminderAssetId(""); setReminderRecipientEmail(""); setReminderSubject(""); setReminderBody("");
-    }
   };
 
   const handleReturnToService = async (assetId) => {
@@ -300,7 +263,6 @@ export default function App() {
     }
   };
 
-  // --- NEW PERSISTENT DELETE FUNCTIONS ---
   const deleteAsset = (id) => { 
     triggerModal("Confirm Removal", "Confirm permanent removal of this asset from the database?", "confirm", async () => { 
       try {
@@ -451,7 +413,6 @@ export default function App() {
           <button onClick={() => setActiveTab("dashboard")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "dashboard" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📊 Operations Dashboard</button>
           <button onClick={() => setActiveTab("assets")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "assets" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>🏭 Asset Directory ({assets.length})</button>
           <button onClick={() => setActiveTab("scheduler")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "scheduler" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📋 PM Execution & Sign-Off</button>
-          <button onClick={() => setActiveTab("reminders")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "reminders" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📧 Email Dispatcher ({overdueCount + calibrationCount})</button>
           <button onClick={() => setActiveTab("manuals")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "manuals" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📖 Equipment Manuals ({manualCount})</button>
           <button onClick={() => setActiveTab("templates")} className={`mr-4 pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "templates" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>⚙️ PM Task Configurations ({pmTemplates.length})</button>
           <button onClick={() => setActiveTab("history")} className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 px-1 ${activeTab === "history" ? "border-[#005596] text-[#005596]" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}>📜 Audit Logs & History ({history.length})</button>
@@ -590,13 +551,6 @@ export default function App() {
                 <div><button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 px-4 rounded text-xs font-bold uppercase tracking-widest shadow-sm">Commit Maintenance Action</button></div>
               </form>
             </div>
-          </div>
-        )}
-
-        {activeTab === "reminders" && (
-          <div className="p-8 bg-white border rounded-xl shadow-sm text-center">
-            <h3 className="font-bold text-gray-700 text-sm">Email Dispatcher</h3>
-            <p className="text-xs text-gray-500 mt-2">Use this tab to dispatch alerts for non-compliant equipment directly to specific technician accounts.</p>
           </div>
         )}
 
