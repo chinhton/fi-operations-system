@@ -215,7 +215,6 @@ export default function App() {
       
       const updatedAsset = { ...targetAsset, manual: attachmentPayload };
       
-      // FIX: Tell Cosmos DB to permanently save the manual link!
       try {
         await fetch('/api/assets', { 
           method: 'POST', 
@@ -289,6 +288,45 @@ export default function App() {
       const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
       setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly" });
       triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
+    }
+  };
+
+  // RESTORED: Custom SOP Template Creation Handler 
+  const handleAddTemplateSubmit = async (e) => {
+    e.preventDefault();
+    if (!newTemplate.name) { triggerModal("Error", "SOP Template Title is strictly required.", "info"); return; }
+    
+    const steps = newTemplate.checklistInput
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    if (steps.length === 0) {
+      triggerModal("Error", "Please provide at least one individual action step item.", "info");
+      return;
+    }
+
+    const created = {
+      id: `SOP-${Date.now().toString().slice(-3)}`,
+      name: newTemplate.name.trim(),
+      interval: newTemplate.interval,
+      department: newTemplate.department.trim() || "General Engineering",
+      checklist: steps
+    };
+
+    const res = await fetch('/api/templates', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify(created) 
+    });
+    
+    if (res.ok) {
+      const savedTemplate = await res.json();
+      setPmTemplates([...pmTemplates, savedTemplate]);
+      setNewTemplate({ name: "", interval: "Monthly", department: "", checklistInput: "" });
+      triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
+    } else {
+      triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
     }
   };
 
