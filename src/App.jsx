@@ -302,6 +302,9 @@ export default function App() {
   const complianceRate = (() => { if (assets.length === 0) return 100; const nonCompliant = overdueCount + calibrationCount + correctiveCount; return Math.round(((assets.length - nonCompliant) / assets.length) * 100); })();
   const pendingApprovals = users.filter(u => !u.approved);
 
+  // NEW: Dynamic Action Queue Logic
+  const actionQueue = assets.filter(a => a.status !== "Operational");
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#F4F6F8] flex flex-col justify-center items-center px-4 py-12 antialiased">
@@ -441,9 +444,37 @@ export default function App() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                   <div className="bg-[#005596] text-white px-5 py-4 flex items-center justify-between">
                     <h3 className="font-bold text-xs uppercase tracking-wider">SOP & Maintenance Actions Queue</h3>
+                    {actionQueue.length > 0 && (
+                      <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{actionQueue.length} Pending</span>
+                    )}
                   </div>
-                  <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto p-6 text-center text-gray-500 text-xs">
-                    Select the Asset Directory or PM Execution tab to manage hardware protocols.
+                  <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
+                    {actionQueue.length === 0 ? (
+                      <div className="p-6 text-center text-gray-500 text-xs">
+                        No pending maintenance actions. All systems are operational.
+                      </div>
+                    ) : (
+                      actionQueue.map(asset => (
+                        <div key={asset.id} className="p-4 hover:bg-gray-50 transition flex justify-between items-center">
+                          <div>
+                            <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
+                            <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {asset.serial}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                              asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
+                              asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
+                              "bg-orange-100 text-orange-800"
+                            }`}>{asset.status}</span>
+                            <button 
+                              onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} 
+                              className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
+                              Execute PM ➔
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
