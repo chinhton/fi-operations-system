@@ -302,7 +302,6 @@ export default function App() {
   const complianceRate = (() => { if (assets.length === 0) return 100; const nonCompliant = overdueCount + calibrationCount + correctiveCount; return Math.round(((assets.length - nonCompliant) / assets.length) * 100); })();
   const pendingApprovals = users.filter(u => !u.approved);
 
-  // NEW: Dynamic Action Queue Logic
   const actionQueue = assets.filter(a => a.status !== "Operational");
 
   if (!currentUser) {
@@ -533,8 +532,9 @@ export default function App() {
                         <td className="px-6 py-4 font-mono"><span className="block text-gray-700">Mod: {asset.model}</span><span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span></td>
                         <td className="px-6 py-4"><span className="text-xs font-semibold px-2 py-1 rounded bg-blue-50 text-[#005596] border inline-block">{asset.category}</span></td>
                         <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${asset.status === "Operational" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}`}>{asset.status}</span></td>
-                        <td className="px-6 py-4 text-right space-x-2">
-                          <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800">Delete</button>
+                        <td className="px-6 py-4 text-right space-x-4">
+                          <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                          <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                         </td>
                       </tr>
                     ))}
