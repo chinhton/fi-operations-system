@@ -31,7 +31,6 @@ export default function App() {
     return savedSession ? JSON.parse(savedSession) : null;
   });
 
-  const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState("signin"); 
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -72,35 +71,6 @@ export default function App() {
   const manualFileInputRef = useRef(null);
 
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
-
-  // NEW AZURE AUTHENTICATION CHECK
-  useEffect(() => {
-    fetch('/.auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.clientPrincipal) {
-          const email = data.clientPrincipal.userDetails.toLowerCase();
-          // Extract their real name from Microsoft, or default to their email prefix
-          const nameObj = data.clientPrincipal.claims.find(c => c.typ === "name");
-          const name = nameObj ? nameObj.val : email.split('@')[0];
-          
-          // Automatically make you the System Admin, and everyone else an Operator
-          const role = email === "cton@fcimg.com" ? "System Admin" : "Operator";
-          
-          setCurrentUser({
-            name: name,
-            email: email,
-            role: role,
-            approved: true
-          });
-        }
-        setAuthLoading(false);
-      })
-      .catch(err => {
-        console.error("Azure Auth check failed:", err);
-        setAuthLoading(false);
-      });
-  }, []);
 
   useEffect(() => {
     fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
@@ -539,16 +509,10 @@ export default function App() {
   
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
-  const actionQueue = assets.filter(a => a.status !== "Operational");
-  const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#F4F6F8] flex items-center justify-center font-sans text-xs font-bold text-gray-500">
-        Verifying secure enterprise token encryption...
-      </div>
-    );
-  }
+  const actionQueue = assets.filter(a => a.status !== "Operational");
+  
+  const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
 
   if (!currentUser) {
     return (
@@ -562,16 +526,45 @@ export default function App() {
             <h2 className="text-xl font-bold tracking-tight font-sans">FI-Operation Management System</h2>
           </div>
 
-          <div className="p-8 text-center space-y-6">
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Authorized access restricted. Please log in using your corporate Microsoft network credentials.
-            </p>
-            <a 
-              href="/.auth/login/aad"
-              className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3.5 px-4 rounded font-bold text-xs uppercase tracking-wider shadow-sm flex items-center justify-center space-x-3 transition-all"
-            >
-              <span>🖥️</span> <span>Sign In with Microsoft</span>
-            </a>
+          <div className="p-8">
+            {authError && <div className="mb-5 bg-red-50 border-l-4 border-red-500 p-3 text-xs font-semibold text-red-800 leading-relaxed">{authError}</div>}
+            {authSuccess && <div className="mb-5 bg-green-50 border-l-4 border-green-500 p-3 text-xs font-semibold text-green-800 leading-relaxed">{authSuccess}</div>}
+
+            {authMode === "signin" ? (
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Email Address</label>
+                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="name@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Security Password</label>
+                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                </div>
+                <button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans">Authorized Sign In</button>
+                <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
+                  New Operator? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:underline font-bold">Request Account Access</button>
+                </p>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Full Name / Initials</label>
+                  <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Corporate Email Address (@fcimg.com)</label>
+                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="user@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Choose Security Password</label>
+                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                </div>
+                <button type="submit" className="w-full bg-[#00A1E4] hover:bg-[#00A1E4]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans">Submit Access Request</button>
+                <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
+                  Already registered? <button type="button" onClick={() => { setAuthMode("signin"); setAuthError(""); setAuthSuccess(""); }} className="text-[#005596] hover:underline font-bold">Back to Sign In</button>
+                </p>
+              </form>
+            )}
           </div>
         </div>
       </div>
@@ -598,7 +591,7 @@ export default function App() {
               <span className="text-xs font-bold text-gray-900 block font-sans">{currentUser.name}</span>
               <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>{currentUser.role}</span>
             </div>
-            <a href="/.auth/logout" className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition inline-block">Sign Out</a>
+            <button onClick={handleLogout} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">Sign Out</button>
           </div>
         </div>
       </header>
@@ -1136,6 +1129,7 @@ export default function App() {
 
           {activeTab === "approvals" && isSystemAdmin && (
             <div className="space-y-8 max-w-3xl mx-auto">
+              {/* CARD 1: PENDING ACCOUNT REQUESTS */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">🔑 Pending Account Approvals</h3>
@@ -1160,6 +1154,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* CARD 2: ACTIVE AUTHORIZED USERS DIRECTORY */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">🟢 Active Authorized Accounts</h3>
