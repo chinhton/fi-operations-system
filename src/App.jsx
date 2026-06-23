@@ -55,10 +55,12 @@ export default function App() {
     name: "", interval: "Monthly", department: "", checklistInput: ""
   });
 
-  const [manualAssetId, setManualAssetId] = useState("");
+  // MULTI-SELECT ASSETS FOR MANUAL UPLOADS
+  const [manualAssetIds, setManualAssetIds] = useState([]);
   const [manualFile, setManualFile] = useState(null);
   const [manualText, setManualText] = useState("");
   const [viewingManualAsset, setViewingManualAsset] = useState(null);
+  const [activeManualIndex, setActiveManualIndex] = useState(0);
 
   const [validationError, setValidationError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard"); 
@@ -248,16 +250,17 @@ export default function App() {
 
   const handleAttachManualSubmit = async (e) => {
     e.preventDefault();
-    if (!manualAssetId) { triggerModal("Field Required", "Please select a target asset from your registered directory.", "info"); return; }
+    if (manualAssetIds.length === 0) { triggerModal("Field Required", "Please select at least one target asset from the fleet directory.", "info"); return; }
     if (!manualFile && !manualText.trim()) { triggerModal("Input Required", "Please attach a documentation file or draft a quick-reference procedure layout.", "info"); return; }
-    const targetAsset = assets.find(a => a.id === manualAssetId);
-    if (!targetAsset) return;
+    
+    const targetAssets = assets.filter(a => manualAssetIds.includes(a.id));
+    if (targetAssets.length === 0) return;
 
     let finalFileUrl = "";
-    let finalFileName = manualFile ? manualFile.name : "Quick_Manual_SOP.txt";
+    let finalFileName = manualFile ? manualFile.name : `Quick_Manual_${Date.now().toString().slice(-4)}.txt`;
 
     if (manualFile) {
-      triggerModal("Uploading", "Transferring equipment manual to Azure Blob Storage...", "info");
+      triggerModal("Uploading", `Transferring manual and mapping to ${targetAssets.length} asset(s)...`, "info");
       try {
         const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: manualFile.name, fileData: manualFile.data }) });
         if (uploadRes.ok) {
@@ -270,37 +273,60 @@ export default function App() {
       finalFileUrl = `data:text/plain;base64,${btoa(unescape(encodeURIComponent(manualText)))}`;
     }
 
-    const attachmentPayload = { fileName: finalFileName, fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, fileData: finalFileUrl, manualText: manualText || "Refer to the attached downloaded instruction file." };
-    const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "cton@fcimg.com", status: "Completed Pass", comments: `Successfully linked manual documentation standard [${attachmentPayload.fileName}] to device.` };
+    const attachmentPayload = { 
+      id: `DOC-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`,
+      fileName: finalFileName, 
+      fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, 
+      fileData: finalFileUrl, 
+      manualText: manualText || "Refer to the attached downloaded instruction file." 
+    };
 
-    const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
-    if (logRes.ok) {
-      const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
-      
-      const updatedAsset = { ...targetAsset, manual: attachmentPayload };
+    const updatedAssetsMap = {};
+    const newLogs = [];
+
+    // Map the new manual to all selected assets in Azure
+    await Promise.all(targetAssets.map(async (targetAsset) => {
+      const existingManuals = targetAsset.manuals || (targetAsset.manual ? [targetAsset.manual] : []);
+      const updatedAsset = { ...targetAsset, manual: null, manuals: [...existingManuals, attachmentPayload] };
+      updatedAssetsMap[updatedAsset.id] = updatedAsset;
+
+      const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "cton@fcimg.com", status: "Completed Pass", comments: `Successfully linked new manual documentation [${attachmentPayload.fileName}] to device.` };
       
       try {
-        await fetch('/api/assets', { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(updatedAsset) 
-        });
+        await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+        const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
+        if (logRes.ok) {
+          const savedLog = await logRes.json();
+          newLogs.push(savedLog);
+        }
       } catch (err) {
-        console.error("Failed to sync manual to database", err);
+        console.error("Failed to sync manual for asset", targetAsset.id, err);
       }
+    }));
 
-      setAssets(prevAssets => prevAssets.map(ast => ast.id === manualAssetId ? updatedAsset : ast));
-      setViewingManualAsset(updatedAsset);
-      
-      closeModal(); setManualAssetId(""); setManualFile(null); setManualText(""); if (manualFileInputRef.current) manualFileInputRef.current.value = "";
-      triggerModal("Success", `Manual successfully uploaded and attached to asset: ${targetAsset.name}`, "success");
-    }
+    setHistory(prev => [...newLogs, ...prev]);
+    setAssets(prevAssets => prevAssets.map(ast => updatedAssetsMap[ast.id] || ast));
+    
+    // Auto-focus the first updated asset in the viewer
+    const firstUpdated = updatedAssetsMap[targetAssets[0].id];
+    setViewingManualAsset(firstUpdated);
+    setActiveManualIndex(firstUpdated.manuals.length - 1);
+    
+    closeModal(); 
+    setManualAssetIds([]); 
+    setManualFile(null); 
+    setManualText(""); 
+    if (manualFileInputRef.current) manualFileInputRef.current.value = "";
+    triggerModal("Success", `Document successfully uploaded and mapped to ${targetAssets.length} asset(s).`, "success");
   };
 
-  const handleRemoveManual = async (assetId) => {
-    triggerModal("Remove Manual", "Are you sure you want to permanently detach and delete this manual from the asset?", "confirm", async () => {
+  const handleRemoveManual = (assetId, docId) => {
+    triggerModal("Remove Manual", "Are you sure you want to permanently detach and delete this specific document from the asset?", "confirm", async () => {
       const targetAsset = assets.find(a => a.id === assetId);
-      const updatedAsset = { ...targetAsset, manual: null };
+      const existingManuals = targetAsset.manuals || (targetAsset.manual ? [targetAsset.manual] : []);
+      const updatedManuals = existingManuals.filter(m => m.id !== docId);
+      
+      const updatedAsset = { ...targetAsset, manual: null, manuals: updatedManuals };
       
       try {
         await fetch('/api/assets', { 
@@ -310,9 +336,13 @@ export default function App() {
         });
         
         setAssets(assets.map(a => a.id === assetId ? updatedAsset : a));
-        setViewingManualAsset(updatedAsset);
         
-        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Manual Removal", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Completed Pass", comments: `Administrator securely detached manual documentation from asset.` };
+        if (viewingManualAsset?.id === assetId) {
+          setViewingManualAsset(updatedAsset);
+          setActiveManualIndex(0); 
+        }
+        
+        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Manual Removal", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Completed Pass", comments: `Administrator securely detached a document from the asset.` };
         const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
         if (logRes.ok) {
           const savedLog = await logRes.json();
@@ -320,7 +350,7 @@ export default function App() {
         }
         
         closeModal();
-        triggerModal("Success", "Manual successfully removed from the system.", "success");
+        triggerModal("Success", "Document successfully removed from the system.", "success");
       } catch (err) {
         closeModal();
         triggerModal("Error", "Failed to remove manual from database.", "error");
@@ -375,7 +405,7 @@ export default function App() {
       category: newAsset.category.trim() || "Uncategorized", 
       status: "Operational", 
       lastPmDate: new Date().toISOString(),
-      manual: null 
+      manuals: [] 
     };
 
     const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
@@ -430,7 +460,8 @@ export default function App() {
         const res = await fetch(`/api/assets?id=${id}`, { method: 'DELETE' });
         if (res.ok) {
           setAssets(assets.filter(a => a.id !== id)); 
-          if (manualAssetId === id) setManualAssetId(""); 
+          // Cleanup selected manuals if this asset is removed
+          setManualAssetIds(prev => prev.filter(aId => aId !== id));
         } else {
           triggerModal("Error", "Failed to delete asset from Azure Cosmos DB.", "error");
         }
@@ -477,14 +508,16 @@ export default function App() {
   const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
   const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
   const correctiveCount = assets.filter(a => a.status === "Corrective Maintenance").length;
-  const manualCount = assets.filter(a => a.manual).length;
+  
+  const manualCount = assets.reduce((sum, a) => sum + (a.manuals ? a.manuals.length : (a.manual ? 1 : 0)), 0);
   const complianceRate = (() => { if (assets.length === 0) return 100; const nonCompliant = overdueCount + calibrationCount + correctiveCount; return Math.round(((assets.length - nonCompliant) / assets.length) * 100); })();
   
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
 
   const actionQueue = assets.filter(a => a.status !== "Operational");
-  const assetsWithManuals = assets.filter(a => a.manual);
+  
+  const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
 
   if (!currentUser) {
     return (
@@ -815,7 +848,7 @@ export default function App() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-xs uppercase tracking-wider">📚 Document Library</h3>
-                  <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assetsWithManuals.length} files</span>
+                  <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assetsWithManuals.length} systems</span>
                 </div>
                 <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
                   {assetsWithManuals.length === 0 ? (
@@ -824,12 +857,14 @@ export default function App() {
                     assetsWithManuals.map(asset => (
                       <div 
                         key={asset.id} 
-                        onClick={() => setViewingManualAsset(asset)}
+                        onClick={() => { setViewingManualAsset(asset); setActiveManualIndex(0); }}
                         className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManualAsset?.id === asset.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
                       >
                         <div>
                           <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
-                          <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">{asset.manual.fileName}</span>
+                          <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">
+                            {asset.manuals ? `${asset.manuals.length} documents` : (asset.manual ? "1 document" : "")}
+                          </span>
                         </div>
                         <span className="text-[#005596] text-lg font-bold">➔</span>
                       </div>
@@ -842,11 +877,35 @@ export default function App() {
                 <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Attach Documentation Manual</h3></div>
                 <form onSubmit={handleAttachManualSubmit} className="p-5 space-y-5">
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Equipment Asset</label>
-                    <select value={manualAssetId} onChange={(e) => setManualAssetId(e.target.value)} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer" required>
-                      <option value="">-- Choose Asset from Directory --</option>
-                      {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Fleet Assets (Select Multiple)</label>
+                    <div className="max-h-40 overflow-y-auto border border-gray-300 rounded p-3 bg-white space-y-2 shadow-inner">
+                      {assets.length === 0 ? (
+                        <div className="text-xs text-gray-400 italic">No assets registered in directory.</div>
+                      ) : (
+                        assets.map(a => (
+                          <label key={a.id} className="flex items-center space-x-3 text-xs cursor-pointer hover:bg-gray-50 p-1 rounded transition">
+                            <input 
+                              type="checkbox" 
+                              checked={manualAssetIds.includes(a.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setManualAssetIds([...manualAssetIds, a.id]);
+                                } else {
+                                  setManualAssetIds(manualAssetIds.filter(id => id !== a.id));
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-gray-300 text-[#005596] focus:ring-[#005596]" 
+                            />
+                            <span className="font-medium text-gray-700">{a.name} <span className="text-gray-400 font-mono text-[10px] ml-1">(SN: {a.serial})</span></span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    {manualAssetIds.length > 0 && (
+                      <div className="mt-1.5 text-[10px] text-[#005596] font-bold">
+                        {manualAssetIds.length} asset(s) selected for bulk upload mapping.
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload Manual File</label>
@@ -859,7 +918,7 @@ export default function App() {
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Quick Manual SOP Text Layout</label>
                     <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
                   </div>
-                  <button type="submit" className="w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all">Attach Manual to Asset</button>
+                  <button type="submit" className="w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all">Distribute Manual to Assets</button>
                 </form>
               </div>
             </div>
@@ -870,18 +929,49 @@ export default function App() {
                   <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
                     <h3 className="font-bold text-xs uppercase tracking-wider">Embedded Manual / SOP Guidelines Reader</h3>
                   </div>
-                  {viewingManualAsset && viewingManualAsset.manual ? (
-                    <div className="p-6 space-y-5 flex-grow">
-                      <div className="border-b border-gray-100 pb-3 flex justify-between items-start">
-                        <div><h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4><span className="text-xs text-gray-500 block font-mono">SN: {viewingManualAsset.serial}</span></div>
-                        <div className="flex space-x-2">
-                          <a href={viewingManualAsset.manual.fileData} download={viewingManualAsset.manual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
-                          {isSystemAdmin && (
-                            <button onClick={() => handleRemoveManual(viewingManualAsset.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner">{viewingManualAsset.manual.manualText}</div>
+                  
+                  {viewingManualAsset && ((viewingManualAsset.manuals && viewingManualAsset.manuals.length > 0) || viewingManualAsset.manual) ? (
+                    <div className="p-6 space-y-5 flex-grow flex flex-col">
+                      
+                      {(() => {
+                        const currentManuals = viewingManualAsset.manuals || (viewingManualAsset.manual ? [{...viewingManualAsset.manual, id: viewingManualAsset.manual.id || 'LEGACY-DOC'}] : []);
+                        const activeManual = currentManuals[activeManualIndex] || currentManuals[0];
+                        
+                        return (
+                          <>
+                            {currentManuals.length > 1 && (
+                              <div className="flex space-x-2 border-b border-gray-100 pb-3 mb-4 overflow-x-auto">
+                                {currentManuals.map((doc, idx) => (
+                                  <button 
+                                    key={doc.id || idx}
+                                    onClick={() => setActiveManualIndex(idx)}
+                                    className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition whitespace-nowrap ${activeManualIndex === idx ? 'bg-[#005596] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                  >
+                                    {doc.fileName.length > 20 ? doc.fileName.substring(0, 20) + '...' : doc.fileName}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-start mb-4">
+                              <div>
+                                <h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4>
+                                <span className="text-xs text-gray-500 block font-mono mt-1">SN: {viewingManualAsset.serial} • Doc: {activeManual.fileName}</span>
+                              </div>
+                              <div className="flex space-x-2">
+                                <a href={activeManual.fileData} download={activeManual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
+                                {isSystemAdmin && (
+                                  <button onClick={() => handleRemoveManual(viewingManualAsset.id, activeManual.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
+                                )}
+                              </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner flex-grow">
+                              {activeManual.manualText}
+                            </div>
+                          </>
+                        );
+                      })()}
+
                     </div>
                   ) : (
                     <div className="p-12 text-center text-gray-400 mt-20"><span className="text-4xl block mb-3">📖</span><p className="text-sm font-semibold">Select an asset from the Document Library<br/>to inspect its attached manuals.</p></div>
