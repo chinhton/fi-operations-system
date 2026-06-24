@@ -14,6 +14,8 @@ const customStyles = `
   .charcoal-bg { background-color: #1A2530; }
 `;
 
+const PM_CYCLE_OPTIONS = ["Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually"];
+
 export default function App() {
   const [users, setUsers] = useState([
     {
@@ -56,7 +58,7 @@ export default function App() {
   const [pmComments, setPmComments] = useState("");
 
   const [newAsset, setNewAsset] = useState({
-    name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly"
+    name: "", model: "", serial: "", location: "", category: "", pmFrequencies: []
   });
 
   const [newTemplate, setNewTemplate] = useState({
@@ -455,7 +457,31 @@ export default function App() {
         const savedLog = await res.json(); setHistory([savedLog, ...history]);
         
         const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
-        const updatedAsset = { ...selectedAsset, status: finalStatus, lastPmDate: new Date().toISOString() };
+        
+        // Handle targeted PM Clocks updating rather than wiping all of them
+        const currentPmDates = selectedAsset.pmDates || {};
+        
+        // Legacy fallback integration
+        if (selectedAsset.lastPmDate && !Object.keys(currentPmDates).length && selectedAsset.pmFrequency) {
+            currentPmDates[selectedAsset.pmFrequency] = selectedAsset.lastPmDate;
+        }
+
+        const interval = selectedTemplate.interval; 
+        const updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
+
+        // Make sure the interval executed is mapped to the asset so it continues tracking
+        let updatedFrequencies = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
+        if (!updatedFrequencies.includes(interval) && interval !== "On-Demand") {
+            updatedFrequencies = [...updatedFrequencies, interval];
+        }
+
+        const updatedAsset = { 
+          ...selectedAsset, 
+          status: finalStatus, 
+          lastPmDate: new Date().toISOString(), // Keeping old string alive for legacy components 
+          pmDates: updatedPmDates,
+          pmFrequencies: updatedFrequencies
+        };
         
         try {
           await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
@@ -465,7 +491,7 @@ export default function App() {
 
         setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
         setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
-        triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully. PM Cycle has been reset.", "success"); setActiveTab("dashboard");
+        triggerModal("SOP Signature Logged", `Preventative maintenance log recorded successfully. Specific [${interval}] cycle timer has been reset.`, "success"); setActiveTab("dashboard");
       }
     } finally {
       setIsSubmittingPm(false);
@@ -480,19 +506,24 @@ export default function App() {
     
     setIsAddingAsset(true);
     try {
+      const initialPmDates = {};
+      newAsset.pmFrequencies.forEach(freq => { initialPmDates[freq] = new Date().toISOString(); });
+
       const created = { 
         id: `FI-${Date.now().toString().slice(-3)}`, 
         ...newAsset, 
         category: newAsset.category.trim() || "Uncategorized", 
         status: "Operational", 
-        lastPmDate: new Date().toISOString(),
+        lastPmDate: new Date().toISOString(), // Legacy
+        pmFrequencies: newAsset.pmFrequencies,
+        pmDates: initialPmDates,
         manuals: [] 
       };
 
       const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
       if (res.ok) {
         const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
-        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly" });
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
       }
     } finally {
@@ -623,12 +654,36 @@ export default function App() {
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
 
-  // ACTION QUEUE FILTER - dynamically catches manually flagged items OR those due in <= 7 days
-  const actionQueue = assets.filter(a => {
-    if (a.status !== "Operational") return true;
-    const daysRemaining = calculateDaysRemaining(a.lastPmDate, a.pmFrequency);
-    if (daysRemaining !== null && daysRemaining <= 7) return true;
-    return false;
+  // EXPANDED ACTION QUEUE - Checks all independent PM cycles per asset
+  const expandedActionQueue = [];
+  assets.forEach(asset => {
+    if (asset.status !== "Operational") {
+      expandedActionQueue.push({
+        ...asset,
+        queueId: `${asset.id}-status`,
+        displayStatus: asset.status,
+        displayDate: null,
+        badgeColor: asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" : asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"
+      });
+      return; // Skip cycle checks if asset is physically down
+    }
+
+    const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+
+    freqs.forEach(freq => {
+      const lastDate = asset.pmDates?.[freq] || asset.lastPmDate;
+      const daysLeft = calculateDaysRemaining(lastDate, freq);
+
+      if (daysLeft !== null && daysLeft <= 7) {
+        expandedActionQueue.push({
+          ...asset,
+          queueId: `${asset.id}-${freq}`,
+          displayStatus: daysLeft < 0 ? `${freq.toUpperCase()} PM OVERDUE` : `${freq.toUpperCase()} PM DUE`,
+          displayDate: calculateNextPmDate(lastDate, freq),
+          badgeColor: daysLeft < 0 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"
+        });
+      }
+    });
   });
   
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
@@ -738,7 +793,7 @@ export default function App() {
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Pending Actions</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{actionQueue.length}</div>
+            <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{expandedActionQueue.length}</div>
             <div className="text-[11px] text-blue-200 mt-1">Schedules in queue</div>
           </div>
           <div 
@@ -852,52 +907,39 @@ export default function App() {
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-[#005596] text-white px-5 py-4 flex items-center justify-between">
                       <h3 className="font-bold text-xs uppercase tracking-wider">SOP & Maintenance Actions Queue</h3>
-                      {actionQueue.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{actionQueue.length} Pending</span>
+                      {expandedActionQueue.length > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{expandedActionQueue.length} Pending</span>
                       )}
                     </div>
                     <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
-                      {actionQueue.length === 0 ? (
+                      {expandedActionQueue.length === 0 ? (
                         <div className="p-6 text-center text-gray-500 text-xs">
                           No pending maintenance actions. All systems are operational.
                         </div>
                       ) : (
-                        actionQueue.map(asset => {
-                          const daysLeft = calculateDaysRemaining(asset.lastPmDate, asset.pmFrequency);
-                          let displayStatus = asset.status;
-                          let badgeColor = "bg-orange-100 text-orange-800";
-                          
-                          if (asset.status === "Operational" && daysLeft !== null && daysLeft <= 7) {
-                              displayStatus = daysLeft < 0 ? "PM OVERDUE" : "PM DUE SOON";
-                              badgeColor = daysLeft < 0 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800";
-                          } else if (asset.status === "Maintenance Due") {
-                              badgeColor = "bg-yellow-100 text-yellow-800";
-                          } else if (asset.status === "Out of Calibration") {
-                              badgeColor = "bg-red-100 text-red-800";
-                          }
-
-                          return (
-                            <div key={asset.id} className="p-4 hover:bg-gray-50 transition flex justify-between items-center">
-                              <div>
-                                <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
-                                <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {asset.serial}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badgeColor}`}>
-                                  {displayStatus}
-                                </span>
-                                <div className="mt-1 text-[10px] text-gray-500 font-mono">
-                                  Due: {calculateNextPmDate(asset.lastPmDate, asset.pmFrequency) || "N/A"}
-                                </div>
-                                <button 
-                                  onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} 
-                                  className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
-                                  Execute PM ➔
-                                </button>
-                              </div>
+                        expandedActionQueue.map(item => (
+                          <div key={item.queueId} className="p-4 hover:bg-gray-50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#f97316' }}>
+                            <div>
+                              <span className="font-bold text-gray-900 text-xs block">{item.name}</span>
+                              <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {item.serial}</span>
                             </div>
-                          );
-                        })
+                            <div className="text-right">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                              {item.displayDate && (
+                                <div className="mt-1 text-[10px] text-gray-500 font-mono">
+                                  Due: {item.displayDate}
+                                </div>
+                              )}
+                              <button 
+                                onClick={() => { setSelectedAssetId(item.id); setActiveTab("scheduler"); }} 
+                                className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
+                                Execute PM ➔
+                              </button>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -931,17 +973,31 @@ export default function App() {
                     <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label><input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
                     <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label><input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
                     <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label><input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequency</label>
-                      <select value={newAsset.pmFrequency} onChange={(e) => setNewAsset({...newAsset, pmFrequency: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="None">None (Run to Fail)</option>
-                        <option value="Weekly">Weekly Cycle</option>
-                        <option value="Monthly">Monthly Cycle</option>
-                        <option value="Quarterly">Quarterly Cycle</option>
-                        <option value="Semi-Annually">Semi-Annually Cycle</option>
-                        <option value="Annually">Annually Cycle</option>
-                      </select>
+                    
+                    {/* UPDATED MULTI-SELECT PM FREQUENCY LAYOUT */}
+                    <div className="md:col-span-1">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
+                      <div className="flex flex-wrap gap-3 mt-2.5">
+                        {PM_CYCLE_OPTIONS.map(freq => (
+                          <label key={freq} className="flex items-center space-x-1.5 cursor-pointer text-xs text-gray-700 font-medium bg-gray-50 px-2 py-1.5 rounded border border-gray-200 hover:bg-gray-100 transition">
+                            <input
+                              type="checkbox"
+                              checked={newAsset.pmFrequencies?.includes(freq) || false}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewAsset({ ...newAsset, pmFrequencies: [...(newAsset.pmFrequencies || []), freq] });
+                                } else {
+                                  setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
+                                }
+                              }}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
+                            />
+                            <span>{freq}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
+
                   </div>
                   <div className="mt-6 flex justify-end">
                     <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
@@ -956,10 +1012,14 @@ export default function App() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-left">
                     <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                      <tr><th className="px-6 py-3.5">Asset Name</th><th className="px-6 py-3.5">Model / Serial No</th><th className="px-6 py-3.5">Category</th><th className="px-6 py-3.5">Status & PM Cycle</th><th className="px-6 py-3.5 text-right">Actions</th></tr>
+                      <tr><th className="px-6 py-3.5">Asset Name</th><th className="px-6 py-3.5">Model / Serial No</th><th className="px-6 py-3.5">Category</th><th className="px-6 py-3.5">Status & PM Cycle Tracker</th><th className="px-6 py-3.5 text-right">Actions</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {assets.map((asset) => (
+                      {assets.map((asset) => {
+                        // Extract array of frequencies with fallback for legacy DB entries
+                        const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+                        
+                        return (
                         <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
                           <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{asset.name}</span></td>
                           <td className="px-6 py-4 font-mono"><span className="block text-gray-700">Mod: {asset.model}</span><span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span></td>
@@ -980,27 +1040,33 @@ export default function App() {
                               <option value="Out of Calibration">Out of Calibration</option>
                               <option value="Corrective Maintenance">Corrective Action</option>
                             </select>
-                            <div className="flex flex-col mt-2 space-y-1.5">
-                              <div className="text-[9px] text-gray-500 font-bold uppercase pl-1">
-                                Cycle: <span className="text-[#005596]">{asset.pmFrequency || "None"}</span>
-                                {asset.pmFrequency && asset.pmFrequency !== "None" && asset.lastPmDate && (
-                                   <span className="ml-1 block mt-0.5">Next Due: <span className="text-gray-800">{calculateNextPmDate(asset.lastPmDate, asset.pmFrequency)}</span></span>
-                                )}
-                              </div>
-                              {(() => {
-                                const daysRemaining = calculateDaysRemaining(asset.lastPmDate, asset.pmFrequency);
-                                if (asset.pmFrequency && asset.pmFrequency !== "None" && daysRemaining === null) {
-                                  return <div className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-gray-100 text-gray-600 inline-block w-max">⏳ Needs Initial PM Baseline</div>;
-                                }
-                                if (daysRemaining !== null) {
+                            
+                            {/* MULTIPLE PM DATES RENDERER */}
+                            <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
+                              {freqs.length === 0 ? (
+                                <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
+                              ) : (
+                                freqs.map(freq => {
+                                  const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+                                  const daysRemaining = calculateDaysRemaining(targetDate, freq);
+                                  
                                   return (
-                                    <div className={`text-[10px] font-bold px-2 py-0.5 rounded-sm inline-block w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                      ⏳ {daysRemaining < 0 ? `Overdue by ${Math.abs(daysRemaining)} days` : `Due in ${daysRemaining} days`}
+                                    <div key={freq} className="flex flex-col text-[10px]">
+                                      <div className="flex justify-between items-center mb-0.5">
+                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                        {daysRemaining !== null ? (
+                                          <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                            ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
+                                          </span>
+                                        ) : (
+                                          <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
+                                        )}
+                                      </div>
+                                      {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
                                     </div>
                                   );
-                                }
-                                return null;
-                              })()}
+                                })
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right space-x-4">
@@ -1010,7 +1076,7 @@ export default function App() {
                             )}
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
