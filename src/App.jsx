@@ -709,7 +709,10 @@ export default function App() {
       const lastDate = asset.pmDates?.[freq] || asset.lastPmDate;
       const daysLeft = calculateDaysRemaining(lastDate, freq);
 
-      if (daysLeft !== null && daysLeft <= 7) {
+      // DYNAMIC THRESHOLD: Weekly pops up on exact due date (Monday), others get a 7-day heads up.
+      const threshold = freq === "Weekly" ? 0 : 7;
+
+      if (daysLeft !== null && daysLeft <= threshold) {
         expandedActionQueue.push({
           ...asset,
           queueId: `${asset.id}-${freq}`,
