@@ -76,11 +76,17 @@ export default function App() {
     show: false, title: "", message: "", type: "info", onConfirm: null
   });
 
+  // REAL-TIME CLOCK STATE
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   const manualFileInputRef = useRef(null);
 
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
 
   useEffect(() => {
+    // Start ticking clock
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+
     fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
     fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(data || [])).catch(err => console.error("Error pulling templates:", err));
     fetch('/api/history').then(res => res.json()).then(data => setHistory(data || [])).catch(err => console.error("Error pulling history:", err));
@@ -92,6 +98,8 @@ export default function App() {
           });
         }
       }).catch(err => console.error("Error pulling users:", err));
+
+    return () => clearInterval(timer);
   }, []);
 
   const triggerModal = (title, message, type = "info", onConfirm = null) => {
@@ -157,7 +165,6 @@ export default function App() {
         setUsers([...users, savedUser]); setRegisterName(""); setAuthEmail(""); setAuthPassword("");
         setAuthSuccess("Account request submitted. Please ask the System Admin to authorize your account."); setAuthMode("signin");
 
-        // TRIGGER 1: ADMIN NOTIFICATION FOR NEW USER REQUEST
         try {
           await fetch('/api/sendEmail', {
             method: 'POST',
@@ -212,7 +219,6 @@ export default function App() {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
     }
 
-    // TRIGGER 2: APPROVAL NOTIFICATION TO OPERATOR WITH CC TO ADMIN
     try {
       await fetch('/api/sendEmail', {
         method: 'POST',
@@ -459,7 +465,7 @@ export default function App() {
 
         setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
         setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
-        triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully.", "success"); setActiveTab("dashboard");
+        triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully. PM Cycle has been reset.", "success"); setActiveTab("dashboard");
       }
     } finally {
       setIsSubmittingPm(false);
@@ -588,6 +594,24 @@ export default function App() {
     return cycleDays - daysPassed;
   };
 
+  const calculateNextPmDate = (lastDateStr, frequency) => {
+    if (!lastDateStr || frequency === "None" || !frequency) return null;
+    const lastDate = new Date(lastDateStr);
+    let cycleDays = 0;
+    
+    switch(frequency) {
+      case "Weekly": cycleDays = 7; break;
+      case "Monthly": cycleDays = 30; break;
+      case "Quarterly": cycleDays = 90; break;
+      case "Semi-Annually": cycleDays = 182; break;
+      case "Annually": cycleDays = 365; break;
+      default: return null;
+    }
+    
+    const nextDate = new Date(lastDate.getTime() + (cycleDays * 24 * 60 * 60 * 1000));
+    return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   const operationalCount = assets.filter(a => a.status === "Operational").length;
   const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
   const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
@@ -599,7 +623,13 @@ export default function App() {
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
 
-  const actionQueue = assets.filter(a => a.status !== "Operational");
+  // ACTION QUEUE FILTER - dynamically catches manually flagged items OR those due in <= 7 days
+  const actionQueue = assets.filter(a => {
+    if (a.status !== "Operational") return true;
+    const daysRemaining = calculateDaysRemaining(a.lastPmDate, a.pmFrequency);
+    if (daysRemaining !== null && daysRemaining <= 7) return true;
+    return false;
+  });
   
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
 
@@ -679,7 +709,11 @@ export default function App() {
             <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Operation Management System</h1></div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-6">
+            <div className="hidden lg:block text-right border-r border-gray-200 pr-6">
+               <span className="block text-xs font-bold text-gray-800">{currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+               <span className="block text-[10px] text-gray-500 font-mono mt-0.5">{currentTime.toLocaleTimeString('en-US')}</span>
+            </div>
             <div className="text-right hidden sm:block">
               <span className="text-xs font-bold text-gray-900 block font-sans">{currentUser.name}</span>
               <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>{currentUser.role}</span>
@@ -704,7 +738,7 @@ export default function App() {
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Pending Actions</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{overdueCount + calibrationCount}</div>
+            <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{actionQueue.length}</div>
             <div className="text-[11px] text-blue-200 mt-1">Schedules in queue</div>
           </div>
           <div 
@@ -828,26 +862,42 @@ export default function App() {
                           No pending maintenance actions. All systems are operational.
                         </div>
                       ) : (
-                        actionQueue.map(asset => (
-                          <div key={asset.id} className="p-4 hover:bg-gray-50 transition flex justify-between items-center">
-                            <div>
-                              <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
-                              <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {asset.serial}</span>
+                        actionQueue.map(asset => {
+                          const daysLeft = calculateDaysRemaining(asset.lastPmDate, asset.pmFrequency);
+                          let displayStatus = asset.status;
+                          let badgeColor = "bg-orange-100 text-orange-800";
+                          
+                          if (asset.status === "Operational" && daysLeft !== null && daysLeft <= 7) {
+                              displayStatus = daysLeft < 0 ? "PM OVERDUE" : "PM DUE SOON";
+                              badgeColor = daysLeft < 0 ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800";
+                          } else if (asset.status === "Maintenance Due") {
+                              badgeColor = "bg-yellow-100 text-yellow-800";
+                          } else if (asset.status === "Out of Calibration") {
+                              badgeColor = "bg-red-100 text-red-800";
+                          }
+
+                          return (
+                            <div key={asset.id} className="p-4 hover:bg-gray-50 transition flex justify-between items-center">
+                              <div>
+                                <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
+                                <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {asset.serial}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badgeColor}`}>
+                                  {displayStatus}
+                                </span>
+                                <div className="mt-1 text-[10px] text-gray-500 font-mono">
+                                  Due: {calculateNextPmDate(asset.lastPmDate, asset.pmFrequency) || "N/A"}
+                                </div>
+                                <button 
+                                  onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} 
+                                  className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
+                                  Execute PM ➔
+                                </button>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                                asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                                "bg-orange-100 text-orange-800"
-                              }`}>{asset.status}</span>
-                              <button 
-                                onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} 
-                                className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
-                                Execute PM ➔
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -931,7 +981,12 @@ export default function App() {
                               <option value="Corrective Maintenance">Corrective Action</option>
                             </select>
                             <div className="flex flex-col mt-2 space-y-1.5">
-                              <div className="text-[9px] text-gray-500 font-bold uppercase pl-1">Cycle: <span className="text-[#005596]">{asset.pmFrequency || "None"}</span></div>
+                              <div className="text-[9px] text-gray-500 font-bold uppercase pl-1">
+                                Cycle: <span className="text-[#005596]">{asset.pmFrequency || "None"}</span>
+                                {asset.pmFrequency && asset.pmFrequency !== "None" && asset.lastPmDate && (
+                                   <span className="ml-1 block mt-0.5">Next Due: <span className="text-gray-800">{calculateNextPmDate(asset.lastPmDate, asset.pmFrequency)}</span></span>
+                                )}
+                              </div>
                               {(() => {
                                 const daysRemaining = calculateDaysRemaining(asset.lastPmDate, asset.pmFrequency);
                                 if (asset.pmFrequency && asset.pmFrequency !== "None" && daysRemaining === null) {
