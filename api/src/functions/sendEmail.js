@@ -6,11 +6,11 @@ app.http('sendEmail', {
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
-            // Parse incoming JSON data from your React frontend request
-            const body = await request.json();
-            const { to, subject, message } = body;
+            // Parse incoming JSON data from your React frontend
+            const requestBody = await request.json();
+            const { to, subject, body } = requestBody;
 
-            // Load the connection string from your Azure Environment Variables
+            // Load the connection string from Azure Environment Variables
             const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
             
             if (!connectionString) {
@@ -23,13 +23,12 @@ app.http('sendEmail', {
 
             const client = new EmailClient(connectionString);
 
-            // Construct the email payload
+            // Construct the email payload using your exact provisioned domain
             const emailMessage = {
-                // UPDATE THIS string with your actual provisioned Azure domain
-senderAddress: "DoNotReply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
+                senderAddress: "DoNotReply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
                 content: {
                     subject: subject || "Notification from FI Operations System",
-                    plainText: message || "You have received an automated operational update.",
+                    plainText: body || "You have received an automated operational update.",
                 },
                 recipients: {
                     to: [{ address: to }],
