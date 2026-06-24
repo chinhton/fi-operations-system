@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import OperatorAssignment from './components/OperatorAssignment';
 
 const customStyles = `
   body {
@@ -772,6 +773,13 @@ export default function App() {
                       </div>
                     </div>
                   </div>
+
+                  {/* NEW: Operator Assignment Module Embedded Here */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-3">Task Delegation</h4>
+                    <OperatorAssignment />
+                  </div>
+
                 </div>
               </div>
             </div>
