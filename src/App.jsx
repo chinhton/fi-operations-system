@@ -62,7 +62,7 @@ export default function App() {
   });
 
   const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", checklistInput: ""
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: ""
   });
 
   const [manualAssetIds, setManualAssetIds] = useState([]);
@@ -73,6 +73,7 @@ export default function App() {
 
   const [validationError, setValidationError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard"); 
+  const [historySearch, setHistorySearch] = useState("");
 
   const [customModal, setCustomModal] = useState({
     show: false, title: "", message: "", type: "info", onConfirm: null
@@ -554,6 +555,7 @@ export default function App() {
         name: newTemplate.name.trim(),
         interval: newTemplate.interval,
         department: newTemplate.department.trim() || "General Engineering",
+        targetCategory: newTemplate.targetCategory,
         checklist: steps
       };
 
@@ -566,7 +568,7 @@ export default function App() {
       if (res.ok) {
         const savedTemplate = await res.json();
         setPmTemplates([...pmTemplates, savedTemplate]);
-        setNewTemplate({ name: "", interval: "Monthly", department: "", checklistInput: "" });
+        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "" });
         triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
       } else {
         triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
@@ -607,15 +609,40 @@ export default function App() {
     }); 
   };
 
+  const deleteHistoryLog = (id) => {
+    triggerModal("Delete Audit Record", "Delete this system log permanently? This overrides compliance tracking.", "confirm", async () => {
+      try {
+        await fetch(`/api/history?id=${id}`, { method: 'DELETE' });
+        setHistory(history.filter(h => h.id !== id));
+        closeModal();
+      } catch (err) {
+        closeModal();
+        triggerModal("Error", "Failed to delete log from database.", "error");
+      }
+    });
+  };
+
   const calculateDaysRemaining = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
     const lastDate = new Date(lastDateStr);
     const now = new Date();
+
+    if (frequency === "Weekly") {
+      const nextMonday = new Date(lastDate);
+      const day = nextMonday.getDay();
+      const diff = day === 0 ? 1 : 8 - day;
+      nextMonday.setDate(nextMonday.getDate() + diff);
+      nextMonday.setHours(0, 0, 0, 0);
+
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      return Math.ceil((nextMonday - today) / (1000 * 60 * 60 * 24));
+    }
+
     const daysPassed = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
     let cycleDays = 0;
     
     switch(frequency) {
-      case "Weekly": cycleDays = 7; break;
       case "Monthly": cycleDays = 30; break;
       case "Quarterly": cycleDays = 90; break;
       case "Semi-Annually": cycleDays = 182; break;
@@ -628,10 +655,18 @@ export default function App() {
   const calculateNextPmDate = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
     const lastDate = new Date(lastDateStr);
+
+    if (frequency === "Weekly") {
+      const nextMonday = new Date(lastDate);
+      const day = nextMonday.getDay();
+      const diff = day === 0 ? 1 : 8 - day;
+      nextMonday.setDate(nextMonday.getDate() + diff);
+      return nextMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
     let cycleDays = 0;
     
     switch(frequency) {
-      case "Weekly": cycleDays = 7; break;
       case "Monthly": cycleDays = 30; break;
       case "Quarterly": cycleDays = 90; break;
       case "Semi-Annually": cycleDays = 182; break;
@@ -687,6 +722,21 @@ export default function App() {
   });
   
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
+
+  const uniqueCategories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)));
+
+  const filteredHistory = history.filter(log => 
+    log.assetName?.toLowerCase().includes(historySearch.toLowerCase()) || 
+    log.technician?.toLowerCase().includes(historySearch.toLowerCase()) ||
+    log.templateName?.toLowerCase().includes(historySearch.toLowerCase())
+  );
+
+  const groupedAssets = assets.reduce((acc, asset) => {
+    const cat = asset.category || "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(asset);
+    return acc;
+  }, {});
 
   if (!currentUser) {
     return (
@@ -968,11 +1018,26 @@ export default function App() {
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
                 <form onSubmit={handleAddAssetSubmit} className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label><input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label><input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label><input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label><input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label><input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
+                      <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
+                      <input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
+                      <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
+                      <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
+                      <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
                     
                     {/* UPDATED MULTI-SELECT PM FREQUENCY LAYOUT */}
                     <div className="md:col-span-1">
@@ -1008,78 +1073,102 @@ export default function App() {
               </div>
               
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between"><h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3></div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-left">
-                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                      <tr><th className="px-6 py-3.5">Asset Name</th><th className="px-6 py-3.5">Model / Serial No</th><th className="px-6 py-3.5">Category</th><th className="px-6 py-3.5">Status & PM Cycle Tracker</th><th className="px-6 py-3.5 text-right">Actions</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs">
-                      {assets.map((asset) => {
-                        // Extract array of frequencies with fallback for legacy DB entries
-                        const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
-                        
-                        return (
-                        <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
-                          <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{asset.name}</span></td>
-                          <td className="px-6 py-4 font-mono"><span className="block text-gray-700">Mod: {asset.model}</span><span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span></td>
-                          <td className="px-6 py-4"><span className="text-xs font-semibold px-2 py-1 rounded bg-blue-50 text-[#005596] border inline-block">{asset.category}</span></td>
-                          <td className="px-6 py-4">
-                            <select
-                              value={asset.status}
-                              onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                                asset.status === "Operational" ? "bg-green-100 text-green-800" :
-                                asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                                asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                                "bg-orange-100 text-orange-800"
-                              }`}
-                            >
-                              <option value="Operational">Operational</option>
-                              <option value="Maintenance Due">Maintenance Due</option>
-                              <option value="Out of Calibration">Out of Calibration</option>
-                              <option value="Corrective Maintenance">Corrective Action</option>
-                            </select>
-                            
-                            {/* MULTIPLE PM DATES RENDERER */}
-                            <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
-                              {freqs.length === 0 ? (
-                                <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
-                              ) : (
-                                freqs.map(freq => {
-                                  const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-                                  const daysRemaining = calculateDaysRemaining(targetDate, freq);
-                                  
-                                  return (
-                                    <div key={freq} className="flex flex-col text-[10px]">
-                                      <div className="flex justify-between items-center mb-0.5">
-                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                        {daysRemaining !== null ? (
-                                          <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                            ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
-                                          </span>
-                                        ) : (
-                                          <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
-                                        )}
-                                      </div>
-                                      {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right space-x-4">
-                            <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
-                            {isSystemAdmin && (
-                              <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
-                            )}
-                          </td>
-                        </tr>
-                      )})}
-                    </tbody>
-                  </table>
+                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+                  <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
                 </div>
+                
+                {Object.keys(groupedAssets).length === 0 ? (
+                  <div className="p-8 text-center text-xs text-gray-500">No assets registered in the database.</div>
+                ) : (
+                  Object.entries(groupedAssets).map(([category, catAssets]) => (
+                    <div key={category} className="mb-4">
+                      <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner">
+                        📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 text-left">
+                          <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                            <tr>
+                              <th className="px-6 py-3.5">Asset Name</th>
+                              <th className="px-6 py-3.5">Model / Serial No</th>
+                              <th className="px-6 py-3.5">Status & PM Cycle Tracker</th>
+                              <th className="px-6 py-3.5 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 text-xs">
+                            {catAssets.map((asset) => {
+                              // Extract array of frequencies with fallback for legacy DB entries
+                              const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+                              
+                              return (
+                                <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
+                                  <td className="px-6 py-4">
+                                    <span className="font-bold text-gray-900 block">{asset.name}</span>
+                                  </td>
+                                  <td className="px-6 py-4 font-mono">
+                                    <span className="block text-gray-700">Mod: {asset.model}</span>
+                                    <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <select
+                                      value={asset.status}
+                                      onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
+                                      className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
+                                        asset.status === "Operational" ? "bg-green-100 text-green-800" :
+                                        asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
+                                        asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
+                                        "bg-orange-100 text-orange-800"
+                                      }`}
+                                    >
+                                      <option value="Operational">Operational</option>
+                                      <option value="Maintenance Due">Maintenance Due</option>
+                                      <option value="Out of Calibration">Out of Calibration</option>
+                                      <option value="Corrective Maintenance">Corrective Action</option>
+                                    </select>
+                                    
+                                    {/* MULTIPLE PM DATES RENDERER */}
+                                    <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
+                                      {freqs.length === 0 ? (
+                                        <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
+                                      ) : (
+                                        freqs.map(freq => {
+                                          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+                                          const daysRemaining = calculateDaysRemaining(targetDate, freq);
+                                          
+                                          return (
+                                            <div key={freq} className="flex flex-col text-[10px]">
+                                              <div className="flex justify-between items-center mb-0.5">
+                                                <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                                {daysRemaining !== null ? (
+                                                  <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                    ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
+                                                  </span>
+                                                ) : (
+                                                  <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
+                                                )}
+                                              </div>
+                                              {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
+                                            </div>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right space-x-4">
+                                    <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                                    {isSystemAdmin && (
+                                      <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -1100,9 +1189,16 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">2. Select SOP Protocol</label>
-                    <select value={selectedTemplateId} onChange={(e) => { setSelectedTemplateId(e.target.value); setCompletedSteps({}); }} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                    <select 
+                      value={selectedTemplateId} 
+                      onChange={(e) => { setSelectedTemplateId(e.target.value); setCompletedSteps({}); }} 
+                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+                      disabled={!selectedAssetId}
+                    >
                       <option value="">-- Choose Protocol Template to Execute --</option>
-                      {pmTemplates.map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name}</option>)}
+                      {pmTemplates
+                        .filter(t => !selectedAssetId || t.targetCategory === "Global" || t.targetCategory === assets.find(a => a.id === selectedAssetId)?.category)
+                        .map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name} {t.targetCategory !== "Global" ? `(Locked to ${t.targetCategory})` : ''}</option>)}
                     </select>
                   </div>
                   {selectedTemplateId && (
@@ -1277,15 +1373,37 @@ export default function App() {
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
                 <form onSubmit={handleAddTemplateSubmit} className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label><input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white" /></div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
+                      <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white" />
+                    </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                       <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer">
-                        <option value="Weekly">Weekly Cycle</option><option value="Monthly">Monthly Cycle</option><option value="Quarterly">Quarterly Cycle</option><option value="Semi-Annually">Semi-Annually Cycle</option><option value="Annually">Annually Cycle</option>
+                        <option value="Weekly">Weekly Cycle</option>
+                        <option value="Monthly">Monthly Cycle</option>
+                        <option value="Quarterly">Quarterly Cycle</option>
+                        <option value="Semi-Annually">Semi-Annually Cycle</option>
+                        <option value="Annually">Annually Cycle</option>
                       </select>
                     </div>
-                    <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label><input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
-                    <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label><textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
+                      <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
+                      <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="Global">Global (All Assets)</option>
+                        {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
+                      <textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
+                    </div>
                   </div>
                   <div className="mt-6 flex justify-end">
                     <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
@@ -1297,10 +1415,16 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {pmTemplates.map((template) => (
-                  <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between">
+                  <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between relative">
+                    {template.targetCategory !== "Global" && (
+                      <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 uppercase rounded-bl-lg shadow-sm border-b border-l border-yellow-500 z-10">Locked: {template.targetCategory}</div>
+                    )}
                     <div className="p-5">
                       <div className="flex items-start justify-between">
-                        <div><span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span><h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4></div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span>
+                          <h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4>
+                        </div>
                         <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
                       </div>
                       <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
@@ -1324,28 +1448,67 @@ export default function App() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                 <h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3>
-                <span className="text-xs text-gray-400 font-semibold">{history.length} operations on file</span>
+                <span className="text-xs text-gray-400 font-semibold">{filteredHistory.length} records matching</span>
               </div>
-              <div className="p-4 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
-                This log officially timestamps and records all executed PMs, protocol sign-offs, and administrative actions performed within the system.
+              <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <span className="text-xs text-gray-600 max-w-lg hidden md:block">
+                  This log officially timestamps and records all executed PMs, protocol sign-offs, and administrative actions performed within the system.
+                </span>
+                <input 
+                  type="text" 
+                  value={historySearch} 
+                  onChange={(e) => setHistorySearch(e.target.value)} 
+                  placeholder="Filter by Asset, Tech, or SOP..." 
+                  className="w-full md:w-64 text-xs rounded border border-gray-300 shadow-sm p-2 bg-white focus:outline-none focus:border-[#005596]" 
+                />
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-left">
                   <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                    <tr><th className="px-6 py-3.5">Timestamp</th><th className="px-6 py-3.5">Asset & Category</th><th className="px-6 py-3.5">Executed Protocol</th><th className="px-6 py-3.5">Technician / Inspector</th><th className="px-6 py-3.5">Execution Status</th><th className="px-6 py-3.5">Operating Notes</th></tr>
+                    <tr>
+                      <th className="px-6 py-3.5">Timestamp</th>
+                      <th className="px-6 py-3.5">Asset & Category</th>
+                      <th className="px-6 py-3.5">Executed Protocol</th>
+                      <th className="px-6 py-3.5">Technician / Inspector</th>
+                      <th className="px-6 py-3.5">Execution Status</th>
+                      <th className="px-6 py-3.5">Operating Notes</th>
+                      {isSystemAdmin && <th className="px-6 py-3.5 text-right">Admin</th>}
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
-                    {history.length === 0 ? (
-                      <tr><td colSpan="6" className="px-6 py-12 text-center text-gray-400 text-xs">No historical log entries found.</td></tr>
+                    {filteredHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={isSystemAdmin ? "7" : "6"} className="px-6 py-12 text-center text-gray-400 text-xs">
+                          No historical log entries found matching criteria.
+                        </td>
+                      </tr>
                     ) : (
-                      history.map((log) => (
+                      filteredHistory.map((log) => (
                         <tr key={log.id} className="hover:bg-gray-50/50 transition">
                           <td className="px-6 py-4 text-gray-500 font-mono whitespace-nowrap">{log.timestamp}</td>
-                          <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.assetName}</span><span className="text-[10px] text-gray-400 font-mono">{log.assetId}</span></td>
-                          <td className="px-6 py-4"><span className="font-bold text-gray-800 block">{log.templateName}</span><span className="text-[10px] bg-blue-50 text-[#005596] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block">{log.interval} Cycle</span></td>
-                          <td className="px-6 py-4"><span className="font-bold text-gray-900 block">{log.technician}</span><span className="text-xs text-gray-500 font-mono block">{log.email}</span></td>
-                          <td className="px-6 py-4"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : log.status === "Incomplete Log" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{log.status}</span></td>
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-gray-900 block">{log.assetName}</span>
+                            <span className="text-[10px] text-gray-400 font-mono">{log.assetId}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-gray-800 block">{log.templateName}</span>
+                            <span className="text-[10px] bg-blue-50 text-[#005596] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block">{log.interval} Cycle</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-bold text-gray-900 block">{log.technician}</span>
+                            <span className="text-xs text-gray-500 font-mono block">{log.email}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : log.status === "Incomplete Log" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
+                              {log.status}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 text-gray-600 max-w-xs break-words">{log.comments}</td>
+                          {isSystemAdmin && (
+                            <td className="px-6 py-4 text-right">
+                              <button onClick={() => deleteHistoryLog(log.id)} className="text-[10px] font-bold text-red-500 hover:text-red-800 transition uppercase tracking-wider">Delete</button>
+                            </td>
+                          )}
                         </tr>
                       ))
                     )}
@@ -1370,7 +1533,10 @@ export default function App() {
                     ) : (
                       pendingApprovals.map((u) => (
                         <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                          <div><h4 className="font-bold text-xs text-gray-900">{u.name}</h4><span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span></div>
+                          <div>
+                            <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
+                            <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
+                          </div>
                           <div className="flex space-x-2">
                             <button onClick={() => handleApproveUser(u.email)} className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold uppercase py-1.5 px-3 rounded shadow transition">Approve Access</button>
                             <button onClick={() => handleDenyUser(u.email)} className="border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold uppercase py-1.5 px-3 rounded transition">Decline</button>
