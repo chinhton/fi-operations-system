@@ -19,7 +19,7 @@ export default function App() {
     {
       id: "USER-ADMIN",
       name: "System Administrator",
-      email: "admin",
+      email: "admin@fcimg.com",
       password: "admin",
       role: "System Admin",
       approved: true
