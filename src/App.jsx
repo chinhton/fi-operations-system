@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import OperatorAssignment from './components/OperatorAssignment';
 
 const customStyles = `
   body {
@@ -169,8 +168,24 @@ export default function App() {
     const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
     if (res.ok) {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
-      triggerModal("Account Approved", `Access granted successfully for ${email}.`, "success");
     }
+
+    // AUTOMATED EMAIL TRIGGER
+    try {
+      await fetch('/api/sendEmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: email,
+          subject: 'Account Approved - FI Operations System',
+          body: `Hello ${targetUser.name},\n\nYour account access request for the Fairchild Imaging Operations System has been approved by the System Administrator. You can now log in using your corporate email and security password.\n\nThank you.`
+        }),
+      });
+    } catch (err) {
+      console.error('Failed to trigger approval email:', err);
+    }
+
+    triggerModal("Account Approved", `Access granted successfully for ${email}. An automated notification email has been dispatched to the user.`, "success");
   };
 
   const handleDenyUser = (email) => {
@@ -773,13 +788,6 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-
-                  {/* NEW: Operator Assignment Module Embedded Here */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-3">Task Delegation</h4>
-                    <OperatorAssignment />
-                  </div>
-
                 </div>
               </div>
             </div>
