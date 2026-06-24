@@ -37,8 +37,6 @@ export default function App() {
   const [registerName, setRegisterName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
-  
-  // NEW: State to prevent duplicate submissions
   const [isRegistering, setIsRegistering] = useState(false);
   
   const [assets, setAssets] = useState([]);
@@ -117,8 +115,6 @@ export default function App() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    
-    // Safety lock: if already processing a click, ignore any subsequent clicks
     if (isRegistering) return;
     
     setAuthError(""); setAuthSuccess("");
@@ -128,7 +124,6 @@ export default function App() {
     const alreadyExists = users.some(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
     if (alreadyExists) { setAuthError("An account with this email address already exists."); return; }
 
-    // Lock the button
     setIsRegistering(true);
 
     const newUser = { 
@@ -154,7 +149,6 @@ export default function App() {
       setAuthError("Network communication error. Please try again.");
       console.error(err);
     } finally {
-      // Unlock the button after request finishes (success or fail)
       setIsRegistering(false);
     }
   };
@@ -188,13 +182,14 @@ export default function App() {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
     }
 
-    // AUTOMATED EMAIL TRIGGER
+    // AUTOMATED EMAIL TRIGGER WITH CC INCLUDED
     try {
       await fetch('/api/sendEmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: email,
+          cc: 'cton@fcimg.com',
           subject: 'Account Approved - FI Operations System',
           body: `Hello ${targetUser.name},\n\nYour account access request for the Fairchild Imaging Operations System has been approved by the System Administrator. You can now log in using your corporate email and security password.\n\nThank you.`
         }),
@@ -593,12 +588,9 @@ export default function App() {
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Choose Security Password</label>
                   <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
                 </div>
-                
-                {/* NEW: Button disabled state to prevent spamming */}
                 <button type="submit" disabled={isRegistering} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans transition-all ${isRegistering ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   {isRegistering ? 'Submitting...' : 'Submit Access Request'}
                 </button>
-                
                 <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
                   Already registered? <button type="button" onClick={() => { setAuthMode("signin"); setAuthError(""); setAuthSuccess(""); }} className="text-[#005596] hover:underline font-bold">Back to Sign In</button>
                 </p>

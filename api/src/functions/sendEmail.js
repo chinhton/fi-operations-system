@@ -8,7 +8,9 @@ app.http('sendEmail', {
         try {
             // Parse incoming JSON data from your React frontend
             const requestBody = await request.json();
-            const { to, subject, body } = requestBody;
+            
+            // NEW: Extract 'cc' alongside the other variables
+            const { to, cc, subject, body } = requestBody;
 
             // Load the connection string from Azure Environment Variables
             const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
@@ -23,7 +25,7 @@ app.http('sendEmail', {
 
             const client = new EmailClient(connectionString);
 
-            // Construct the email payload using your exact provisioned domain
+            // Construct the base email payload
             const emailMessage = {
                 senderAddress: "DoNotReply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
                 content: {
@@ -34,6 +36,11 @@ app.http('sendEmail', {
                     to: [{ address: to }],
                 },
             };
+
+            // NEW: Safely append the CC array if a CC address was provided by the frontend
+            if (cc) {
+                emailMessage.recipients.cc = [{ address: cc }];
+            }
 
             // Trigger the email sending sequence
             const poller = await client.beginSend(emailMessage);
