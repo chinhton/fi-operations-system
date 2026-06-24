@@ -82,6 +82,13 @@ export default function App() {
   // REAL-TIME CLOCK STATE
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // NAVIGATION FLOW STATE
+  const [navOrder, setNavOrder] = useState(() => {
+    const saved = localStorage.getItem('fi_nav_order');
+    return saved ? JSON.parse(saved) : ['dashboard', 'assets', 'scheduler', 'manuals', 'templates', 'history'];
+  });
+  const [isEditingNav, setIsEditingNav] = useState(false);
+
   const manualFileInputRef = useRef(null);
 
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
@@ -111,6 +118,17 @@ export default function App() {
 
   const closeModal = () => {
     setCustomModal({ show: false, title: "", message: "", type: "info", onConfirm: null });
+  };
+
+  const moveNav = (index, direction) => {
+    const newOrder = [...navOrder];
+    if (direction === -1 && index > 0) {
+      [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+    } else if (direction === 1 && index < newOrder.length - 1) {
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    }
+    setNavOrder(newOrder);
+    localStorage.setItem('fi_nav_order', JSON.stringify(newOrder));
   };
 
   const handleSignIn = async (e) => {
@@ -459,18 +477,19 @@ export default function App() {
         
         const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
         
-        // Handle targeted PM Clocks updating rather than wiping all of them
-        const currentPmDates = selectedAsset.pmDates || {};
+        // BUG FIX: Securely copy all existing baselines FIRST so updating lastPmDate doesn't wipe them
+        const currentPmDates = { ...selectedAsset.pmDates };
+        const activeFreqs = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
         
-        // Legacy fallback integration
-        if (selectedAsset.lastPmDate && !Object.keys(currentPmDates).length && selectedAsset.pmFrequency) {
-            currentPmDates[selectedAsset.pmFrequency] = selectedAsset.lastPmDate;
-        }
+        activeFreqs.forEach(f => {
+            if (!currentPmDates[f]) {
+                currentPmDates[f] = selectedAsset.lastPmDate; // Lock in the old baseline before we push the global forward
+            }
+        });
 
         const interval = selectedTemplate.interval; 
         const updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
 
-        // Make sure the interval executed is mapped to the asset so it continues tracking
         let updatedFrequencies = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
         if (!updatedFrequencies.includes(interval) && interval !== "On-Demand") {
             updatedFrequencies = [...updatedFrequencies, interval];
@@ -479,7 +498,7 @@ export default function App() {
         const updatedAsset = { 
           ...selectedAsset, 
           status: finalStatus, 
-          lastPmDate: new Date().toISOString(), // Keeping old string alive for legacy components 
+          lastPmDate: new Date().toISOString(), 
           pmDates: updatedPmDates,
           pmFrequencies: updatedFrequencies
         };
@@ -511,7 +530,8 @@ export default function App() {
       newAsset.pmFrequencies.forEach(freq => { initialPmDates[freq] = new Date().toISOString(); });
 
       const created = { 
-        id: `FI-${Date.now().toString().slice(-3)}`, 
+        // BUG FIX: Inject random math node to prevent ms-slice collisions on rapid asset creation
+        id: `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
         ...newAsset, 
         category: newAsset.category.trim() || "Uncategorized", 
         status: "Operational", 
@@ -741,6 +761,16 @@ export default function App() {
     return acc;
   }, {});
 
+  // DYNAMIC SIDEBAR RENDER MAPPING
+  const navData = {
+    dashboard: { icon: '📊', label: 'Operations Dashboard' },
+    assets: { icon: '🏭', label: 'Asset Directory', badge: assets.length },
+    scheduler: { icon: '📋', label: 'PM Execution & Sign-Off' },
+    manuals: { icon: '📖', label: 'Equipment Manuals', badge: manualCount },
+    templates: { icon: '⚙️', label: 'PM Task Configurations', badge: pmTemplates.length },
+    history: { icon: '📜', label: 'Audit Logs & PM History', badge: history.length }
+  };
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#F4F6F8] flex flex-col justify-center items-center px-4 py-12 antialiased">
@@ -862,65 +892,35 @@ export default function App() {
       {/* CORE WRAPPER LAYOUT WITH LEFT NAVIGATION SIDEBAR */}
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto">
         
-        {/* REFACTORED NAVIGATION SIDEBAR PANEL */}
+        {/* DYNAMIC NAVIGATION SIDEBAR PANEL */}
         <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-4 space-y-1 flex flex-col shrink-0">
           <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 hidden md:block">
             Main Navigation
           </div>
           
-          <button 
-            onClick={() => setActiveTab("dashboard")} 
-            className={`w-full flex items-center space-x-3 px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "dashboard" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <span>📊</span> <span>Operations Dashboard</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab("assets")} 
-            className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "assets" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <div className="flex items-center space-x-3">
-              <span>🏭</span> <span>Asset Directory</span>
-            </div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === "assets" ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{assets.length}</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab("scheduler")} 
-            className={`w-full flex items-center space-x-3 px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "scheduler" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <span>📋</span> <span>PM Execution & Sign-Off</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab("manuals")} 
-            className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "manuals" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <div className="flex items-center space-x-3">
-              <span>📖</span> <span>Equipment Manuals</span>
-            </div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === "manuals" ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{manualCount}</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab("templates")} 
-            className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "templates" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <div className="flex items-center space-x-3">
-              <span>⚙️</span> <span>PM Task Configurations</span>
-            </div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === "templates" ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{pmTemplates.length}</span>
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab("history")} 
-            className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "history" ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-          >
-            <div className="flex items-center space-x-3">
-              <span>📜</span> <span>Audit Logs & PM History</span>
-            </div>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === "history" ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{history.length}</span>
-          </button>
+          {navOrder.map((tabId, index) => {
+            const info = navData[tabId];
+            if (!info) return null;
+            return (
+              <div key={tabId} className="relative flex items-center group">
+                {isEditingNav && isSystemAdmin && (
+                  <div className="absolute left-[-8px] flex flex-col space-y-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => moveNav(index, -1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▲</button>
+                    <button onClick={() => moveNav(index, 1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▼</button>
+                  </div>
+                )}
+                <button 
+                  onClick={() => !isEditingNav && setActiveTab(tabId)} 
+                  className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId && !isEditingNav ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"} ${isEditingNav ? 'pl-6 border border-dashed border-gray-300 cursor-move' : ''}`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <span>{info.icon}</span> <span>{info.label}</span>
+                  </div>
+                  {info.badge !== undefined && <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId && !isEditingNav ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{info.badge}</span>}
+                </button>
+              </div>
+            );
+          })}
           
           {isSystemAdmin && (
             <button 
@@ -932,6 +932,14 @@ export default function App() {
               </div>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ${activeTab === "approvals" ? "bg-red-600 text-white" : "bg-red-100 text-red-700"}`}>{pendingApprovals.length}</span>
             </button>
+          )}
+
+          {isSystemAdmin && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <button onClick={() => setIsEditingNav(!isEditingNav)} className={`w-full text-[10px] uppercase font-bold transition flex items-center justify-center space-x-2 py-2 rounded ${isEditingNav ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-100' : 'text-gray-400 hover:text-[#005596] hover:bg-gray-50'}`}>
+                  <span>{isEditingNav ? '✅ Save Flow' : '⚙️ Edit Navigation Flow'}</span>
+              </button>
+            </div>
           )}
         </aside>
 
