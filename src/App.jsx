@@ -37,7 +37,14 @@ export default function App() {
   const [registerName, setRegisterName] = useState("");
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
+  
+  // ANTI-SPAM LOCK STATES
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isAddingAsset, setIsAddingAsset] = useState(false);
+  const [isAddingTemplate, setIsAddingTemplate] = useState(false);
+  const [isAttachingManual, setIsAttachingManual] = useState(false);
+  const [isSubmittingPm, setIsSubmittingPm] = useState(false);
   
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
@@ -95,22 +102,29 @@ export default function App() {
     setCustomModal({ show: false, title: "", message: "", type: "info", onConfirm: null });
   };
 
-  const handleSignIn = (e) => {
+  const handleSignIn = async (e) => {
     e.preventDefault();
+    if (isSigningIn) return;
+    setIsSigningIn(true);
     setAuthError(""); setAuthSuccess("");
-    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Username/Email and password fields are required."); return; }
     
-    const matchedUser = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
-    
-    if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid credentials."); return; }
-    if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
-    
-    localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
-    
-    setCurrentUser(matchedUser); 
-    setAuthEmail(""); 
-    setAuthPassword(""); 
-    setActiveTab("dashboard");
+    try {
+      if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Username/Email and password fields are required."); return; }
+      
+      const matchedUser = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
+      
+      if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid credentials."); return; }
+      if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
+      
+      localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
+      
+      setCurrentUser(matchedUser); 
+      setAuthEmail(""); 
+      setAuthPassword(""); 
+      setActiveTab("dashboard");
+    } finally {
+      setIsSigningIn(false);
+    }
   };
 
   const handleRegister = async (e) => {
@@ -293,72 +307,80 @@ export default function App() {
 
   const handleAttachManualSubmit = async (e) => {
     e.preventDefault();
+    if (isAttachingManual) return;
+    
     if (manualAssetIds.length === 0) { triggerModal("Field Required", "Please select at least one target asset from the fleet directory.", "info"); return; }
     if (!manualFile && !manualText.trim()) { triggerModal("Input Required", "Please attach a documentation file or draft a quick-reference procedure layout.", "info"); return; }
     
     const targetAssets = assets.filter(a => manualAssetIds.includes(a.id));
     if (targetAssets.length === 0) return;
 
-    let finalFileUrl = "";
-    let finalFileName = manualFile ? manualFile.name : `Quick_Manual_${Date.now().toString().slice(-4)}.txt`;
+    setIsAttachingManual(true);
 
-    if (manualFile) {
-      triggerModal("Uploading", `Transferring manual and mapping to ${targetAssets.length} asset(s)...`, "info");
-      try {
-        const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: manualFile.name, fileData: manualFile.data }) });
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json(); finalFileUrl = uploadData.url; finalFileName = uploadData.fileName;
-        } else {
-          closeModal(); triggerModal("Upload Failed", "Could not transfer file to Azure Blob Storage. Check console logs.", "error"); return;
-        }
-      } catch (err) { closeModal(); triggerModal("Network Error", "Failed to reach the upload server.", "error"); return; }
-    } else {
-      finalFileUrl = `data:text/plain;base64,${btoa(unescape(encodeURIComponent(manualText)))}`;
-    }
+    try {
+      let finalFileUrl = "";
+      let finalFileName = manualFile ? manualFile.name : `Quick_Manual_${Date.now().toString().slice(-4)}.txt`;
 
-    const attachmentPayload = { 
-      id: `DOC-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`,
-      fileName: finalFileName, 
-      fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, 
-      fileData: finalFileUrl, 
-      manualText: manualText || "Refer to the attached downloaded instruction file." 
-    };
-
-    const updatedAssetsMap = {};
-    const newLogs = [];
-
-    await Promise.all(targetAssets.map(async (targetAsset) => {
-      const existingManuals = targetAsset.manuals || (targetAsset.manual ? [targetAsset.manual] : []);
-      const updatedAsset = { ...targetAsset, manual: null, manuals: [...existingManuals, attachmentPayload] };
-      updatedAssetsMap[updatedAsset.id] = updatedAsset;
-
-      const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "admin@fcimg.com", status: "Completed Pass", comments: `Successfully linked new manual documentation [${attachmentPayload.fileName}] to device.` };
-      
-      try {
-        await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
-        const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
-        if (logRes.ok) {
-          const savedLog = await logRes.json();
-          newLogs.push(savedLog);
-        }
-      } catch (err) {
-        console.error("Failed to sync manual for asset", targetAsset.id, err);
+      if (manualFile) {
+        triggerModal("Uploading", `Transferring manual and mapping to ${targetAssets.length} asset(s)...`, "info");
+        try {
+          const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: manualFile.name, fileData: manualFile.data }) });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json(); finalFileUrl = uploadData.url; finalFileName = uploadData.fileName;
+          } else {
+            closeModal(); triggerModal("Upload Failed", "Could not transfer file to Azure Blob Storage. Check console logs.", "error"); return;
+          }
+        } catch (err) { closeModal(); triggerModal("Network Error", "Failed to reach the upload server.", "error"); return; }
+      } else {
+        finalFileUrl = `data:text/plain;base64,${btoa(unescape(encodeURIComponent(manualText)))}`;
       }
-    }));
 
-    setHistory(prev => [...newLogs, ...prev]);
-    setAssets(prevAssets => prevAssets.map(ast => updatedAssetsMap[ast.id] || ast));
-    
-    const firstUpdated = updatedAssetsMap[targetAssets[0].id];
-    setViewingManualAsset(firstUpdated);
-    setActiveManualIndex(firstUpdated.manuals.length - 1);
-    
-    closeModal(); 
-    setManualAssetIds([]); 
-    setManualFile(null); 
-    setManualText(""); 
-    if (manualFileInputRef.current) manualFileInputRef.current.value = "";
-    triggerModal("Success", `Document successfully uploaded and mapped to ${targetAssets.length} asset(s).`, "success");
+      const attachmentPayload = { 
+        id: `DOC-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 100)}`,
+        fileName: finalFileName, 
+        fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, 
+        fileData: finalFileUrl, 
+        manualText: manualText || "Refer to the attached downloaded instruction file." 
+      };
+
+      const updatedAssetsMap = {};
+      const newLogs = [];
+
+      await Promise.all(targetAssets.map(async (targetAsset) => {
+        const existingManuals = targetAsset.manuals || (targetAsset.manual ? [targetAsset.manual] : []);
+        const updatedAsset = { ...targetAsset, manual: null, manuals: [...existingManuals, attachmentPayload] };
+        updatedAssetsMap[updatedAsset.id] = updatedAsset;
+
+        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "admin@fcimg.com", status: "Completed Pass", comments: `Successfully linked new manual documentation [${attachmentPayload.fileName}] to device.` };
+        
+        try {
+          await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+          const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
+          if (logRes.ok) {
+            const savedLog = await logRes.json();
+            newLogs.push(savedLog);
+          }
+        } catch (err) {
+          console.error("Failed to sync manual for asset", targetAsset.id, err);
+        }
+      }));
+
+      setHistory(prev => [...newLogs, ...prev]);
+      setAssets(prevAssets => prevAssets.map(ast => updatedAssetsMap[ast.id] || ast));
+      
+      const firstUpdated = updatedAssetsMap[targetAssets[0].id];
+      setViewingManualAsset(firstUpdated);
+      setActiveManualIndex(firstUpdated.manuals.length - 1);
+      
+      closeModal(); 
+      setManualAssetIds([]); 
+      setManualFile(null); 
+      setManualText(""); 
+      if (manualFileInputRef.current) manualFileInputRef.current.value = "";
+      triggerModal("Success", `Document successfully uploaded and mapped to ${targetAssets.length} asset(s).`, "success");
+    } finally {
+      setIsAttachingManual(false);
+    }
   };
 
   const handleRemoveManual = (assetId, docId) => {
@@ -400,7 +422,10 @@ export default function App() {
   };
 
   const handleSubmitPm = (e) => {
-    e.preventDefault(); setValidationError("");
+    e.preventDefault(); 
+    if (isSubmittingPm) return;
+    
+    setValidationError("");
     if (!selectedAssetId || !selectedTemplateId) { setValidationError("Error: You must select an active asset and protocol."); return; }
     const selectedAsset = assets.find(a => a.id === selectedAssetId); const selectedTemplate = pmTemplates.find(t => t.id === selectedTemplateId);
     if (!selectedAsset || !selectedTemplate) { setValidationError("Error: Match error for Asset or SOP protocol indices."); return; }
@@ -416,49 +441,63 @@ export default function App() {
   };
 
   const executeChecklistSubmission = async (selectedAsset, selectedTemplate, statusState) => {
-    const newLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: selectedAsset.id, assetName: selectedAsset.name, templateName: selectedTemplate.name, interval: selectedTemplate.interval, technician: currentUser.name, email: currentUser.email, status: statusState, comments: pmComments || "No special operating comments provided." };
-    const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newLog) });
-    if (res.ok) {
-      const savedLog = await res.json(); setHistory([savedLog, ...history]);
-      
-      const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
-      const updatedAsset = { ...selectedAsset, status: finalStatus, lastPmDate: new Date().toISOString() };
-      
-      try {
-        await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
-      } catch (err) {
-        console.error("Failed to update asset PM date in DB", err);
-      }
+    setIsSubmittingPm(true);
+    try {
+      const newLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: selectedAsset.id, assetName: selectedAsset.name, templateName: selectedTemplate.name, interval: selectedTemplate.interval, technician: currentUser.name, email: currentUser.email, status: statusState, comments: pmComments || "No special operating comments provided." };
+      const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newLog) });
+      if (res.ok) {
+        const savedLog = await res.json(); setHistory([savedLog, ...history]);
+        
+        const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
+        const updatedAsset = { ...selectedAsset, status: finalStatus, lastPmDate: new Date().toISOString() };
+        
+        try {
+          await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+        } catch (err) {
+          console.error("Failed to update asset PM date in DB", err);
+        }
 
-      setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
-      setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
-      triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully.", "success"); setActiveTab("dashboard");
+        setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
+        setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
+        triggerModal("SOP Signature Logged", "Preventative maintenance log recorded successfully.", "success"); setActiveTab("dashboard");
+      }
+    } finally {
+      setIsSubmittingPm(false);
     }
   };
 
   const handleAddAssetSubmit = async (e) => {
     e.preventDefault();
+    if (isAddingAsset) return;
+    
     if (!newAsset.name || !newAsset.serial) { triggerModal("Error", "Asset name and Serial Number are strictly required.", "info"); return; }
     
-    const created = { 
-      id: `FI-${Date.now().toString().slice(-3)}`, 
-      ...newAsset, 
-      category: newAsset.category.trim() || "Uncategorized", 
-      status: "Operational", 
-      lastPmDate: new Date().toISOString(),
-      manuals: [] 
-    };
+    setIsAddingAsset(true);
+    try {
+      const created = { 
+        id: `FI-${Date.now().toString().slice(-3)}`, 
+        ...newAsset, 
+        category: newAsset.category.trim() || "Uncategorized", 
+        status: "Operational", 
+        lastPmDate: new Date().toISOString(),
+        manuals: [] 
+      };
 
-    const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
-    if (res.ok) {
-      const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
-      setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly" });
-      triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
+      const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
+      if (res.ok) {
+        const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequency: "Monthly" });
+        triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
+      }
+    } finally {
+      setIsAddingAsset(false);
     }
   };
 
   const handleAddTemplateSubmit = async (e) => {
     e.preventDefault();
+    if (isAddingTemplate) return;
+    
     if (!newTemplate.name) { triggerModal("Error", "SOP Template Title is strictly required.", "info"); return; }
     
     const steps = newTemplate.checklistInput
@@ -471,27 +510,32 @@ export default function App() {
       return;
     }
 
-    const created = {
-      id: `SOP-${Date.now().toString().slice(-3)}`,
-      name: newTemplate.name.trim(),
-      interval: newTemplate.interval,
-      department: newTemplate.department.trim() || "General Engineering",
-      checklist: steps
-    };
+    setIsAddingTemplate(true);
+    try {
+      const created = {
+        id: `SOP-${Date.now().toString().slice(-3)}`,
+        name: newTemplate.name.trim(),
+        interval: newTemplate.interval,
+        department: newTemplate.department.trim() || "General Engineering",
+        checklist: steps
+      };
 
-    const res = await fetch('/api/templates', { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify(created) 
-    });
-    
-    if (res.ok) {
-      const savedTemplate = await res.json();
-      setPmTemplates([...pmTemplates, savedTemplate]);
-      setNewTemplate({ name: "", interval: "Monthly", department: "", checklistInput: "" });
-      triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
-    } else {
-      triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
+      const res = await fetch('/api/templates', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(created) 
+      });
+      
+      if (res.ok) {
+        const savedTemplate = await res.json();
+        setPmTemplates([...pmTemplates, savedTemplate]);
+        setNewTemplate({ name: "", interval: "Monthly", department: "", checklistInput: "" });
+        triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
+      } else {
+        triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
+      }
+    } finally {
+      setIsAddingTemplate(false);
     }
   };
 
@@ -585,7 +629,9 @@ export default function App() {
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Security Password</label>
                   <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
                 </div>
-                <button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans">Authorized Sign In</button>
+                <button type="submit" disabled={isSigningIn} className={`w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans transition-all ${isSigningIn ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isSigningIn ? 'Authenticating...' : 'Authorized Sign In'}
+                </button>
                 <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
                   New Operator? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:underline font-bold">Request Account Access</button>
                 </p>
@@ -847,7 +893,11 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  <div className="mt-6 flex justify-end"><button type="submit" className="bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all">Commit Asset</button></div>
+                  <div className="mt-6 flex justify-end">
+                    <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isAddingAsset ? 'Committing...' : 'Commit Asset'}
+                    </button>
+                  </div>
                 </form>
               </div>
               
@@ -947,7 +997,11 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  <div><button type="submit" className="w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 px-4 rounded text-xs font-bold uppercase tracking-widest shadow-sm">Commit Maintenance Action</button></div>
+                  <div>
+                    <button type="submit" disabled={isSubmittingPm} className={`w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 px-4 rounded text-xs font-bold uppercase tracking-widest shadow-sm transition-all ${isSubmittingPm ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isSubmittingPm ? 'Committing Action...' : 'Commit Maintenance Action'}
+                    </button>
+                  </div>
                 </form>
               </div>
             </div>
@@ -1030,7 +1084,9 @@ export default function App() {
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Quick Manual SOP Text Layout</label>
                       <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
                     </div>
-                    <button type="submit" className="w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all">Distribute Manual to Assets</button>
+                    <button type="submit" disabled={isAttachingManual} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isAttachingManual ? 'Uploading Data...' : 'Distribute Manual to Assets'}
+                    </button>
                   </form>
                 </div>
               </div>
@@ -1110,7 +1166,11 @@ export default function App() {
                     <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label><input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" /></div>
                     <div className="md:col-span-3"><label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label><textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea></div>
                   </div>
-                  <div className="mt-6 flex justify-end"><button type="submit" className="bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all">Generate Protocol</button></div>
+                  <div className="mt-6 flex justify-end">
+                    <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isAddingTemplate ? 'Generating Protocol...' : 'Generate Protocol'}
+                    </button>
+                  </div>
                 </form>
               </div>
 
