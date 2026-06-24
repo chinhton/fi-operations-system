@@ -18,8 +18,8 @@ export default function App() {
   const [users, setUsers] = useState([
     {
       id: "USER-ADMIN",
-      name: "Chinh Ton",
-      email: "cton@fcimg.com",
+      name: "System Administrator",
+      email: "admin",
       password: "admin",
       role: "System Admin",
       approved: true
@@ -79,7 +79,7 @@ export default function App() {
     fetch('/api/users').then(res => res.json()).then(data => {
         if (data && data.length > 0) {
           setUsers(prev => {
-            const externalUsers = data.filter(u => u.email !== "cton@fcimg.com");
+            const externalUsers = data.filter(u => u.email !== "admin");
             return [prev[0], ...externalUsers];
           });
         }
@@ -97,11 +97,11 @@ export default function App() {
   const handleSignIn = (e) => {
     e.preventDefault();
     setAuthError(""); setAuthSuccess("");
-    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Email and password fields are required."); return; }
+    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Username/Email and password fields are required."); return; }
     
     const matchedUser = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
     
-    if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid corporate email or security password."); return; }
+    if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid credentials."); return; }
     if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
     
     localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
@@ -164,7 +164,7 @@ export default function App() {
       console.error("Failed to approve user in database:", err);
     }
 
-    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "System Admin", email: "cton@fcimg.com", status: "Completed Pass", comments: `System Admin approved corporate access token for user account: ${email}` };
+    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "System Admin", email: "admin", status: "Completed Pass", comments: `System Admin approved corporate access token for user account: ${email}` };
     const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
     if (res.ok) {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
@@ -206,7 +206,7 @@ export default function App() {
   const handleRevokeUser = (email) => {
     triggerModal("Revoke Corporate Access", `Are you sure you want to permanently terminate access credentials for ${email}?`, "confirm", async () => {
       const targetUser = users.find(u => u.email === email);
-      if (targetUser.email === "cton@fcimg.com") {
+      if (targetUser.email === "admin") {
         triggerModal("Action Blocked", "System Admin account access restrictions cannot self-terminate.", "error");
         return;
       }
@@ -217,7 +217,7 @@ export default function App() {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           
-          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "System Admin", email: "cton@fcimg.com", status: "Incomplete Log", comments: `System Admin permanently revoked corporate access token for account: ${email}` };
+          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "System Admin", email: "admin", status: "Incomplete Log", comments: `System Admin permanently revoked corporate access token for account: ${email}` };
           const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
           if (res.ok) {
             const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
@@ -303,7 +303,7 @@ export default function App() {
       const updatedAsset = { ...targetAsset, manual: null, manuals: [...existingManuals, attachmentPayload] };
       updatedAssetsMap[updatedAsset.id] = updatedAsset;
 
-      const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "cton@fcimg.com", status: "Completed Pass", comments: `Successfully linked new manual documentation [${attachmentPayload.fileName}] to device.` };
+      const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser ? currentUser.name : "System Admin", email: currentUser ? currentUser.email : "admin", status: "Completed Pass", comments: `Successfully linked new manual documentation [${attachmentPayload.fileName}] to device.` };
       
       try {
         await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
@@ -549,8 +549,8 @@ export default function App() {
             {authMode === "signin" ? (
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Email Address</label>
-                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="name@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Username / Email Address</label>
+                  <input type="text" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="admin or name@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Security Password</label>
@@ -1190,7 +1190,7 @@ export default function App() {
                           <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
                         </div>
                         <div>
-                          {u.email === "cton@fcimg.com" ? (
+                          {u.email === "admin" ? (
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider px-3 py-1.5 block">Root Immutable</span>
                           ) : (
                             <button onClick={() => handleRevokeUser(u.email)} className="text-xs font-bold text-red-600 hover:text-red-800 transition py-1.5 px-3 uppercase tracking-wider">
