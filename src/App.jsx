@@ -142,6 +142,22 @@ export default function App() {
         const savedUser = await res.json();
         setUsers([...users, savedUser]); setRegisterName(""); setAuthEmail(""); setAuthPassword("");
         setAuthSuccess("Account request submitted. Please ask the System Admin to authorize your account."); setAuthMode("signin");
+
+        // TRIGGER 1: ADMIN NOTIFICATION FOR NEW USER REQUEST
+        try {
+          await fetch('/api/sendEmail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: 'cton@fcimg.com',
+              subject: 'Action Required: New Account Request - FI Operations System',
+              body: `System Admin,\n\nA new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.\n\nName: ${newUser.name}\nEmail: ${newUser.email}\nRole: ${newUser.role}\n\nPlease log in to the dashboard to approve or decline this request.`
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to trigger admin notification email:', err);
+        }
+
       } else {
         setAuthError("Failed to communicate credential request block packet to Azure.");
       }
@@ -182,7 +198,7 @@ export default function App() {
       const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
     }
 
-    // AUTOMATED EMAIL TRIGGER WITH CC INCLUDED
+    // TRIGGER 2: APPROVAL NOTIFICATION TO OPERATOR WITH CC TO ADMIN
     try {
       await fetch('/api/sendEmail', {
         method: 'POST',
