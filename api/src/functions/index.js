@@ -54,6 +54,9 @@ app.http('templates', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymou
 app.http('history', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
 app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
 
+// THE NEW WORK ORDERS ENDPOINT
+app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
+
 // --- BLOB STORAGE UPLOAD ENDPOINT ---
 app.http('upload', {
     methods: ['POST'],
