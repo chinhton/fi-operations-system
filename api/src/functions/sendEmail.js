@@ -27,7 +27,7 @@ app.http('sendEmail', {
 
             // Construct the base email payload
             const emailMessage = {
-                senderAddress: "DoNotReply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
+                senderAddress: "FI-Operations-noreply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
                 content: {
                     subject: subject || "Notification from FI Operations System",
                     plainText: body || "You have received an automated operational update.",

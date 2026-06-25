@@ -915,6 +915,9 @@ export default function App() {
     return acc;
   }, {});
 
+  // ADDED THIS LINE: Filter out completed work orders for the active dispatch board
+  const activeWorkOrders = workOrders.filter(w => w.status !== "Completed");
+
   // DYNAMIC SIDEBAR RENDER MAPPING
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
@@ -1243,10 +1246,10 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {workOrders.length === 0 ? (
+                      {activeWorkOrders.length === 0 ? (
                         <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400 text-xs">No active work orders in the system.</td></tr>
                       ) : (
-                        workOrders.map((wo) => (
+                        activeWorkOrders.map((wo) => (
                           <tr key={wo.id} className="hover:bg-gray-50/55 transition">
                             <td className="px-6 py-4">
                               <span className="font-bold text-gray-900 block">{wo.title}</span>
