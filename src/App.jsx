@@ -52,6 +52,8 @@ export default function App() {
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
 
+  // PM EXECUTION MODAL STATES
+  const [showPmModal, setShowPmModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [completedSteps, setCompletedSteps] = useState({});
@@ -82,10 +84,10 @@ export default function App() {
   // REAL-TIME CLOCK STATE
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // NAVIGATION FLOW STATE
+  // NAVIGATION FLOW STATE (Scheduler Tab Removed)
   const [navOrder, setNavOrder] = useState(() => {
     const saved = localStorage.getItem('fi_nav_order');
-    return saved ? JSON.parse(saved) : ['dashboard', 'assets', 'scheduler', 'manuals', 'templates', 'history'];
+    return saved ? JSON.parse(saved) : ['dashboard', 'assets', 'manuals', 'templates', 'history'];
   });
   const [isEditingNav, setIsEditingNav] = useState(false);
 
@@ -94,7 +96,6 @@ export default function App() {
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
 
   useEffect(() => {
-    // Start ticking clock
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
     fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
@@ -301,8 +302,12 @@ export default function App() {
     });
   };
 
-  const handleSelectAssetAndTemplate = (assetId, templateId) => {
-    setSelectedAssetId(assetId); setSelectedTemplateId(templateId || ""); setCompletedSteps({}); setValidationError(""); setActiveTab("scheduler");
+  const handleOpenPmModal = (assetId) => {
+    setSelectedAssetId(assetId); 
+    setSelectedTemplateId(""); 
+    setCompletedSteps({}); 
+    setValidationError(""); 
+    setShowPmModal(true);
   };
 
   const handleUpdateAssetStatus = async (assetId, newStatus) => {
@@ -477,13 +482,12 @@ export default function App() {
         
         const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
         
-        // BUG FIX: Securely copy all existing baselines FIRST so updating lastPmDate doesn't wipe them
         const currentPmDates = { ...selectedAsset.pmDates };
         const activeFreqs = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
         
         activeFreqs.forEach(f => {
             if (!currentPmDates[f]) {
-                currentPmDates[f] = selectedAsset.lastPmDate; // Lock in the old baseline before we push the global forward
+                currentPmDates[f] = selectedAsset.lastPmDate;
             }
         });
 
@@ -511,7 +515,9 @@ export default function App() {
 
         setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
         setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
-        triggerModal("SOP Signature Logged", `Preventative maintenance log recorded successfully. Specific [${interval}] cycle timer has been reset.`, "success"); setActiveTab("dashboard");
+        
+        setShowPmModal(false); // Close the popup instead of switching tabs
+        triggerModal("SOP Signature Logged", `Preventative maintenance log recorded successfully. Specific [${interval}] cycle timer has been reset.`, "success");
       }
     } finally {
       setIsSubmittingPm(false);
@@ -530,12 +536,11 @@ export default function App() {
       newAsset.pmFrequencies.forEach(freq => { initialPmDates[freq] = new Date().toISOString(); });
 
       const created = { 
-        // BUG FIX: Inject random math node to prevent ms-slice collisions on rapid asset creation
         id: `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
         ...newAsset, 
         category: newAsset.category.trim() || "Uncategorized", 
         status: "Operational", 
-        lastPmDate: new Date().toISOString(), // Legacy
+        lastPmDate: new Date().toISOString(),
         pmFrequencies: newAsset.pmFrequencies,
         pmDates: initialPmDates,
         manuals: [] 
@@ -709,7 +714,6 @@ export default function App() {
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
 
-  // EXPANDED ACTION QUEUE - Checks all independent PM cycles per asset
   const expandedActionQueue = [];
   assets.forEach(asset => {
     if (asset.status !== "Operational") {
@@ -720,7 +724,7 @@ export default function App() {
         displayDate: null,
         badgeColor: asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" : asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800"
       });
-      return; // Skip cycle checks if asset is physically down
+      return; 
     }
 
     const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
@@ -729,7 +733,6 @@ export default function App() {
       const lastDate = asset.pmDates?.[freq] || asset.lastPmDate;
       const daysLeft = calculateDaysRemaining(lastDate, freq);
 
-      // DYNAMIC THRESHOLD: Weekly pops up on exact due date (Monday), others get a 7-day heads up.
       const threshold = freq === "Weekly" ? 0 : 7;
 
       if (daysLeft !== null && daysLeft <= threshold) {
@@ -761,11 +764,10 @@ export default function App() {
     return acc;
   }, {});
 
-  // DYNAMIC SIDEBAR RENDER MAPPING
+  // DYNAMIC SIDEBAR RENDER MAPPING (Removed Scheduler Tab)
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     assets: { icon: '🏭', label: 'Asset Directory', badge: assets.length },
-    scheduler: { icon: '📋', label: 'PM Execution & Sign-Off' },
     manuals: { icon: '📖', label: 'Equipment Manuals', badge: manualCount },
     templates: { icon: '⚙️', label: 'PM Task Configurations', badge: pmTemplates.length },
     history: { icon: '📜', label: 'Audit Logs & PM History', badge: history.length }
@@ -994,7 +996,7 @@ export default function App() {
                                 </div>
                               )}
                               <button 
-                                onClick={() => { setSelectedAssetId(item.id); setActiveTab("scheduler"); }} 
+                                onClick={() => handleOpenPmModal(item.id)} 
                                 className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
                                 Execute PM ➔
                               </button>
@@ -1050,7 +1052,6 @@ export default function App() {
                       <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     
-                    {/* UPDATED MULTI-SELECT PM FREQUENCY LAYOUT */}
                     <div className="md:col-span-1">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
                       <div className="flex flex-wrap gap-3 mt-2.5">
@@ -1108,7 +1109,6 @@ export default function App() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 text-xs">
                             {catAssets.map((asset) => {
-                              // Extract array of frequencies with fallback for legacy DB entries
                               const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
                               
                               return (
@@ -1137,7 +1137,6 @@ export default function App() {
                                       <option value="Corrective Maintenance">Corrective Action</option>
                                     </select>
                                     
-                                    {/* MULTIPLE PM DATES RENDERER */}
                                     <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
                                       {freqs.length === 0 ? (
                                         <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
@@ -1166,7 +1165,7 @@ export default function App() {
                                     </div>
                                   </td>
                                   <td className="px-6 py-4 text-right space-x-4">
-                                    <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab("scheduler"); }} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                                    <button onClick={() => handleOpenPmModal(asset.id)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                                     {isSystemAdmin && (
                                       <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                                     )}
@@ -1180,57 +1179,6 @@ export default function App() {
                     </div>
                   ))
                 )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "scheduler" && (
-            <div className="max-w-3xl mx-auto">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between">
-                  <div><h3 className="font-bold text-sm tracking-wide uppercase">Active Maintenance Sign-Off Form</h3></div>
-                </div>
-                <form onSubmit={handleSubmitPm} className="p-6 space-y-6">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">1. Select Hardware System for Action</label>
-                    <select value={selectedAssetId} onChange={(e) => handleSelectAssetAndTemplate(e.target.value, selectedTemplateId)} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                      <option value="">-- Choose Hardware System from Directory --</option>
-                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">2. Select SOP Protocol</label>
-                    <select 
-                      value={selectedTemplateId} 
-                      onChange={(e) => { setSelectedTemplateId(e.target.value); setCompletedSteps({}); }} 
-                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
-                      disabled={!selectedAssetId}
-                    >
-                      <option value="">-- Choose Protocol Template to Execute --</option>
-                      {pmTemplates
-                        .filter(t => !selectedAssetId || t.targetCategory === "Global" || t.targetCategory === assets.find(a => a.id === selectedAssetId)?.category)
-                        .map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name} {t.targetCategory !== "Global" ? `(Locked to ${t.targetCategory})` : ''}</option>)}
-                    </select>
-                  </div>
-                  {selectedTemplateId && (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-5">
-                      <h4 className="font-bold text-xs text-gray-700 uppercase tracking-wide mb-4">3. Mandatory Task Checklist Steps</h4>
-                      <div className="space-y-3.5">
-                        {pmTemplates.find(t => t.id === selectedTemplateId)?.checklist.map((step, idx) => (
-                          <label key={idx} className={`flex items-start p-2 rounded cursor-pointer transition ${completedSteps[idx] ? "bg-green-50/50" : "hover:bg-gray-100"}`}>
-                            <input type="checkbox" checked={!!completedSteps[idx]} onChange={(e) => setCompletedSteps({ ...completedSteps, [idx]: e.target.checked })} className="h-4.5 w-4.5 text-[#005596] border-gray-300 rounded mt-0.5" />
-                            <span className="ml-3 text-xs text-gray-700 font-medium">{step}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <button type="submit" disabled={isSubmittingPm} className={`w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 px-4 rounded text-xs font-bold uppercase tracking-widest shadow-sm transition-all ${isSubmittingPm ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isSubmittingPm ? 'Committing Action...' : 'Commit Maintenance Action'}
-                    </button>
-                  </div>
-                </form>
               </div>
             </div>
           )}
@@ -1597,6 +1545,64 @@ export default function App() {
 
         </main>
       </div>
+
+      {/* QUICK EXECUTE PM MODAL */}
+      {showPmModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-sm tracking-wide uppercase">Active Maintenance Sign-Off</h3>
+              <button onClick={() => setShowPmModal(false)} className="text-white hover:text-blue-200 text-xl font-bold leading-none">&times;</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-grow">
+              <form onSubmit={handleSubmitPm} className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">1. Select Hardware System for Action</label>
+                  <select value={selectedAssetId} onChange={(e) => { setSelectedAssetId(e.target.value); setSelectedTemplateId(""); }} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                    <option value="">-- Choose Hardware System from Directory --</option>
+                    {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">2. Select SOP Protocol</label>
+                  <select 
+                    value={selectedTemplateId} 
+                    onChange={(e) => { setSelectedTemplateId(e.target.value); setCompletedSteps({}); }} 
+                    className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+                    disabled={!selectedAssetId}
+                  >
+                    <option value="">-- Choose Protocol Template to Execute --</option>
+                    {pmTemplates
+                      .filter(t => !selectedAssetId || t.targetCategory === "Global" || t.targetCategory === assets.find(a => a.id === selectedAssetId)?.category)
+                      .map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name} {t.targetCategory !== "Global" ? `(Locked to ${t.targetCategory})` : ''}</option>)}
+                  </select>
+                </div>
+                {selectedTemplateId && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-5">
+                    <h4 className="font-bold text-xs text-gray-700 uppercase tracking-wide mb-4">3. Mandatory Task Checklist Steps</h4>
+                    <div className="space-y-3.5">
+                      {pmTemplates.find(t => t.id === selectedTemplateId)?.checklist.map((step, idx) => (
+                        <label key={idx} className={`flex items-start p-2 rounded cursor-pointer transition ${completedSteps[idx] ? "bg-green-50/50" : "hover:bg-gray-100"}`}>
+                          <input type="checkbox" checked={!!completedSteps[idx]} onChange={(e) => setCompletedSteps({ ...completedSteps, [idx]: e.target.checked })} className="h-4.5 w-4.5 text-[#005596] border-gray-300 rounded mt-0.5" />
+                          <span className="ml-3 text-xs text-gray-700 font-medium">{step}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="pt-4 border-t border-gray-100 flex justify-end space-x-3">
+                  <button type="button" onClick={() => setShowPmModal(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
+                  <button type="submit" disabled={isSubmittingPm || !selectedTemplateId} className={`bg-[#005596] hover:bg-[#005596]/95 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-widest shadow-sm transition-all ${isSubmittingPm || !selectedTemplateId ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    {isSubmittingPm ? 'Committing Action...' : 'Commit Action'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GLOBAL MODALS */}
       {customModal.show && (
