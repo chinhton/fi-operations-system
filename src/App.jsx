@@ -47,10 +47,12 @@ export default function App() {
   const [isAddingTemplate, setIsAddingTemplate] = useState(false);
   const [isAttachingManual, setIsAttachingManual] = useState(false);
   const [isSubmittingPm, setIsSubmittingPm] = useState(false);
+  const [isSubmittingWo, setIsSubmittingWo] = useState(false);
   
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
 
   // PM EXECUTION MODAL STATES
   const [showPmModal, setShowPmModal] = useState(false);
@@ -65,6 +67,10 @@ export default function App() {
 
   const [newTemplate, setNewTemplate] = useState({
     name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: ""
+  });
+
+  const [newWo, setNewWo] = useState({
+    title: "", description: "", assetId: "", assignedTo: "", priority: "Medium"
   });
 
   const [manualAssetIds, setManualAssetIds] = useState([]);
@@ -87,7 +93,16 @@ export default function App() {
   // NAVIGATION FLOW STATE
   const [navOrder, setNavOrder] = useState(() => {
     const saved = localStorage.getItem('fi_nav_order');
-    return saved ? JSON.parse(saved) : ['dashboard', 'assets', 'manuals', 'templates', 'history'];
+    if (saved) {
+      let parsed = JSON.parse(saved);
+      // Inject work orders into legacy saved layouts
+      if (!parsed.includes('workOrders')) {
+        parsed.splice(1, 0, 'workOrders');
+        localStorage.setItem('fi_nav_order', JSON.stringify(parsed));
+      }
+      return parsed;
+    }
+    return ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history'];
   });
   const [isEditingNav, setIsEditingNav] = useState(false);
 
@@ -133,7 +148,6 @@ export default function App() {
     fetch('/api/assets').then(res => res.json()).then(data => {
       if (!data) return;
       
-      // AUTO-STATUS COMPLIANCE ENGINE
       const evaluatedData = data.map(asset => {
         if (asset.status === "Corrective Maintenance") return asset; 
         
@@ -166,6 +180,8 @@ export default function App() {
 
     fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(data || [])).catch(err => console.error("Error pulling templates:", err));
     fetch('/api/history').then(res => res.json()).then(data => setHistory(data || [])).catch(err => console.error("Error pulling history:", err));
+    fetch('/api/workorders').then(res => res.json()).then(data => setWorkOrders(data || [])).catch(err => console.error("Error pulling work orders:", err));
+    
     fetch('/api/users').then(res => res.json()).then(data => {
         if (data && data.length > 0) {
           setUsers(prev => {
@@ -546,15 +562,22 @@ export default function App() {
         const savedLog = await res.json(); setHistory([savedLog, ...history]);
         
         const currentPmDates = { ...selectedAsset.pmDates };
+        const activeFreqs = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
+        
+        activeFreqs.forEach(f => {
+            if (!currentPmDates[f]) {
+                currentPmDates[f] = selectedAsset.lastPmDate;
+            }
+        });
+
         const interval = selectedTemplate.interval; 
-        updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
+        const updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
 
         let updatedFrequencies = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
         if (!updatedFrequencies.includes(interval) && interval !== "On-Demand") {
             updatedFrequencies = [...updatedFrequencies, interval];
         }
 
-        // EVALUATE NEW DYNAMIC STATUS (Instead of forcing to "Operational")
         let computedStatus = "Operational";
         let hasOverdueCalibration = false;
         let hasDueMaint = false;
@@ -594,6 +617,89 @@ export default function App() {
       }
     } finally {
       setIsSubmittingPm(false);
+    }
+  };
+
+  const handleAddWorkOrder = async (e) => {
+    e.preventDefault();
+    if (isSubmittingWo) return;
+    
+    if (!newWo.title.trim() || !newWo.assignedTo) { 
+      triggerModal("Input Required", "Work Order Title and Assigned Operator are strictly required fields.", "info"); 
+      return; 
+    }
+    
+    setIsSubmittingWo(true);
+    try {
+      const created = { 
+        id: `WO-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
+        ...newWo, 
+        status: "Open", 
+        createdBy: currentUser.name,
+        timestamp: new Date().toISOString()
+      };
+
+      const res = await fetch('/api/workorders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
+      if (res.ok) {
+        const savedWo = await res.json(); 
+        setWorkOrders([savedWo, ...workOrders]);
+        setNewWo({ title: "", description: "", assetId: "", assignedTo: "", priority: "Medium" });
+        triggerModal("Work Order Dispatched", `Task successfully assigned and queued for operator action.`, "success");
+
+        const assignedUser = users.find(u => u.email === newWo.assignedTo);
+        const assignedName = assignedUser ? assignedUser.name : 'Technician';
+        try {
+          await fetch('/api/sendEmail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: newWo.assignedTo,
+              subject: `New Work Order Assigned: ${newWo.title} - FI Operations System`,
+              body: `Hello ${assignedName},\n\nYou have been assigned a new work order in the Fairchild Imaging Operations System.\n\nTicket: ${newWo.title}\nPriority: ${newWo.priority}\nDescription: ${newWo.description || 'No additional details provided.'}\n\nPlease log in to the dashboard to review and update the status of this job.\n\nThank you.`
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to trigger work order notification email:', err);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate work order:", err);
+    } finally {
+      setIsSubmittingWo(false);
+    }
+  };
+
+  const handleUpdateWoStatus = async (woId, newStatus) => {
+    const targetWo = workOrders.find(w => w.id === woId);
+    if (!targetWo) return;
+    
+    const updatedWo = { ...targetWo, status: newStatus };
+    setWorkOrders(workOrders.map(w => w.id === woId ? updatedWo : w));
+
+    try {
+      await fetch('/api/workorders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedWo) });
+
+      if (newStatus === "Completed") {
+        const logEntry = {
+          id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`,
+          timestamp: new Date().toLocaleString(),
+          assetId: targetWo.assetId || "FACILITY-GEN",
+          assetName: targetWo.assetId ? (assets.find(a=>a.id === targetWo.assetId)?.name || "Unknown") : "General Facility Area",
+          templateName: `Ad-Hoc Work Order: ${targetWo.title}`,
+          interval: "On-Demand",
+          technician: currentUser.name,
+          email: currentUser.email,
+          status: "Completed Pass",
+          comments: targetWo.description || "Work order marked resolved by technician."
+        };
+        const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
+        if (logRes.ok) {
+          const savedLog = await logRes.json();
+          setHistory([savedLog, ...history]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to update Work Order status:", err);
     }
   };
 
@@ -812,6 +918,7 @@ export default function App() {
   // DYNAMIC SIDEBAR RENDER MAPPING
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
+    workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
     assets: { icon: '🏭', label: 'Asset Directory', badge: assets.length },
     manuals: { icon: '📖', label: 'Equipment Manuals', badge: manualCount },
     templates: { icon: '⚙️', label: 'PM Task Configurations', badge: pmTemplates.length },
@@ -963,7 +1070,11 @@ export default function App() {
                   <div className="flex items-center space-x-3">
                     <span>{info.icon}</span> <span>{info.label}</span>
                   </div>
-                  {info.badge !== undefined && <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId && !isEditingNav ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>{info.badge}</span>}
+                  {info.badge !== undefined && info.badge !== 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId && !isEditingNav ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
+                      {info.badge}
+                    </span>
+                  )}
                 </button>
               </div>
             );
@@ -1070,6 +1181,123 @@ export default function App() {
             </div>
           )}
 
+          {activeTab === "workOrders" && (
+            <div className="space-y-8">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Dispatch Ad-Hoc Work Order</h3></div>
+                <form onSubmit={handleAddWorkOrder} className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Work Order Title</label>
+                      <input type="text" value={newWo.title} onChange={(e) => setNewWo({...newWo, title: e.target.value})} placeholder="e.g. Replace worn HEPA filter in cleanroom" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset (Optional)</label>
+                      <select value={newWo.assetId} onChange={(e) => setNewWo({...newWo, assetId: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="">-- General Facility (No specific asset) --</option>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign To Operator</label>
+                      <select value={newWo.assignedTo} onChange={(e) => setNewWo({...newWo, assignedTo: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="">-- Select Active Technician --</option>
+                        {activeAccounts.map(u => <option key={u.email} value={u.email}>{u.name} ({u.email})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
+                      <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="Low">Low Priority</option>
+                        <option value="Medium">Medium Priority</option>
+                        <option value="High">High Priority</option>
+                        <option value="Critical">Critical Issue</option>
+                      </select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
+                      <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="3" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end">
+                    <button type="submit" disabled={isSubmittingWo} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isSubmittingWo ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isSubmittingWo ? 'Dispatching...' : 'Dispatch Ticket'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+                  <h3 className="font-bold text-sm tracking-wide uppercase">Active Dispatch Board</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 text-left">
+                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
+                      <tr>
+                        <th className="px-6 py-3.5">Ticket Info</th>
+                        <th className="px-6 py-3.5">Priority</th>
+                        <th className="px-6 py-3.5">Target Hardware</th>
+                        <th className="px-6 py-3.5">Assigned To</th>
+                        <th className="px-6 py-3.5 text-right">Job Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-xs">
+                      {workOrders.length === 0 ? (
+                        <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400 text-xs">No active work orders in the system.</td></tr>
+                      ) : (
+                        workOrders.map((wo) => (
+                          <tr key={wo.id} className="hover:bg-gray-50/55 transition">
+                            <td className="px-6 py-4">
+                              <span className="font-bold text-gray-900 block">{wo.title}</span>
+                              <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">{wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${wo.priority === 'Critical' ? 'bg-red-100 text-red-800' : wo.priority === 'High' ? 'bg-orange-100 text-orange-800' : wo.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                {wo.priority}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              {wo.assetId ? (
+                                <span className="font-medium text-[#005596]">{assets.find(a => a.id === wo.assetId)?.name || 'Unknown'}</span>
+                              ) : (
+                                <span className="text-gray-500 italic text-[10px]">Facility General</span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-2">
+                                <span className={`w-2 h-2 rounded-full ${wo.assignedTo === currentUser.email ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                                <span className="font-mono text-gray-700">{wo.assignedTo}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              {wo.status === "Completed" ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800">
+                                  Completed ✓
+                                </span>
+                              ) : (
+                                <select
+                                  value={wo.status}
+                                  onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
+                                  disabled={!isSystemAdmin && wo.assignedTo !== currentUser.email}
+                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
+                                >
+                                  <option value="Open">Open</option>
+                                  <option value="In Progress">In Progress</option>
+                                  <option value="Completed">Mark Completed</option>
+                                </select>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === "assets" && (
             <div className="space-y-8">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1097,6 +1325,7 @@ export default function App() {
                       <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     
+                    {/* UPDATED MULTI-SELECT PM FREQUENCY LAYOUT */}
                     <div className="md:col-span-1">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
                       <div className="flex flex-wrap gap-3 mt-2.5">
@@ -1154,6 +1383,7 @@ export default function App() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 text-xs">
                             {catAssets.map((asset) => {
+                              // Extract array of frequencies with fallback for legacy DB entries
                               const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
                               
                               return (
@@ -1182,6 +1412,7 @@ export default function App() {
                                       <option value="Corrective Maintenance">Corrective Action</option>
                                     </select>
                                     
+                                    {/* MULTIPLE PM DATES RENDERER */}
                                     <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
                                       {freqs.length === 0 ? (
                                         <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
