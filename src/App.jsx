@@ -14,7 +14,7 @@ const customStyles = `
   .charcoal-bg { background-color: #1A2530; }
 `;
 
-const PM_CYCLE_OPTIONS = ["Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually"];
+const PM_CYCLE_OPTIONS = ["Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "Calibration (Semi-Annual)", "Calibration (Annual)"];
 
 export default function App() {
   const [users, setUsers] = useState([
@@ -84,7 +84,7 @@ export default function App() {
   // REAL-TIME CLOCK STATE
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // NAVIGATION FLOW STATE (Scheduler Tab Removed)
+  // NAVIGATION FLOW STATE
   const [navOrder, setNavOrder] = useState(() => {
     const saved = localStorage.getItem('fi_nav_order');
     return saved ? JSON.parse(saved) : ['dashboard', 'assets', 'manuals', 'templates', 'history'];
@@ -95,10 +95,75 @@ export default function App() {
 
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
 
+  const calculateDaysRemaining = (lastDateStr, frequency) => {
+    if (!lastDateStr || frequency === "None" || !frequency) return null;
+    const lastDate = new Date(lastDateStr);
+    const now = new Date();
+
+    if (frequency === "Weekly") {
+      const nextMonday = new Date(lastDate);
+      const day = nextMonday.getDay();
+      const diff = day === 0 ? 1 : 8 - day;
+      nextMonday.setDate(nextMonday.getDate() + diff);
+      nextMonday.setHours(0, 0, 0, 0);
+
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      return Math.ceil((nextMonday - today) / (1000 * 60 * 60 * 24));
+    }
+
+    const daysPassed = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
+    let cycleDays = 0;
+    
+    switch(frequency) {
+      case "Monthly": cycleDays = 30; break;
+      case "Quarterly": cycleDays = 90; break;
+      case "Semi-Annually":
+      case "Calibration (Semi-Annual)": cycleDays = 182; break;
+      case "Annually":
+      case "Calibration (Annual)": cycleDays = 365; break;
+      default: return null;
+    }
+    return cycleDays - daysPassed;
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
-    fetch('/api/assets').then(res => res.json()).then(data => setAssets(data || [])).catch(err => console.error("Error pulling assets:", err));
+    fetch('/api/assets').then(res => res.json()).then(data => {
+      if (!data) return;
+      
+      // AUTO-STATUS COMPLIANCE ENGINE
+      const evaluatedData = data.map(asset => {
+        if (asset.status === "Corrective Maintenance") return asset; 
+        
+        let hasOverdueCalibration = false;
+        let hasDueMaint = false;
+        const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+        
+        freqs.forEach(freq => {
+          const lastDate = asset.pmDates?.[freq] || asset.lastPmDate;
+          const daysLeft = calculateDaysRemaining(lastDate, freq);
+          const threshold = freq === "Weekly" ? 0 : 7;
+          if (daysLeft !== null && daysLeft < 0 && freq.includes("Calibration")) hasOverdueCalibration = true;
+          else if (daysLeft !== null && daysLeft <= threshold) hasDueMaint = true;
+        });
+        
+        let computedStatus = "Operational";
+        if (hasOverdueCalibration) computedStatus = "Out of Calibration";
+        else if (hasDueMaint) computedStatus = "Maintenance Due";
+
+        if (asset.status !== computedStatus) {
+          const updated = { ...asset, status: computedStatus };
+          fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }).catch(()=>console.log("Silent DB Sync Failed"));
+          return updated;
+        }
+        return asset;
+      });
+      
+      setAssets(evaluatedData);
+    }).catch(err => console.error("Error pulling assets:", err));
+
     fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(data || [])).catch(err => console.error("Error pulling templates:", err));
     fetch('/api/history').then(res => res.json()).then(data => setHistory(data || [])).catch(err => console.error("Error pulling history:", err));
     fetch('/api/users').then(res => res.json()).then(data => {
@@ -480,24 +545,32 @@ export default function App() {
       if (res.ok) {
         const savedLog = await res.json(); setHistory([savedLog, ...history]);
         
-        const finalStatus = statusState === "Completed Pass" ? "Operational" : "Under Service Review";
-        
         const currentPmDates = { ...selectedAsset.pmDates };
-        const activeFreqs = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
-        
-        activeFreqs.forEach(f => {
-            if (!currentPmDates[f]) {
-                currentPmDates[f] = selectedAsset.lastPmDate;
-            }
-        });
-
         const interval = selectedTemplate.interval; 
-        const updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
+        updatedPmDates = { ...currentPmDates, [interval]: new Date().toISOString() };
 
         let updatedFrequencies = selectedAsset.pmFrequencies || (selectedAsset.pmFrequency && selectedAsset.pmFrequency !== "None" ? [selectedAsset.pmFrequency] : []);
         if (!updatedFrequencies.includes(interval) && interval !== "On-Demand") {
             updatedFrequencies = [...updatedFrequencies, interval];
         }
+
+        // EVALUATE NEW DYNAMIC STATUS (Instead of forcing to "Operational")
+        let computedStatus = "Operational";
+        let hasOverdueCalibration = false;
+        let hasDueMaint = false;
+        
+        updatedFrequencies.forEach(freq => {
+          const lastDate = updatedPmDates[freq] || selectedAsset.lastPmDate;
+          const daysLeft = calculateDaysRemaining(lastDate, freq);
+          const threshold = freq === "Weekly" ? 0 : 7;
+          if (daysLeft !== null && daysLeft < 0 && freq.includes("Calibration")) hasOverdueCalibration = true;
+          else if (daysLeft !== null && daysLeft <= threshold) hasDueMaint = true;
+        });
+
+        if (hasOverdueCalibration) computedStatus = "Out of Calibration";
+        else if (hasDueMaint) computedStatus = "Maintenance Due";
+
+        const finalStatus = statusState === "Completed Pass" ? computedStatus : "Corrective Maintenance";
 
         const updatedAsset = { 
           ...selectedAsset, 
@@ -516,7 +589,7 @@ export default function App() {
         setAssets(assets.map(ast => ast.id === selectedAsset.id ? updatedAsset : ast));
         setCompletedSteps({}); setPmComments(""); setSelectedAssetId(""); setSelectedTemplateId("");
         
-        setShowPmModal(false); // Close the popup instead of switching tabs
+        setShowPmModal(false); 
         triggerModal("SOP Signature Logged", `Preventative maintenance log recorded successfully. Specific [${interval}] cycle timer has been reset.`, "success");
       }
     } finally {
@@ -647,36 +720,6 @@ export default function App() {
     });
   };
 
-  const calculateDaysRemaining = (lastDateStr, frequency) => {
-    if (!lastDateStr || frequency === "None" || !frequency) return null;
-    const lastDate = new Date(lastDateStr);
-    const now = new Date();
-
-    if (frequency === "Weekly") {
-      const nextMonday = new Date(lastDate);
-      const day = nextMonday.getDay();
-      const diff = day === 0 ? 1 : 8 - day;
-      nextMonday.setDate(nextMonday.getDate() + diff);
-      nextMonday.setHours(0, 0, 0, 0);
-
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      return Math.ceil((nextMonday - today) / (1000 * 60 * 60 * 24));
-    }
-
-    const daysPassed = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
-    let cycleDays = 0;
-    
-    switch(frequency) {
-      case "Monthly": cycleDays = 30; break;
-      case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually": cycleDays = 182; break;
-      case "Annually": cycleDays = 365; break;
-      default: return null;
-    }
-    return cycleDays - daysPassed;
-  };
-
   const calculateNextPmDate = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
     const lastDate = new Date(lastDateStr);
@@ -694,8 +737,10 @@ export default function App() {
     switch(frequency) {
       case "Monthly": cycleDays = 30; break;
       case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually": cycleDays = 182; break;
-      case "Annually": cycleDays = 365; break;
+      case "Semi-Annually":
+      case "Calibration (Semi-Annual)": cycleDays = 182; break;
+      case "Annually":
+      case "Calibration (Annual)": cycleDays = 365; break;
       default: return null;
     }
     
@@ -764,7 +809,7 @@ export default function App() {
     return acc;
   }, {});
 
-  // DYNAMIC SIDEBAR RENDER MAPPING (Removed Scheduler Tab)
+  // DYNAMIC SIDEBAR RENDER MAPPING
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     assets: { icon: '🏭', label: 'Asset Directory', badge: assets.length },
@@ -1344,6 +1389,8 @@ export default function App() {
                         <option value="Quarterly">Quarterly Cycle</option>
                         <option value="Semi-Annually">Semi-Annually Cycle</option>
                         <option value="Annually">Annually Cycle</option>
+                        <option value="Calibration (Semi-Annual)">Calibration (Semi-Annual)</option>
+                        <option value="Calibration (Annual)">Calibration (Annual)</option>
                       </select>
                     </div>
                     <div>
