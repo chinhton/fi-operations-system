@@ -165,6 +165,12 @@ export default function App() {
     return cycleDays - daysPassed;
   };
 
+// NEW: Navigation wrapper to sync with browser history
+  const changeTab = (tabId) => {
+    setActiveTab(tabId);
+    window.location.hash = tabId;
+  };
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
@@ -198,6 +204,27 @@ export default function App() {
         return asset;
       });
       
+      // NEW: Listen for browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      // Grab the word after the '#' in the URL
+      const hash = window.location.hash.replace('#', '');
+      
+      // If it's a valid tab, switch to it. Otherwise default to dashboard.
+      const validTabs = ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history', 'approvals'];
+      
+      if (validTabs.includes(hash)) {
+        setActiveTab(hash);
+      } else if (currentUser) {
+        setActiveTab('dashboard');
+        window.location.hash = 'dashboard';
+      }
+    };
+
+    window.addEventListener('hashchange', handlePopState);
+    return () => window.removeEventListener('hashchange', handlePopState);
+  }, [currentUser]);
+
       setAssets(evaluatedData);
     }).catch(err => console.error("Error pulling assets:", err));
 
