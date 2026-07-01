@@ -6,13 +6,10 @@ app.http('sendEmail', {
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
-            // Parse incoming JSON data from your React frontend
             const requestBody = await request.json();
             
-            // NEW: Extract 'cc' alongside the other variables
             const { to, cc, subject, body } = requestBody;
 
-            // Load the connection string from Azure Environment Variables
             const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
             
             if (!connectionString) {
@@ -25,9 +22,8 @@ app.http('sendEmail', {
 
             const client = new EmailClient(connectionString);
 
-            // Construct the base email payload
             const emailMessage = {
-                senderAddress: "DoNotReply@1f1b4f12-3a18-4366-b454-e99c5d34d5d8.azurecomm.net",
+                senderAddress: "DoNotReply@fi-operations-sendermail.unitedstates.communication.azure.com",
                 content: {
                     subject: subject || "Notification from FI Operations System",
                     plainText: body || "You have received an automated operational update.",
@@ -37,12 +33,10 @@ app.http('sendEmail', {
                 },
             };
 
-            // NEW: Safely append the CC array if a CC address was provided by the frontend
             if (cc) {
                 emailMessage.recipients.cc = [{ address: cc }];
             }
 
-            // Trigger the email sending sequence
             const poller = await client.beginSend(emailMessage);
             const response = await poller.pollUntilDone();
 
