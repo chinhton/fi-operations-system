@@ -12,6 +12,26 @@ const customStyles = `
   .logo-cyan-bg { background-color: #00A1E4; }
   .charcoal-text { color: #1A2530; }
   .charcoal-bg { background-color: #1A2530; }
+
+  /* NEW ANIMATIONS FOR SIGN-IN PAGE */
+  @keyframes movingGradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  .animated-gradient-bg {
+    background: linear-gradient(-45deg, #F4F6F8, #e0e7ff, #dbeafe, #F4F6F8);
+    background-size: 400% 400%;
+    animation: movingGradient 12s ease infinite;
+  }
+  
+  @keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-entrance {
+    animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 `;
 
 const PM_CYCLE_OPTIONS = ["Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "Calibration (Semi-Annual)", "Calibration (Annual)"];
@@ -928,58 +948,65 @@ export default function App() {
     history: { icon: '📜', label: 'Audit Logs & PM History', badge: history.length }
   };
 
-  if (!currentUser) {
+ if (!currentUser) {
     return (
-      <div className="min-h-screen bg-[#F4F6F8] flex flex-col justify-center items-center px-4 py-12 antialiased">
+      <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
         <style>{customStyles}</style>
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="bg-[#005596] px-8 py-8 text-center text-white relative">
-            <div className="mb-4 flex justify-center">
-                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded bg-white p-2" />
+        
+        {/* Added animate-entrance for a smooth slide-up load and increased shadow/ring */}
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 animate-entrance overflow-hidden">
+          
+          {/* Header Area */}
+          <div className="bg-[#005596] px-8 py-8 text-center text-white relative overflow-hidden">
+            {/* Optional: Add a subtle overlay pattern or sheen to the blue header */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent"></div>
+            
+            <div className="mb-4 flex justify-center relative z-10">
+                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded-xl bg-white p-3 shadow-md transform hover:scale-105 transition-transform duration-300" />
             </div>
-            <h2 className="text-xl font-bold tracking-tight font-sans">FI-Operation Management System</h2>
+            <h2 className="text-xl font-bold tracking-tight font-sans relative z-10 drop-shadow-sm">FI-Operation Management System</h2>
           </div>
 
           <div className="p-8">
-            {authError && <div className="mb-5 bg-red-50 border-l-4 border-red-500 p-3 text-xs font-semibold text-red-800 leading-relaxed">{authError}</div>}
+            {authError && <div className="mb-5 bg-red-50 border-l-4 border-red-500 p-3 text-xs font-semibold text-red-800 leading-relaxed animate-pulse">{authError}</div>}
             {authSuccess && <div className="mb-5 bg-green-50 border-l-4 border-green-500 p-3 text-xs font-semibold text-green-800 leading-relaxed">{authSuccess}</div>}
 
             {authMode === "signin" ? (
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-5">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Username / Email Address</label>
-                  <input type="text" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="admin@fcimg.com or name@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <input type="text" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="admin@fcimg.com or name@fcimg.com" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Security Password</label>
-                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
                 </div>
-                <button type="submit" disabled={isSigningIn} className={`w-full bg-[#005596] hover:bg-[#005596]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans transition-all ${isSigningIn ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <button type="submit" disabled={isSigningIn} className={`w-full bg-[#005596] hover:bg-[#00407a] text-white py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 ${isSigningIn ? 'opacity-70 cursor-not-allowed animate-pulse' : ''}`}>
                   {isSigningIn ? 'Authenticating...' : 'Authorized Sign In'}
                 </button>
-                <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
-                  New Operator? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:underline font-bold">Request Account Access</button>
+                <p className="text-center text-xs text-gray-500 mt-6 pt-5 border-t border-gray-100">
+                  New Operator? <button type="button" onClick={() => { setAuthMode("register"); setAuthError(""); setAuthSuccess(""); }} className="text-[#00A1E4] hover:text-[#0081b8] hover:underline font-bold transition-colors">Request Account Access</button>
                 </p>
               </form>
             ) : (
-              <form onSubmit={handleRegister} className="space-y-4">
+              <form onSubmit={handleRegister} className="space-y-5">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Full Name / Initials</label>
-                  <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Corporate Email Address (@fcimg.com)</label>
-                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="user@fcimg.com" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Corporate Email Address</label>
+                  <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="user@fcimg.com" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Choose Security Password</label>
-                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded border-gray-300 shadow-sm focus:border-[#005596] p-2.5 border bg-white" />
+                  <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
                 </div>
-                <button type="submit" disabled={isRegistering} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/95 text-white py-3 rounded text-xs font-bold uppercase tracking-wider shadow-sm font-sans transition-all ${isRegistering ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <button type="submit" disabled={isRegistering} className={`w-full bg-[#00A1E4] hover:bg-[#0081b8] text-white py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 ${isRegistering ? 'opacity-70 cursor-not-allowed animate-pulse' : ''}`}>
                   {isRegistering ? 'Submitting...' : 'Submit Access Request'}
                 </button>
-                <p className="text-center text-xs text-gray-500 mt-6 pt-4 border-t border-gray-100">
-                  Already registered? <button type="button" onClick={() => { setAuthMode("signin"); setAuthError(""); setAuthSuccess(""); }} className="text-[#005596] hover:underline font-bold">Back to Sign In</button>
+                <p className="text-center text-xs text-gray-500 mt-6 pt-5 border-t border-gray-100">
+                  Already registered? <button type="button" onClick={() => { setAuthMode("signin"); setAuthError(""); setAuthSuccess(""); }} className="text-[#005596] hover:text-[#00407a] hover:underline font-bold transition-colors">Back to Sign In</button>
                 </p>
               </form>
             )}
