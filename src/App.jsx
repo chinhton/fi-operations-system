@@ -103,7 +103,6 @@ export default function App() {
   const [activeManualIndex, setActiveManualIndex] = useState(0);
 
   const [validationError, setValidationError] = useState("");
-  const [activeTab, setActiveTab] = useState("dashboard"); 
   const [historySearch, setHistorySearch] = useState("");
 
   const [customModal, setCustomModal] = useState({
@@ -118,7 +117,6 @@ export default function App() {
     const saved = localStorage.getItem('fi_nav_order');
     if (saved) {
       let parsed = JSON.parse(saved);
-      // Inject work orders into legacy saved layouts
       if (!parsed.includes('workOrders')) {
         parsed.splice(1, 0, 'workOrders');
         localStorage.setItem('fi_nav_order', JSON.stringify(parsed));
@@ -130,8 +128,40 @@ export default function App() {
   const [isEditingNav, setIsEditingNav] = useState(false);
 
   const manualFileInputRef = useRef(null);
-
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
+
+  // BULLETPROOF ROUTING STATE
+  const [activeTab, setActiveTab] = useState(() => {
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history', 'approvals'];
+    return validTabs.includes(hash) ? hash : "dashboard";
+  });
+
+  const changeTab = (tabId) => {
+    setActiveTab(tabId);
+    window.history.pushState(null, '', `#${tabId}`);
+  };
+
+  useEffect(() => {
+    const handleRouting = () => {
+      const hash = window.location.hash.replace('#', '');
+      const validTabs = ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history', 'approvals'];
+      
+      if (validTabs.includes(hash)) {
+        setActiveTab(hash);
+      } else if (currentUser) {
+        setActiveTab('dashboard');
+        window.history.replaceState(null, '', '#dashboard');
+      }
+    };
+
+    window.addEventListener('popstate', handleRouting);
+    window.addEventListener('hashchange', handleRouting);
+    return () => {
+      window.removeEventListener('popstate', handleRouting);
+      window.removeEventListener('hashchange', handleRouting);
+    };
+  }, [currentUser]);
 
   const calculateDaysRemaining = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
@@ -165,17 +195,11 @@ export default function App() {
     return cycleDays - daysPassed;
   };
 
-// NEW: Navigation wrapper to sync with browser history
-  const changeTab = (tabId) => {
-    setActiveTab(tabId);
-    window.location.hash = tabId;
-  };
-
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
     fetch('/api/assets').then(res => res.json()).then(data => {
-      if (!data) return;
+      if (!Array.isArray(data)) return;
       
       const evaluatedData = data.map(asset => {
         if (asset.status === "Corrective Maintenance") return asset; 
@@ -204,36 +228,15 @@ export default function App() {
         return asset;
       });
       
-      // NEW: Listen for browser back/forward buttons
-  useEffect(() => {
-    const handlePopState = () => {
-      // Grab the word after the '#' in the URL
-      const hash = window.location.hash.replace('#', '');
-      
-      // If it's a valid tab, switch to it. Otherwise default to dashboard.
-      const validTabs = ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history', 'approvals'];
-      
-      if (validTabs.includes(hash)) {
-        setActiveTab(hash);
-      } else if (currentUser) {
-        setActiveTab('dashboard');
-        window.location.hash = 'dashboard';
-      }
-    };
-
-    window.addEventListener('hashchange', handlePopState);
-    return () => window.removeEventListener('hashchange', handlePopState);
-  }, [currentUser]);
-
       setAssets(evaluatedData);
     }).catch(err => console.error("Error pulling assets:", err));
 
-    fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(data || [])).catch(err => console.error("Error pulling templates:", err));
-    fetch('/api/history').then(res => res.json()).then(data => setHistory(data || [])).catch(err => console.error("Error pulling history:", err));
-    fetch('/api/workorders').then(res => res.json()).then(data => setWorkOrders(data || [])).catch(err => console.error("Error pulling work orders:", err));
+    fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling templates:", err));
+    fetch('/api/history').then(res => res.json()).then(data => setHistory(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling history:", err));
+    fetch('/api/workorders').then(res => res.json()).then(data => setWorkOrders(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling work orders:", err));
     
     fetch('/api/users').then(res => res.json()).then(data => {
-        if (data && data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           setUsers(prev => {
             const externalUsers = data.filter(u => u.email !== "admin@fcimg.com");
             return [prev[0], ...externalUsers];
@@ -282,7 +285,7 @@ export default function App() {
       setCurrentUser(matchedUser); 
       setAuthEmail(""); 
       setAuthPassword(""); 
-      setActiveTab("dashboard");
+      changeTab("dashboard");
     } finally {
       setIsSigningIn(false);
     }
@@ -346,7 +349,7 @@ export default function App() {
   const handleLogout = () => { 
     localStorage.removeItem('fi_oms_session');
     setCurrentUser(null); 
-    setActiveTab("dashboard"); 
+    changeTab("dashboard"); 
   };
 
   const handleApproveUser = async (email) => {
@@ -367,10 +370,12 @@ export default function App() {
     }
 
     const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "System Admin", email: "admin@fcimg.com", status: "Completed Pass", comments: `System Admin approved corporate access token for user account: ${email}` };
-    const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
-    if (res.ok) {
-      const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
-    }
+    try {
+      const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
+      if (res.ok) {
+        const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
+      }
+    } catch (err) { console.error(err); }
 
     try {
       await fetch('/api/sendEmail', {
@@ -779,7 +784,7 @@ export default function App() {
       if (res.ok) {
         const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
         setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [] });
-        triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); setActiveTab("dashboard");
+        triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); changeTab("dashboard");
       }
     } finally {
       setIsAddingAsset(false);
@@ -876,34 +881,6 @@ export default function App() {
     });
   };
 
-  const calculateNextPmDate = (lastDateStr, frequency) => {
-    if (!lastDateStr || frequency === "None" || !frequency) return null;
-    const lastDate = new Date(lastDateStr);
-
-    if (frequency === "Weekly") {
-      const nextMonday = new Date(lastDate);
-      const day = nextMonday.getDay();
-      const diff = day === 0 ? 1 : 8 - day;
-      nextMonday.setDate(nextMonday.getDate() + diff);
-      return nextMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    let cycleDays = 0;
-    
-    switch(frequency) {
-      case "Monthly": cycleDays = 30; break;
-      case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually":
-      case "Calibration (Semi-Annual)": cycleDays = 182; break;
-      case "Annually":
-      case "Calibration (Annual)": cycleDays = 365; break;
-      default: return null;
-    }
-    
-    const nextDate = new Date(lastDate.getTime() + (cycleDays * 24 * 60 * 60 * 1000));
-    return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   const operationalCount = assets.filter(a => a.status === "Operational").length;
   const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
   const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
@@ -949,13 +926,13 @@ export default function App() {
   });
   
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
-
   const uniqueCategories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)));
 
+  // THE BUG FIX: Fallbacks added to prevent .includes() from crashing on missing data
   const filteredHistory = history.filter(log => 
-    log.assetName?.toLowerCase().includes(historySearch.toLowerCase()) || 
-    log.technician?.toLowerCase().includes(historySearch.toLowerCase()) ||
-    log.templateName?.toLowerCase().includes(historySearch.toLowerCase())
+    (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
+    (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
+    (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase())
   );
 
   const groupedAssets = assets.reduce((acc, asset) => {
@@ -965,10 +942,8 @@ export default function App() {
     return acc;
   }, {});
 
-  // ADDED THIS LINE: Filter out completed work orders for the active dispatch board
   const activeWorkOrders = workOrders.filter(w => w.status !== "Completed");
 
-  // DYNAMIC SIDEBAR RENDER MAPPING
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
@@ -978,17 +953,14 @@ export default function App() {
     history: { icon: '📜', label: 'Audit Logs & PM History', badge: history.length }
   };
 
- if (!currentUser) {
+  if (!currentUser) {
     return (
       <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
         <style>{customStyles}</style>
         
-        {/* Added animate-entrance for a smooth slide-up load and increased shadow/ring */}
         <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 animate-entrance overflow-hidden">
           
-          {/* Header Area */}
           <div className="bg-[#005596] px-8 py-8 text-center text-white relative overflow-hidden">
-            {/* Optional: Add a subtle overlay pattern or sheen to the blue header */}
             <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent"></div>
             
             <div className="mb-4 flex justify-center relative z-10">
@@ -1094,7 +1066,7 @@ export default function App() {
             <div className="text-[11px] text-blue-200 mt-1">Schedules in queue</div>
           </div>
           <div 
-            onClick={() => setActiveTab('history')} 
+            onClick={() => changeTab('history')} 
             className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20 cursor-pointer hover:bg-white/20 transition-all">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Executed Audits</span>
             <div className="text-2xl sm:text-3xl font-black mt-1">{history.length}</div>
@@ -1124,7 +1096,7 @@ export default function App() {
                   </div>
                 )}
                 <button 
-                  onClick={() => !isEditingNav && setActiveTab(tabId)} 
+                  onClick={() => !isEditingNav && changeTab(tabId)} 
                   className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId && !isEditingNav ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"} ${isEditingNav ? 'pl-6 border border-dashed border-gray-300 cursor-move' : ''}`}
                 >
                   <div className="flex items-center space-x-3">
@@ -1142,7 +1114,7 @@ export default function App() {
           
           {isSystemAdmin && (
             <button 
-              onClick={() => setActiveTab("approvals")} 
+              onClick={() => changeTab("approvals")} 
               className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "approvals" ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
             >
               <div className="flex items-center space-x-3">
@@ -1385,7 +1357,6 @@ export default function App() {
                       <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     
-                    {/* UPDATED MULTI-SELECT PM FREQUENCY LAYOUT */}
                     <div className="md:col-span-1">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
                       <div className="flex flex-wrap gap-3 mt-2.5">
@@ -1443,7 +1414,6 @@ export default function App() {
                           </thead>
                           <tbody className="divide-y divide-gray-100 text-xs">
                             {catAssets.map((asset) => {
-                              // Extract array of frequencies with fallback for legacy DB entries
                               const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
                               
                               return (
@@ -1472,7 +1442,6 @@ export default function App() {
                                       <option value="Corrective Maintenance">Corrective Action</option>
                                     </select>
                                     
-                                    {/* MULTIPLE PM DATES RENDERER */}
                                     <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
                                       {freqs.length === 0 ? (
                                         <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
