@@ -19,16 +19,19 @@ const customStyles = `
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
   }
+  
   .animated-gradient-bg {
-    background: linear-gradient(-45deg, #F4F6F8, #e0e7ff, #dbeafe, #F4F6F8);
+    /* Fairchild Corporate Palette: Navy, Charcoal, Deep Blue, Cyan */
+    background: linear-gradient(-45deg, #005596, #1A2530, #003058, #00A1E4);
     background-size: 400% 400%;
-    animation: movingGradient 12s ease infinite;
+    animation: movingGradient 15s ease infinite;
   }
   
   @keyframes slideUpFade {
     0% { opacity: 0; transform: translateY(30px); }
     100% { opacity: 1; transform: translateY(0); }
   }
+  
   .animate-entrance {
     animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
