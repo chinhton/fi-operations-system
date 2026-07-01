@@ -23,7 +23,7 @@ app.http('sendEmail', {
             const client = new EmailClient(connectionString);
 
             const emailMessage = {
-                senderAddress: "DoNotReply@fi-operations-sendermail.unitedstates.communication.azure.com",
+                senderAddress: "DoNotReply@c805663a-e99f-4e65-9825-9a3d620107cb.azurecomm.net",
                 content: {
                     subject: subject || "Notification from FI Operations System",
                     plainText: body || "You have received an automated operational update.",
