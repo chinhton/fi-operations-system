@@ -21,19 +21,18 @@ const customStyles = `
   }
   
   .animated-gradient-bg {
-    /* Fairchild Corporate Palette: Navy, Charcoal, Deep Blue, Cyan */
     background: linear-gradient(-45deg, #005596, #1A2530, #003058, #00A1E4);
     background-size: 400% 400%;
     animation: movingGradient 15s ease infinite;
   }
   
   @keyframes slideUpFade {
-    0% { opacity: 0; transform: translateY(30px); }
+    0% { opacity: 0; transform: translateY(20px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   
   .animate-entrance {
-    animation: slideUpFade 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 `;
 
@@ -63,7 +62,6 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   
-  // ANTI-SPAM LOCK STATES
   const [isRegistering, setIsRegistering] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isAddingAsset, setIsAddingAsset] = useState(false);
@@ -77,7 +75,6 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
 
-  // PM EXECUTION MODAL STATES
   const [showPmModal, setShowPmModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -109,10 +106,8 @@ export default function App() {
     show: false, title: "", message: "", type: "info", onConfirm: null
   });
 
-  // REAL-TIME CLOCK STATE
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // NAVIGATION FLOW STATE
   const [navOrder, setNavOrder] = useState(() => {
     const saved = localStorage.getItem('fi_nav_order');
     if (saved) {
@@ -130,7 +125,6 @@ export default function App() {
   const manualFileInputRef = useRef(null);
   const isSystemAdmin = currentUser?.role === "System Admin" || currentUser?.role === "admin";
 
-  // BULLETPROOF ROUTING STATE
   const [activeTab, setActiveTab] = useState(() => {
     const hash = window.location.hash.replace('#', '');
     const validTabs = ['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history', 'approvals'];
@@ -928,7 +922,6 @@ export default function App() {
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
   const uniqueCategories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)));
 
-  // THE BUG FIX: Fallbacks added to prevent .includes() from crashing on missing data
   const filteredHistory = history.filter(log => 
     (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
     (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
@@ -1048,29 +1041,31 @@ export default function App() {
       </header>
 
       {/* COMPLIANCE KPI TRACKER BANNER */}
-      <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-inner">
-        <div className="max-w-full mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Facility Assets</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1">{assets.length}</div>
-            <div className="text-[11px] text-blue-200 mt-1">Monitored high-value systems</div>
+      <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-md relative overflow-hidden">
+        {/* Subtle background glow effect */}
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl"></div>
+        <div className="max-w-full mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Facility Assets</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{assets.length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-medium">Monitored high-value systems</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Compliance Factor</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1">{complianceRate}%</div>
-            <div className="text-[11px] text-blue-200 mt-1">Optimal health ratio</div>
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Compliance Factor</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{complianceRate}%</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-medium">Optimal health ratio</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Pending Actions</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1 text-yellow-300">{expandedActionQueue.length}</div>
-            <div className="text-[11px] text-blue-200 mt-1">Schedules in queue</div>
+          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Pending Actions</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 text-yellow-300 drop-shadow-md">{expandedActionQueue.length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-medium">Schedules in queue</div>
           </div>
           <div 
             onClick={() => changeTab('history')} 
-            className="bg-white/10 backdrop-blur-md rounded-lg p-4 border border-white/20 cursor-pointer hover:bg-white/20 transition-all">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100">Executed Audits</span>
-            <div className="text-2xl sm:text-3xl font-black mt-1">{history.length}</div>
-            <div className="text-[11px] text-blue-200 mt-1">Traceable sign-off operations &rarr;</div>
+            className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Executed Audits</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{history.length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Traceable sign-off operations &rarr;</div>
           </div>
         </div>
       </section>
@@ -1079,7 +1074,7 @@ export default function App() {
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto">
         
         {/* DYNAMIC NAVIGATION SIDEBAR PANEL */}
-        <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-4 space-y-1 flex flex-col shrink-0">
+        <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-4 space-y-1 flex flex-col shrink-0 z-10">
           <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 hidden md:block">
             Main Navigation
           </div>
@@ -1134,59 +1129,71 @@ export default function App() {
         </aside>
 
         {/* WORKPLACE MAIN PANEL CONTENT WINDOW */}
-        <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+        <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden relative z-0">
 
           {activeTab === "dashboard" && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-entrance">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
-                  <div><span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Operational Health</span><div className="text-3xl font-black mt-2 text-green-600">{operationalCount}</div></div>
+                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Operational Health</span>
+                    <div className="text-4xl font-black mt-3 text-green-600 drop-shadow-sm">{operationalCount}</div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
-                  <div><span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Overdue Maintenance</span><div className="text-3xl font-black mt-2 text-yellow-600">{overdueCount}</div></div>
+                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Overdue Maintenance</span>
+                    <div className="text-4xl font-black mt-3 text-yellow-600 drop-shadow-sm">{overdueCount}</div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
-                  <div><span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Out Of Calibration</span><div className="text-3xl font-black mt-2 text-red-600">{calibrationCount}</div></div>
+                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Out Of Calibration</span>
+                    <div className="text-4xl font-black mt-3 text-red-600 drop-shadow-sm">{calibrationCount}</div>
+                  </div>
                 </div>
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-between">
-                  <div><span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Corrective Action</span><div className="text-3xl font-black mt-2 text-orange-600">{correctiveCount}</div></div>
+                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
+                  <div>
+                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Corrective Action</span>
+                    <div className="text-4xl font-black mt-3 text-orange-600 drop-shadow-sm">{correctiveCount}</div>
+                  </div>
                 </div>
               </div>
               
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
                 <div className="lg:col-span-7 space-y-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-[#005596] text-white px-5 py-4 flex items-center justify-between">
-                      <h3 className="font-bold text-xs uppercase tracking-wider">SOP & Maintenance Actions Queue</h3>
+                  <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+                    <div className="bg-gradient-to-r from-[#005596] to-[#00407a] text-white px-6 py-4 flex items-center justify-between border-b border-[#003058]">
+                      <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">SOP & Maintenance Actions Queue</h3>
                       {expandedActionQueue.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">{expandedActionQueue.length} Pending</span>
+                        <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{expandedActionQueue.length} Pending</span>
                       )}
                     </div>
                     <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
                       {expandedActionQueue.length === 0 ? (
-                        <div className="p-6 text-center text-gray-500 text-xs">
+                        <div className="p-8 text-center text-gray-400 text-xs font-medium">
                           No pending maintenance actions. All systems are operational.
                         </div>
                       ) : (
                         expandedActionQueue.map(item => (
-                          <div key={item.queueId} className="p-4 hover:bg-gray-50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#f97316' }}>
+                          <div key={item.queueId} className="p-5 hover:bg-blue-50/50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#f97316' }}>
                             <div>
                               <span className="font-bold text-gray-900 text-xs block">{item.name}</span>
-                              <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">S/N: {item.serial}</span>
+                              <span className="text-[10px] text-gray-500 font-mono mt-1 block bg-gray-50 inline-block px-1.5 py-0.5 rounded">S/N: {item.serial}</span>
                             </div>
                             <div className="text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${item.badgeColor}`}>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
                               {item.displayDate && (
-                                <div className="mt-1 text-[10px] text-gray-500 font-mono">
+                                <div className="mt-1.5 text-[10px] text-gray-500 font-mono">
                                   Due: {item.displayDate}
                                 </div>
                               )}
                               <button 
                                 onClick={() => handleOpenPmModal(item.id)} 
-                                className="block w-full text-right mt-1.5 text-[10px] text-[#005596] font-bold hover:underline">
-                                Execute PM ➔
+                                className="block w-full text-right mt-2 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
+                                Execute PM &rarr;
                               </button>
                             </div>
                           </div>
@@ -1196,15 +1203,15 @@ export default function App() {
                   </div>
                 </div>
                 <div className="lg:col-span-5 space-y-6">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-3">Technician Duty Board</h4>
-                    <div className="p-3 bg-gray-50 rounded border border-gray-100 flex items-center space-x-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
+                  <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Technician Duty Board</h4>
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center space-x-4 shadow-inner">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596] border border-[#005596]/20' : 'bg-slate-200 text-slate-700 border border-slate-300'}`}>
                         {isSystemAdmin ? 'SYS' : 'OP'}
                       </div>
                       <div>
-                        <span className="block text-xs font-bold text-gray-900 font-sans">{currentUser.name}</span>
-                        <span className="text-[10px] text-gray-500 font-mono">{currentUser.email}</span>
+                        <span className="block text-sm font-bold text-gray-900 font-sans">{currentUser.name}</span>
+                        <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">{currentUser.email}</span>
                       </div>
                     </div>
                   </div>
@@ -1214,7 +1221,7 @@ export default function App() {
           )}
 
           {activeTab === "workOrders" && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-entrance">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Dispatch Ad-Hoc Work Order</h3></div>
                 <form onSubmit={handleAddWorkOrder} className="p-6">
@@ -1331,7 +1338,7 @@ export default function App() {
           )}
 
           {activeTab === "assets" && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-entrance">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
                 <form onSubmit={handleAddAssetSubmit} className="p-6">
@@ -1489,7 +1496,7 @@ export default function App() {
           )}
 
           {activeTab === "manuals" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
               <div className="lg:col-span-5 space-y-6">
                 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1632,7 +1639,7 @@ export default function App() {
           )}
 
           {activeTab === "templates" && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-entrance">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
                 <form onSubmit={handleAddTemplateSubmit} className="p-6">
@@ -1711,7 +1718,7 @@ export default function App() {
           )}
 
           {activeTab === "history" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-entrance">
               <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                 <h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3>
                 <span className="text-xs text-gray-400 font-semibold">{filteredHistory.length} records matching</span>
@@ -1785,7 +1792,7 @@ export default function App() {
           )}
 
           {activeTab === "approvals" && isSystemAdmin && (
-            <div className="space-y-8 max-w-3xl mx-auto">
+            <div className="space-y-8 max-w-3xl mx-auto animate-entrance">
               {/* CARD 1: PENDING ACCOUNT REQUESTS */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between">
@@ -1856,7 +1863,7 @@ export default function App() {
       {/* QUICK EXECUTE PM MODAL */}
       {showPmModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-entrance">
             <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
               <h3 className="font-bold text-sm tracking-wide uppercase">Active Maintenance Sign-Off</h3>
               <button onClick={() => setShowPmModal(false)} className="text-white hover:text-blue-200 text-xl font-bold leading-none">&times;</button>
@@ -1914,7 +1921,7 @@ export default function App() {
       {/* GLOBAL MODALS */}
       {customModal.show && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-sm w-full overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-sm w-full overflow-hidden animate-entrance">
             <div className={`p-4 text-white text-xs font-bold uppercase tracking-wider ${customModal.type === "error" ? "bg-red-600" : "bg-[#005596]"}`}>{customModal.type === "error" ? "⚠️ System Error" : "ℹ️ System Message"}</div>
             <div className="p-5"><p className="text-xs text-gray-700 leading-relaxed font-medium">{customModal.message}</p></div>
             <div className="bg-gray-50 px-5 py-3.5 flex justify-end space-x-2 border-t border-gray-100">
