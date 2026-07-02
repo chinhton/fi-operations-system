@@ -1327,12 +1327,11 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Dispatch Ad-Hoc Work Order</h3></div>
                 <form onSubmit={handleAddWorkOrder} className="p-6">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Work Order Title</label>
                       <input type="text" value={newWo.title} onChange={(e) => setNewWo({...newWo, title: e.target.value})} placeholder="e.g. Replace worn HEPA filter in cleanroom" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
-                    
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset (Optional)</label>
                       <select value={newWo.assetId} onChange={(e) => setNewWo({...newWo, assetId: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
@@ -1340,7 +1339,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                         {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
                       </select>
                     </div>
-                    
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign To Operator</label>
                       <select value={newWo.assignedTo} onChange={(e) => setNewWo({...newWo, assignedTo: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
@@ -1348,38 +1346,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                         {activeAccounts.map(u => <option key={u.email} value={u.email}>{u.name} ({u.email})</option>)}
                       </select>
                     </div>
-
-                    {/* NEW FIELD: PM Task Protocol Auto-Filler */}
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Link PM Task Protocol (Optional)</label>
-                      <select 
-                        value={newWo.templateId || ""} 
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          const template = pmTemplates.find(t => t.id === selectedId);
-                          
-                          if (template) {
-                            // Extract and format the checklist into a numbered string
-                            const checklistText = template.checklist.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
-                            
-                            setNewWo({
-                              ...newWo,
-                              templateId: selectedId,
-                              title: newWo.title || `Execute SOP: ${template.name}`,
-                              description: `[PM CHECKLIST]\n${checklistText}\n\n` + (newWo.description || "")
-                            });
-                          } else {
-                            setNewWo({ ...newWo, templateId: "" });
-                          }
-                        }} 
-                        className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-bold text-[#005596]"
-                      >
-                        <option value="">-- Select Standard Protocol --</option>
-                        {pmTemplates.map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name}</option>)}
-                      </select>
-                    </div>
-                    
-                    {/* MOVED FIELD: Priority Level */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
                       <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
@@ -1389,10 +1355,9 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                         <option value="Critical">Critical Issue</option>
                       </select>
                     </div>
-                    
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
-                      <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="4" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
+                      <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="3" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
                     </div>
                   </div>
                   <div className="mt-6 flex justify-end">
