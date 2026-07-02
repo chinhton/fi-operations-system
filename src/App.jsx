@@ -969,10 +969,10 @@ export default function App() {
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
-    assets: { icon: '🏭', label: 'Asset Directory', badge: assets.length },
+    assets: { icon: '🏭', label: 'Facility Assets', badge: assets.length },
     manuals: { icon: '📖', label: 'Equipment Manuals', badge: manualCount },
     templates: { icon: '⚙️', label: 'PM Task Configurations', badge: pmTemplates.length },
-    history: { icon: '📜', label: 'Audit Logs & PM History', badge: history.length }
+    history: { icon: '📜', label: 'Executed Audits', badge: history.length }
   };
 
   if (!currentUser) {
