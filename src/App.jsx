@@ -1389,10 +1389,12 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                       ) : (
                         activeWorkOrders.map((wo) => (
                           <tr key={wo.id} className="hover:bg-gray-50/55 transition">
-                            <td className="px-6 py-4">
-                              <span className="font-bold text-gray-900 block">{wo.title}</span>
-                              <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">{wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()}</span>
-                            </td>
+<td className="px-6 py-4">
+  <span className="font-bold text-gray-900 block">{wo.title}</span>
+  <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">
+    {wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()} by <span className="font-bold text-[#005596]">{wo.createdBy || 'System'}</span>
+  </span>
+</td>
                             <td className="px-6 py-4">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${wo.priority === 'Critical' ? 'bg-red-100 text-red-800' : wo.priority === 'High' ? 'bg-orange-100 text-orange-800' : wo.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
                                 {wo.priority}
