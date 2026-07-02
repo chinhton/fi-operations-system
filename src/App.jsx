@@ -59,7 +59,7 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
-  const [registerRole, setRegisterRole] = useState("Operator"); // NEW: Dynamic Role Request
+  const [registerRole, setRegisterRole] = useState("Operator"); 
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   
@@ -333,7 +333,7 @@ export default function App() {
       name: registerName.trim(), 
       email: authEmail.toLowerCase().trim(), 
       password: authPassword, 
-      role: registerRole, // Dynamically set to "Operator" or "System Admin"
+      role: registerRole, 
       approved: false 
     };
 
@@ -350,7 +350,6 @@ export default function App() {
         setAuthSuccess("Account request submitted. Please ask a System Admin to authorize your account."); 
         setAuthMode("signin");
 
-        // NEW: Gather all current admin emails to notify them dynamically
         const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
         const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
 
@@ -1094,20 +1093,26 @@ export default function App() {
         {/* Subtle background glow effect */}
         <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl"></div>
         <div className="max-w-full mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+          <div 
+            onClick={() => changeTab('assets')}
+            className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Facility Assets</span>
             <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{assets.length}</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-medium">Monitored high-value systems</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Monitored high-value systems &rarr;</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+          <div 
+            onClick={() => changeTab('dashboard')}
+            className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Compliance Factor</span>
             <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{complianceRate}%</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-medium">Optimal health ratio</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Optimal health ratio &rarr;</div>
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300">
+          <div 
+            onClick={() => changeTab('workOrders')}
+            className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
             <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Pending Actions</span>
             <div className="text-3xl sm:text-4xl font-black mt-2 text-yellow-300 drop-shadow-md">{expandedActionQueue.length}</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-medium">Schedules in queue</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Schedules in queue &rarr;</div>
           </div>
           <div 
             onClick={() => changeTab('history')} 
