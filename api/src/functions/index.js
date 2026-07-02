@@ -1,16 +1,6 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { EmailClient } = require('@azure/communication-email');
-
-// Helper function to safely split comma-separated strings into Azure's required format
-const formatRecipients = (emailString) => {
-    if (!emailString) return [];
-    return emailString
-        .split(',')
-        .map(email => ({ address: email.trim() }))
-        .filter(obj => obj.address !== ""); // drop any accidental blanks
-};
 
 // 1. Database & Blob Connections
 const client = new CosmosClient(process.env.CosmosDbConnectionString || "");
@@ -41,7 +31,7 @@ async function processRoute(request, containerId) {
         if (method === 'POST') {
             const payload = await request.json();
             
-            // Changed .create() to .upsert() so it can overwrite existing records
+            // THE FIX: Changed .create() to .upsert() so it can overwrite existing records!
             const { resource } = await container.items.upsert(payload);
             
             return createResponse(201, resource);
@@ -63,6 +53,8 @@ app.http('assets', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous',
 app.http('templates', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'templates') });
 app.http('history', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
 app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
+
+// THE NEW WORK ORDERS ENDPOINT
 app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
 
 // --- BLOB STORAGE UPLOAD ENDPOINT ---
@@ -98,52 +90,6 @@ app.http('upload', {
 
         } catch (error) {
             return createResponse(500, { error: "Blob upload failure", details: error.message });
-        }
-    }
-});
-
-// --- AZURE COMMUNICATION SERVICES EMAIL ENDPOINT ---
-app.http('sendEmail', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        try {
-            const requestBody = await request.json();
-            const { to, cc, subject, body } = requestBody;
-
-            const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
-            
-            if (!connectionString) {
-                context.log.error("Missing COMMUNICATION_SERVICES_CONNECTION_STRING environment variable.");
-                return createResponse(500, { error: "Server misconfiguration: Connection string missing." });
-            }
-
-            const client = new EmailClient(connectionString);
-
-            const emailMessage = {
-                senderAddress: "DoNotReply@77bb0478-c5db-4ee5-8cf9-84265c1432a3.azurecomm.net",
-                content: {
-                    subject: subject || "Notification from FI Operations System",
-                    plainText: body || "You have received an automated operational update.",
-                },
-                recipients: {
-                    to: formatRecipients(to),
-                },
-            };
-
-            if (cc) {
-                emailMessage.recipients.cc = formatRecipients(cc);
-            }
-
-            const poller = await client.beginSend(emailMessage);
-            const response = await poller.pollUntilDone();
-
-            context.log(`Email dispatched successfully. Message ID: ${response.id}`);
-
-            return createResponse(200, { message: "Email sent successfully via Azure ACS!", messageId: response.id });
-        } catch (error) {
-            context.log.error("Failed to send email via Azure:", error);
-            return createResponse(500, { error: "Failed to send email backend-side.", details: error.message });
         }
     }
 });

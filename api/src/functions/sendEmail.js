@@ -1,15 +1,6 @@
 const { app } = require('@azure/functions');
 const { EmailClient } = require('@azure/communication-email');
 
-// Helper function to safely split comma-separated strings into Azure's required format
-const formatRecipients = (emailString) => {
-    if (!emailString) return [];
-    return emailString
-        .split(',')
-        .map(email => ({ address: email.trim() }))
-        .filter(obj => obj.address !== ""); // drop any accidental blanks
-};
-
 app.http('sendEmail', {
     methods: ['POST'],
     authLevel: 'anonymous',
@@ -37,14 +28,12 @@ app.http('sendEmail', {
                     plainText: body || "You have received an automated operational update.",
                 },
                 recipients: {
-                    // Use the helper to properly format the 'to' string
-                    to: formatRecipients(to),
+                    to: [{ address: to }],
                 },
             };
 
-            // Use the helper to properly format the 'cc' string if it exists
             if (cc) {
-                emailMessage.recipients.cc = formatRecipients(cc);
+                emailMessage.recipients.cc = [{ address: cc }];
             }
 
             const poller = await client.beginSend(emailMessage);
