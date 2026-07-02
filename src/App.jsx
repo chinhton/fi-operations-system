@@ -157,6 +157,7 @@ export default function App() {
     };
   }, [currentUser]);
 
+  // FULLY SCOPED DATE CALCULATORS
   const calculateDaysRemaining = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
     const lastDate = new Date(lastDateStr);
@@ -189,67 +190,6 @@ export default function App() {
     return cycleDays - daysPassed;
   };
 
-  const calculateNextPmDate = (lastDateStr, frequency) => {
-    if (!lastDateStr || frequency === "None" || !frequency) return null;
-    const lastDate = new Date(lastDateStr);
-
-    if (frequency === "Weekly") {
-      const nextMonday = new Date(lastDate);
-      const day = nextMonday.getDay();
-      const diff = day === 0 ? 1 : 8 - day;
-      nextMonday.setDate(nextMonday.getDate() + diff);
-      return nextMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    let cycleDays = 0;
-    
-    switch(frequency) {
-      case "Monthly": cycleDays = 30; break;
-      case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually":
-      case "Calibration (Semi-Annual)": cycleDays = 182; break;
-      case "Annually":
-      case "Calibration (Annual)": cycleDays = 365; break;
-      default: return null;
-    }
-    
-    const nextDate = new Date(lastDate.getTime() + (cycleDays * 24 * 60 * 60 * 1000));
-    return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-  
-  const calculateDaysRemaining = (lastDateStr, frequency) => {
-    if (!lastDateStr || frequency === "None" || !frequency) return null;
-    const lastDate = new Date(lastDateStr);
-    const now = new Date();
-
-    if (frequency === "Weekly") {
-      const nextMonday = new Date(lastDate);
-      const day = nextMonday.getDay();
-      const diff = day === 0 ? 1 : 8 - day;
-      nextMonday.setDate(nextMonday.getDate() + diff);
-      nextMonday.setHours(0, 0, 0, 0);
-
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-      return Math.ceil((nextMonday - today) / (1000 * 60 * 60 * 24));
-    }
-
-    const daysPassed = Math.floor((now - lastDate) / (1000 * 60 * 60 * 24));
-    let cycleDays = 0;
-    
-    switch(frequency) {
-      case "Monthly": cycleDays = 30; break;
-      case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually":
-      case "Calibration (Semi-Annual)": cycleDays = 182; break;
-      case "Annually":
-      case "Calibration (Annual)": cycleDays = 365; break;
-      default: return null;
-    }
-    return cycleDays - daysPassed;
-  };
-
-  // THE MISSING FUNCTION IS BACK!
   const calculateNextPmDate = (lastDateStr, frequency) => {
     if (!lastDateStr || frequency === "None" || !frequency) return null;
     const lastDate = new Date(lastDateStr);

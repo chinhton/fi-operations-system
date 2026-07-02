@@ -21,5 +21,5 @@ echo [3/3] Pushing to Azure...
 git push origin main
 
 echo.
-echo ✅ Shipped!
+echo ✅ ZOOMING!
 endlocal
