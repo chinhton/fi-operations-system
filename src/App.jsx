@@ -59,6 +59,7 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
+  const [registerRole, setRegisterRole] = useState("Operator"); // NEW: Dynamic Role Request
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
   
@@ -332,7 +333,7 @@ export default function App() {
       name: registerName.trim(), 
       email: authEmail.toLowerCase().trim(), 
       password: authPassword, 
-      role: "Operator", 
+      role: registerRole, // Dynamically set to "Operator" or "System Admin"
       approved: false 
     };
 
@@ -341,17 +342,26 @@ export default function App() {
 
       if (res.ok) {
         const savedUser = await res.json();
-        setUsers([...users, savedUser]); setRegisterName(""); setAuthEmail(""); setAuthPassword("");
-        setAuthSuccess("Account request submitted. Please ask the System Admin to authorize your account."); setAuthMode("signin");
+        setUsers([...users, savedUser]); 
+        setRegisterName(""); 
+        setAuthEmail(""); 
+        setAuthPassword("");
+        setRegisterRole("Operator");
+        setAuthSuccess("Account request submitted. Please ask a System Admin to authorize your account."); 
+        setAuthMode("signin");
+
+        // NEW: Gather all current admin emails to notify them dynamically
+        const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
+        const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
 
         try {
           await fetch('/api/sendEmail', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              to: 'cton@fcimg.com',
+              to: adminMailingList,
               subject: 'Action Required: New Account Request - FI Operations System',
-              body: `System Admin,\n\nA new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.\n\nName: ${newUser.name}\nEmail: ${newUser.email}\nRole: ${newUser.role}\n\nPlease log in to the dashboard to approve or decline this request.`
+              body: `System Admin,\n\nA new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.\n\nName: ${newUser.name}\nEmail: ${newUser.email}\nRequested Role: ${newUser.role}\n\nPlease log in to the dashboard to approve or decline this request.`
             }),
           });
         } catch (err) {
@@ -392,7 +402,7 @@ export default function App() {
       console.error("Failed to approve user in database:", err);
     }
 
-    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: "System Admin", email: "admin@fcimg.com", status: "Completed Pass", comments: `System Admin approved corporate access token for user account: ${email}` };
+    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Completed Pass", comments: `Admin approved corporate access token for user account: ${email} with role: ${targetUser.role}` };
     try {
       const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
       if (res.ok) {
@@ -400,15 +410,18 @@ export default function App() {
       }
     } catch (err) { console.error(err); }
 
+    const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
+    const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
+
     try {
       await fetch('/api/sendEmail', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: email,
-          cc: 'cton@fcimg.com',
+          cc: adminMailingList,
           subject: 'Account Approved - FI Operations System',
-          body: `Hello ${targetUser.name},\n\nYour account access request for the Fairchild Imaging Operations System has been approved by the System Administrator. You can now log in using your corporate email and security password.\n\nThank you.`
+          body: `Hello ${targetUser.name},\n\nYour account access request for the Fairchild Imaging Operations System has been approved by the System Administrator. You can now log in using your corporate email and security password.\n\nAssigned Role: ${targetUser.role}\n\nThank you.`
         }),
       });
     } catch (err) {
@@ -447,7 +460,7 @@ export default function App() {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           
-          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: "System Admin", email: "admin@fcimg.com", status: "Incomplete Log", comments: `System Admin permanently revoked corporate access token for account: ${email}` };
+          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Incomplete Log", comments: `Admin permanently revoked corporate access token for account: ${email}` };
           const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
           if (res.ok) {
             const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
@@ -1025,6 +1038,13 @@ export default function App() {
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Choose Security Password</label>
                   <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Requested Role</label>
+                  <select value={registerRole} onChange={(e) => setRegisterRole(e.target.value)} className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] focus:bg-blue-50/30 p-3 border bg-white transition-all duration-200 outline-none cursor-pointer">
+                    <option value="Operator">Operator (Standard)</option>
+                    <option value="System Admin">System Admin (Elevated)</option>
+                  </select>
                 </div>
                 <button type="submit" disabled={isRegistering} className={`w-full bg-[#00A1E4] hover:bg-[#0081b8] text-white py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all duration-200 ${isRegistering ? 'opacity-70 cursor-not-allowed animate-pulse' : ''}`}>
                   {isRegistering ? 'Submitting...' : 'Submit Access Request'}
