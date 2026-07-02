@@ -710,7 +710,7 @@ export default function App() {
     }
   };
 
-  const handleAddWorkOrder = async (e) => {
+const handleAddWorkOrder = async (e) => {
     e.preventDefault();
     if (isSubmittingWo) return;
     
@@ -726,6 +726,7 @@ export default function App() {
         ...newWo, 
         status: "Open", 
         createdBy: currentUser.name,
+        creatorEmail: currentUser.email, // Added tracking for the creator's email
         timestamp: new Date().toISOString()
       };
 
@@ -738,14 +739,18 @@ export default function App() {
 
         const assignedUser = users.find(u => u.email === newWo.assignedTo);
         const assignedName = assignedUser ? assignedUser.name : 'Technician';
+        
+        // Bundle both creator and assigned operator into the mailing list
+        const mailingList = Array.from(new Set([newWo.assignedTo, currentUser.email])).filter(Boolean).join(',');
+
         try {
           await fetch('/api/sendEmail', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              to: newWo.assignedTo,
+              to: mailingList,
               subject: `New Work Order Assigned: ${newWo.title} - FI Operations System`,
-              body: `Hello ${assignedName},\n\nYou have been assigned a new work order in the Fairchild Imaging Operations System.\n\nTicket: ${newWo.title}\nPriority: ${newWo.priority}\nDescription: ${newWo.description || 'No additional details provided.'}\n\nPlease log in to the dashboard to review and update the status of this job.\n\nThank you.`
+              body: `Hello,\n\nA new work order has been created and assigned in the Fairchild Imaging Operations System.\n\nTicket: ${newWo.title}\nCreated By: ${currentUser.name}\nAssigned To: ${assignedName}\nPriority: ${newWo.priority}\nDescription: ${newWo.description || 'No additional details provided.'}\n\nPlease log in to the dashboard to review and update the status of this job.\n\nThank you.`
             }),
           });
         } catch (err) {
@@ -759,7 +764,7 @@ export default function App() {
     }
   };
 
-  const handleUpdateWoStatus = async (woId, newStatus) => {
+const handleUpdateWoStatus = async (woId, newStatus) => {
     const targetWo = workOrders.find(w => w.id === woId);
     if (!targetWo) return;
     
@@ -768,6 +773,28 @@ export default function App() {
 
     try {
       await fetch('/api/workorders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedWo) });
+
+      // --- EMAIL NOTIFICATION BLOCK ---
+      if (newStatus === "In Progress" || newStatus === "Completed") {
+        const mailingList = Array.from(new Set([targetWo.assignedTo, targetWo.creatorEmail || currentUser.email])).filter(Boolean).join(',');
+        const assignedUser = users.find(u => u.email === targetWo.assignedTo);
+        const assignedName = assignedUser ? assignedUser.name : 'Technician';
+        
+        try {
+          await fetch('/api/sendEmail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: mailingList,
+              subject: `Work Order Update: ${targetWo.title} is now ${newStatus}`,
+              body: `Hello,\n\nThe status for the following work order has been updated to: ${newStatus}\n\nTicket: ${targetWo.title}\nAssigned To: ${assignedName}\nUpdated By: ${currentUser.name}\n\nPlease log in to the FI Operations System dashboard for more details.\n\nThank you.`
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to trigger work order status email:', err);
+        }
+      }
+      // --- END EMAIL NOTIFICATION BLOCK ---
 
       if (newStatus === "Completed") {
         const logEntry = {
