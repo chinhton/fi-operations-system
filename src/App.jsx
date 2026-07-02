@@ -1137,27 +1137,39 @@ export default function App() {
             const info = navData[tabId];
             if (!info) return null;
             return (
-              <div key={tabId} className="relative flex items-center group">
-                {isEditingNav && isSystemAdmin && (
-                  <div className="absolute left-[-8px] flex flex-col space-y-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => moveNav(index, -1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▲</button>
-                    <button onClick={() => moveNav(index, 1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▼</button>
+              <React.Fragment key={tabId}>
+                <div className="relative flex items-center group w-full">
+                  {isEditingNav && isSystemAdmin && (
+                    <div className="absolute left-[-8px] flex flex-col space-y-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => moveNav(index, -1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▲</button>
+                      <button onClick={() => moveNav(index, 1)} className="text-[10px] bg-gray-200 hover:bg-gray-300 rounded px-1.5 py-0.5">▼</button>
+                    </div>
+                  )}
+                  <button 
+                    onClick={() => !isEditingNav && changeTab(tabId)} 
+                    className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId && !isEditingNav ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"} ${isEditingNav ? 'pl-6 border border-dashed border-gray-300 cursor-move' : ''}`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span>{info.icon}</span> <span>{info.label}</span>
+                    </div>
+                    {info.badge !== undefined && info.badge !== 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId && !isEditingNav ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
+                        {info.badge}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* NEW UI SEPARATOR FOR DAILY VS STATIC TASKS */}
+                {tabId === 'workOrders' && (
+                  <div className="pt-2 pb-1 w-full">
+                     <div className="border-t border-gray-200 w-full mb-3"></div>
+                     <div className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:block">
+                       Database & Records
+                     </div>
                   </div>
                 )}
-                <button 
-                  onClick={() => !isEditingNav && changeTab(tabId)} 
-                  className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId && !isEditingNav ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"} ${isEditingNav ? 'pl-6 border border-dashed border-gray-300 cursor-move' : ''}`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <span>{info.icon}</span> <span>{info.label}</span>
-                  </div>
-                  {info.badge !== undefined && info.badge !== 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId && !isEditingNav ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
-                      {info.badge}
-                    </span>
-                  )}
-                </button>
-              </div>
+              </React.Fragment>
             );
           })}
           
