@@ -1,22 +1,43 @@
 const { app } = require('@azure/functions');
 const { EmailClient } = require('@azure/communication-email');
 
+// 1. Explicit Response Formatter (Forces Azure to send the JSON back to the browser)
+const createResponse = (status, data) => ({
+    status: status,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+});
+
+// 2. Bulletproofed Array Parser
+const formatRecipients = (emailInput) => {
+    if (!emailInput) return [];
+    
+    // Force type conversion to string just in case the frontend sends an unexpected object type
+    const emailString = String(emailInput); 
+    
+    return emailString
+        .split(',')
+        .map(email => ({ address: email.trim() }))
+        .filter(obj => obj.address !== ""); // Drop any accidental blank spaces
+};
+
 app.http('sendEmail', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
+            // Check payload existence
             const requestBody = await request.json();
+            if (!requestBody) {
+                return createResponse(400, { error: "Payload missing. Azure received an empty request." });
+            }
+
             const { to, cc, subject, body } = requestBody;
 
+            // Verify Environment Variable
             const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
-            
             if (!connectionString) {
-                context.log.error("Missing COMMUNICATION_SERVICES_CONNECTION_STRING environment variable.");
-                return {
-                    status: 500,
-                    jsonBody: { error: "Server misconfiguration: Connection string missing." }
-                };
+                return createResponse(500, { error: "CRITICAL: COMMUNICATION_SERVICES_CONNECTION_STRING is missing in Azure Environment Variables." });
             }
 
             const client = new EmailClient(connectionString);
@@ -28,29 +49,27 @@ app.http('sendEmail', {
                     plainText: body || "You have received an automated operational update.",
                 },
                 recipients: {
-                    to: [{ address: to }],
+                    to: formatRecipients(to),
                 },
             };
 
             if (cc) {
-                emailMessage.recipients.cc = [{ address: cc }];
+                emailMessage.recipients.cc = formatRecipients(cc);
             }
 
             const poller = await client.beginSend(emailMessage);
             const response = await poller.pollUntilDone();
 
-            context.log(`Email dispatched successfully. Message ID: ${response.id}`);
-
-            return { 
-                status: 200, 
-                jsonBody: { message: "Email sent successfully via Azure ACS!", messageId: response.id } 
-            };
+            return createResponse(200, { message: "Email sent successfully via Azure ACS!", messageId: response.id });
+            
         } catch (error) {
-            context.log.error("Failed to send email via Azure:", error);
-            return { 
-                status: 500, 
-                jsonBody: { error: "Failed to send email backend-side.", details: error.message } 
-            };
+            // This will capture the exact Node.js crash reason and force it into your Network tab
+            return createResponse(500, { 
+                error: "Backend execution crash.", 
+                name: error.name, 
+                details: error.message,
+                stack: error.stack
+            });
         }
     }
 });
