@@ -2,38 +2,52 @@ const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
 
-// 1. Database & Blob Connections
-const client = new CosmosClient(process.env.CosmosDbConnectionString || "");
-const database = client.database("OmsDatabase");
-
-const blobConnectionString = process.env.OMS_BLOB_CONNECTION || "";
-let blobServiceClient;
-if (blobConnectionString) {
-    blobServiceClient = BlobServiceClient.fromConnectionString(blobConnectionString);
-}
-
-// 2. Response Formatter
+// 1. Response Formatter
 const createResponse = (status, data) => ({
     status: status,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
 });
 
+// 2. Lazy Initialization Variables
+let database = null;
+let blobServiceClient = null;
+
+// Helper to safely boot Cosmos DB only when needed
+const getDatabase = () => {
+    if (!database) {
+        const connString = process.env.CosmosDbConnectionString;
+        if (!connString) throw new Error("CosmosDbConnectionString is missing from Azure Environment Variables.");
+        const client = new CosmosClient(connString);
+        database = client.database("OmsDatabase");
+    }
+    return database;
+};
+
+// Helper to safely boot Blob Storage only when needed
+const getBlobClient = () => {
+    if (!blobServiceClient) {
+        const connString = process.env.OMS_BLOB_CONNECTION;
+        if (!connString) throw new Error("OMS_BLOB_CONNECTION is missing from Azure Environment Variables.");
+        blobServiceClient = BlobServiceClient.fromConnectionString(connString);
+    }
+    return blobServiceClient;
+};
+
 // 3. Standard Cosmos DB Router
 async function processRoute(request, containerId) {
-    const method = request.method;
-    const container = database.container(containerId);
     try {
+        const db = getDatabase(); // Connects to DB here
+        const method = request.method;
+        const container = db.container(containerId);
+        
         if (method === 'GET') {
             const { resources } = await container.items.readAll().fetchAll();
             return createResponse(200, resources);
         }
         if (method === 'POST') {
             const payload = await request.json();
-            
-            // THE FIX: Changed .create() to .upsert() so it can overwrite existing records!
             const { resource } = await container.items.upsert(payload);
-            
             return createResponse(201, resource);
         }
         if (method === 'DELETE') {
@@ -44,7 +58,12 @@ async function processRoute(request, containerId) {
             return createResponse(200, { message: "Item permanently deleted from database." });
         }
     } catch (error) {
-        return createResponse(500, { error: `Cosmos DB error on ${containerId}`, message: error.message });
+        // Will now properly return a JSON error instead of crashing the server
+        return createResponse(500, { 
+            error: `Cosmos DB error on ${containerId}`, 
+            message: error.message,
+            stack: error.stack
+        });
     }
 }
 
@@ -53,8 +72,6 @@ app.http('assets', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous',
 app.http('templates', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'templates') });
 app.http('history', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
 app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
-
-// THE NEW WORK ORDERS ENDPOINT
 app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
 
 // --- BLOB STORAGE UPLOAD ENDPOINT ---
@@ -63,9 +80,7 @@ app.http('upload', {
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
-            if (!blobServiceClient) {
-                return createResponse(500, { error: "Blob storage connection string missing from OMS_BLOB_CONNECTION." });
-            }
+            const blobClient = getBlobClient(); // Connects to Blob here
 
             const payload = await request.json();
             const { fileName, fileData } = payload;
@@ -79,7 +94,7 @@ app.http('upload', {
             const buffer = Buffer.from(base64String, 'base64');
             
             const cleanFileName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-            const containerClient = blobServiceClient.getContainerClient('equipment-manuals');
+            const containerClient = blobClient.getContainerClient('equipment-manuals');
             const blockBlobClient = containerClient.getBlockBlobClient(cleanFileName);
 
             await blockBlobClient.uploadData(buffer, {
