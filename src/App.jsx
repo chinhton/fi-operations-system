@@ -87,7 +87,7 @@ export default function App() {
   });
 
   const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: ""
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", assignedTo: ""
   });
 
   const [newWo, setNewWo] = useState({
@@ -1798,7 +1798,19 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                         {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                       </select>
                     </div>
-
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign to Operator (Optional)</label>
+                      <select 
+                        value={newTemplate.assignedTo || ""} 
+                        onChange={(e) => setNewTemplate({...newTemplate, assignedTo: e.target.value})} 
+                        className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium"
+                      >
+                        <option value="" disabled>-- Select Active Technician --</option>
+                        {/* Note: Paste your specific technician <option> tags from the Dispatch Work Order form right here! */}
+                        <option value="System Administrator">System Administrator</option>
+                        <option value="cton@fcimg.com">cton@fcimg.com</option>
+                      </select>
+                    </div>
                     <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
                       <textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
