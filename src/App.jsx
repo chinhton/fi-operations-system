@@ -91,7 +91,7 @@ export default function App() {
   });
 
   const [newWo, setNewWo] = useState({
-    title: "", description: "", assetId: "", assignedTo: "", priority: "60 - Service"
+    title: "", description: "", assetId: "", assignedTo: "", priority: ""
   });
 
   const [manualAssetIds, setManualAssetIds] = useState([]);
@@ -714,11 +714,11 @@ const handleAddWorkOrder = async (e) => {
     e.preventDefault();
     if (isSubmittingWo) return;
     
-    if (!newWo.title.trim() || !newWo.assignedTo) { 
-      triggerModal("Input Required", "Work Order Title and Assigned Operator are strictly required fields.", "info"); 
-      return; 
+if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
+      triggerModal("Input Required", "Title, Assigned Operator, and Priority Level are strictly required fields.", "info");
+      return;
     }
-    
+
     setIsSubmittingWo(true);
     try {
       const created = { 
@@ -1360,6 +1360,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
 <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
                       <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium">
+                        <option value="" disabled>-- Select Priority --</option>
                         <option value="95 - Emergency">95 - Emergency</option>
                         <option value="90 - Compliance">90 - Compliance</option>
                         <option value="80 - Reactive">80 - Reactive</option>
