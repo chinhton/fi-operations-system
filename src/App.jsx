@@ -106,7 +106,7 @@ export default function App() {
   });
 
   const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", assignedTo: ""
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "",
   });
 
   const [newWo, setNewWo] = useState({
@@ -1827,25 +1827,14 @@ export default function App() {
                       <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
                       <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
                         <option value="Global">Global (All Assets)</option>
                         {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign to Operator (Optional)</label>
-                      <select 
-                        value={newTemplate.assignedTo || ""} 
-                        onChange={(e) => setNewTemplate({...newTemplate, assignedTo: e.target.value})} 
-                        className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium"
-                      >
-                        <option value="" disabled>-- Select Active Technician --</option>
-                        <option value="System Administrator">System Administrator</option>
-                        <option value="cton@fcimg.com">cton@fcimg.com</option>
-                      </select>
-                    </div>
+ 
                     <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
                       <textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
