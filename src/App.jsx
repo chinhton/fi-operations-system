@@ -1465,7 +1465,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
           {activeTab === "assets" && (
             <div className="space-y-8 animate-entrance">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Facility Asset</h3></div>
+                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
                 <form onSubmit={handleAddAssetSubmit} className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
@@ -1766,7 +1766,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
           {activeTab === "templates" && (
             <div className="space-y-8 animate-entrance">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">PM Task Configuration</h3></div>
+                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
                 <form onSubmit={handleAddTemplateSubmit} className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2">
