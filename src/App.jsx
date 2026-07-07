@@ -91,7 +91,7 @@ export default function App() {
   });
 
   const [newWo, setNewWo] = useState({
-    title: "", description: "", assetId: "", assignedTo: "", priority: "Medium"
+    title: "", description: "", assetId: "", assignedTo: "", priority: "60 - Service"
   });
 
   const [manualAssetIds, setManualAssetIds] = useState([]);
