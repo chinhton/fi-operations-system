@@ -1357,13 +1357,15 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                       </select>
                     </div>
 
-                    <div>
+<div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
-                      <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="Low">Low Priority</option>
-                        <option value="Medium">Medium Priority</option>
-                        <option value="High">High Priority</option>
-                        <option value="Critical">Critical Issue</option>
+                      <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium">
+                        <option value="95 - Emergency">95 - Emergency</option>
+                        <option value="90 - Compliance">90 - Compliance</option>
+                        <option value="80 - Reactive">80 - Reactive</option>
+                        <option value="70 - PM">70 - PM</option>
+                        <option value="60 - Service">60 - Service</option>
+                        <option value="50 - Deferred">50 - Deferred</option>
                       </select>
                     </div>
                     <div className="md:col-span-2">
