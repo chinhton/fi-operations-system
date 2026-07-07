@@ -75,7 +75,8 @@ export default function App() {
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
-
+const [filterSearch, setFilterSearch] = useState("");
+const [filterPriority, setFilterPriority] = useState("All");
   const [showPmModal, setShowPmModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
