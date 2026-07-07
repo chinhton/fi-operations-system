@@ -1409,7 +1409,15 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${wo.priority === 'Critical' ? 'bg-red-100 text-red-800' : wo.priority === 'High' ? 'bg-orange-100 text-orange-800' : wo.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${
+                                wo.priority?.includes('95') || wo.priority === 'Critical' ? 'bg-red-600 text-white animate-pulse' : 
+                                wo.priority?.includes('90') || wo.priority === 'High' ? 'bg-orange-100 text-orange-800 border border-orange-200' : 
+                                wo.priority?.includes('80') ? 'bg-yellow-100 text-yellow-800' : 
+                                wo.priority?.includes('70') ? 'bg-[#005596]/10 text-[#005596]' : 
+                                wo.priority?.includes('60') ? 'bg-green-100 text-green-800' : 
+                                wo.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 
+                                'bg-gray-100 text-gray-500'
+                              }`}>
                                 {wo.priority}
                               </span>
                             </td>
