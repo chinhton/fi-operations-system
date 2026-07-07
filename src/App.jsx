@@ -75,8 +75,26 @@ export default function App() {
   const [pmTemplates, setPmTemplates] = useState([]);
   const [history, setHistory] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
-const [filterSearch, setFilterSearch] = useState("");
-const [filterPriority, setFilterPriority] = useState("All");
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterPriority, setFilterPriority] = useState("All");
+
+  // --- FILTER ENGINE ---
+  const filteredWorkOrders = workOrders.filter((wo) => {
+    // 1. Hide completed tickets from the Active Board
+    if (wo.status === "Completed") return false;
+
+    // 2. Text Search Match (Title or Operator)
+    const searchLower = filterSearch.toLowerCase();
+    const matchesSearch = 
+      (wo.title || "").toLowerCase().includes(searchLower) || 
+      (wo.assignedTo || "").toLowerCase().includes(searchLower);
+      
+    // 3. Priority Match
+    const matchesPriority = filterPriority === "All" || (wo.priority || "").includes(filterPriority);
+    
+    return matchesSearch && matchesPriority;
+  });
+
   const [showPmModal, setShowPmModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -711,11 +729,11 @@ const [filterPriority, setFilterPriority] = useState("All");
     }
   };
 
-const handleAddWorkOrder = async (e) => {
+  const handleAddWorkOrder = async (e) => {
     e.preventDefault();
     if (isSubmittingWo) return;
     
-if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
+    if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
       triggerModal("Input Required", "Title, Assigned Operator, and Priority Level are strictly required fields.", "info");
       return;
     }
@@ -727,7 +745,7 @@ if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
         ...newWo, 
         status: "Open", 
         createdBy: currentUser.name,
-        creatorEmail: currentUser.email, // Added tracking for the creator's email
+        creatorEmail: currentUser.email,
         timestamp: new Date().toISOString()
       };
 
@@ -735,13 +753,12 @@ if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
       if (res.ok) {
         const savedWo = await res.json(); 
         setWorkOrders([savedWo, ...workOrders]);
-        setNewWo({ title: "", description: "", assetId: "", assignedTo: "", priority: "Medium" });
+        setNewWo({ title: "", description: "", assetId: "", assignedTo: "", priority: "" });
         triggerModal("Work Order Dispatched", `Task successfully assigned and queued for operator action.`, "success");
 
         const assignedUser = users.find(u => u.email === newWo.assignedTo);
         const assignedName = assignedUser ? assignedUser.name : 'Technician';
         
-        // Bundle both creator and assigned operator into the mailing list
         const mailingList = Array.from(new Set([newWo.assignedTo, currentUser.email])).filter(Boolean).join(',');
 
         try {
@@ -765,7 +782,7 @@ if (!newWo.title.trim() || !newWo.assignedTo || !newWo.priority) {
     }
   };
 
-const handleUpdateWoStatus = async (woId, newStatus) => {
+  const handleUpdateWoStatus = async (woId, newStatus) => {
     const targetWo = workOrders.find(w => w.id === woId);
     if (!targetWo) return;
     
@@ -775,7 +792,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
     try {
       await fetch('/api/workorders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedWo) });
 
-      // --- EMAIL NOTIFICATION BLOCK ---
       if (newStatus === "In Progress" || newStatus === "Completed") {
         const mailingList = Array.from(new Set([targetWo.assignedTo, targetWo.creatorEmail || currentUser.email])).filter(Boolean).join(',');
         const assignedUser = users.find(u => u.email === targetWo.assignedTo);
@@ -795,7 +811,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
           console.error('Failed to trigger work order status email:', err);
         }
       }
-      // --- END EMAIL NOTIFICATION BLOCK ---
 
       if (newStatus === "Completed") {
         const logEntry = {
@@ -1004,8 +1019,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
     return acc;
   }, {});
 
-  const activeWorkOrders = workOrders.filter(w => w.status !== "Completed");
-
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
@@ -1116,8 +1129,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
         </div>
       </header>
 
-{/* COMPLIANCE KPI TRACKER BANNER */}
-{/* COMPLIANCE KPI TRACKER BANNER */}
+      {/* COMPLIANCE KPI TRACKER BANNER */}
       <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-md relative overflow-hidden">
         {/* Subtle background glow effect */}
         <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl"></div>
@@ -1218,7 +1230,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
         {/* WORKPLACE MAIN PANEL CONTENT WINDOW */}
         <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden relative z-0">
 
-{activeTab === "dashboard" && (
+          {activeTab === "dashboard" && (
             <div className="space-y-8 animate-entrance">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
@@ -1358,7 +1370,7 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                       </select>
                     </div>
 
-<div>
+                    <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
                       <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium">
                         <option value="" disabled>-- Select Priority --</option>
@@ -1383,9 +1395,32 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                 </form>
               </div>
 
+              {/* RESTORED ACTIVE DISPATCH BOARD WRAPPER */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">Active Dispatch Board</h3>
+                  <div className="flex gap-4 text-black font-normal">
+                    <input 
+                      type="text" 
+                      placeholder="Search tickets or operators..." 
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
+                      className="text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none"
+                    />
+                    <select 
+                      value={filterPriority}
+                      onChange={(e) => setFilterPriority(e.target.value)}
+                      className="text-xs rounded border-gray-300 px-3 py-1.5 focus:outline-none cursor-pointer"
+                    >
+                      <option value="All">All Priorities</option>
+                      <option value="95">95 - Emergency</option>
+                      <option value="90">90 - Compliance</option>
+                      <option value="80">80 - Reactive</option>
+                      <option value="70">70 - PM</option>
+                      <option value="60">60 - Service</option>
+                      <option value="50">50 - Deferred</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-left">
@@ -1399,10 +1434,10 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-xs">
-                      {activeWorkOrders.length === 0 ? (
-                        <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400 text-xs">No active work orders in the system.</td></tr>
+                      {filteredWorkOrders.length === 0 ? (
+                        <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400 text-xs">No active work orders match your search criteria.</td></tr>
                       ) : (
-                        activeWorkOrders.map((wo) => (
+                        filteredWorkOrders.map((wo) => (
                           <tr key={wo.id} className="hover:bg-gray-50/55 transition">
                             <td className="px-6 py-4">
                               <span className="font-bold text-gray-900 block">{wo.title}</span>
@@ -1807,7 +1842,6 @@ const handleUpdateWoStatus = async (woId, newStatus) => {
                         className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium"
                       >
                         <option value="" disabled>-- Select Active Technician --</option>
-                        {/* Note: Paste your specific technician <option> tags from the Dispatch Work Order form right here! */}
                         <option value="System Administrator">System Administrator</option>
                         <option value="cton@fcimg.com">cton@fcimg.com</option>
                       </select>
