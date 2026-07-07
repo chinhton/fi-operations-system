@@ -80,16 +80,13 @@ export default function App() {
 
   // --- FILTER ENGINE ---
   const filteredWorkOrders = workOrders.filter((wo) => {
-    // 1. Hide completed tickets from the Active Board
     if (wo.status === "Completed") return false;
 
-    // 2. Text Search Match (Title or Operator)
     const searchLower = filterSearch.toLowerCase();
     const matchesSearch = 
       (wo.title || "").toLowerCase().includes(searchLower) || 
       (wo.assignedTo || "").toLowerCase().includes(searchLower);
       
-    // 3. Priority Match
     const matchesPriority = filterPriority === "All" || (wo.priority || "").includes(filterPriority);
     
     return matchesSearch && matchesPriority;
@@ -106,7 +103,7 @@ export default function App() {
   });
 
   const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "",
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: ""
   });
 
   const [newWo, setNewWo] = useState({
@@ -1804,8 +1801,8 @@ export default function App() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
                 <form onSubmit={handleAddTemplateSubmit} className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
                       <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white" />
                     </div>
@@ -1826,15 +1823,14 @@ export default function App() {
                       <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     
-                    <div className="md:col-span-2">
+                    <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
                       <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
                         <option value="Global">Global (All Assets)</option>
                         {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                       </select>
                     </div>
- 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
                       <textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
                     </div>
@@ -1847,34 +1843,55 @@ export default function App() {
                 </form>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {pmTemplates.map((template) => (
-                  <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between relative">
-                    {template.targetCategory !== "Global" && (
-                      <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 uppercase rounded-bl-lg shadow-sm border-b border-l border-yellow-500 z-10">Locked: {template.targetCategory}</div>
-                    )}
-                    <div className="p-5">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span>
-                          <h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4>
-                        </div>
-                        <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
+              {(() => {
+                const groupedTemplates = pmTemplates.reduce((acc, template) => {
+                  const cat = template.targetCategory || "Global";
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(template);
+                  return acc;
+                }, {});
+
+                return Object.keys(groupedTemplates).length === 0 ? (
+                  <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No SOP templates constructed yet.</div>
+                ) : (
+                  Object.entries(groupedTemplates).map(([category, catTemplates]) => (
+                    <div key={category} className="mb-8">
+                      <div className="bg-gray-100 border border-gray-200 border-b-0 px-6 py-3 rounded-t-xl text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-between shadow-inner">
+                        <span>📁 Category Lock: {category}</span>
+                        <span className="bg-gray-200 text-gray-600 px-2.5 py-1 rounded-full text-[10px]">{catTemplates.length} Protocol{catTemplates.length !== 1 ? 's' : ''}</span>
                       </div>
-                      <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
-                      <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
-                        {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
-                      </ul>
+                      <div className="bg-white p-6 rounded-b-xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-sm">
+                        {catTemplates.map((template) => (
+                          <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between relative hover:shadow-md transition">
+                            {template.targetCategory !== "Global" && (
+                              <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 uppercase rounded-bl-lg shadow-sm border-b border-l border-yellow-500 z-10">Locked: {template.targetCategory}</div>
+                            )}
+                            <div className="p-5">
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span>
+                                  <h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4>
+                                </div>
+                                <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
+                              </div>
+                              <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
+                              <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
+                                {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
+                              </ul>
+                            </div>
+                            <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
+                              <span className="text-gray-500">{template.checklist.length} individual tasks</span>
+                              {isSystemAdmin && (
+                                <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
-                      <span className="text-gray-500">{template.checklist.length} individual tasks</span>
-                      {isSystemAdmin && (
-                        <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))
+                );
+              })()}
             </div>
           )}
 
