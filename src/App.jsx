@@ -758,8 +758,25 @@ export default function App() {
           pmFrequencies: updatedFrequencies
         };
         
-        try {
+          try {
           await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+          
+          // --- AUTOMATED PM COMPLETION EMAIL ---
+          const notifyEmails = [selectedTemplate.managerEmail, selectedTemplate.operatorEmail].filter(Boolean);
+          if (notifyEmails.length > 0) {
+             const mailList = Array.from(new Set(notifyEmails)).join(',');
+             fetch('/api/sendEmail', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({
+                 to: mailList,
+                 subject: `PM Executed: ${selectedTemplate.name} completed for ${selectedAsset.name}`,
+                 body: `Hello,\n\nThe following maintenance protocol has been executed in the FI Operations System.\n\nAsset: ${selectedAsset.name} (SN: ${selectedAsset.serial})\nProtocol: ${selectedTemplate.name}\nCycle: ${selectedTemplate.interval}\nExecuted By: ${currentUser.name}\nStatus: ${statusState}\nNotes: ${pmComments || 'No additional comments.'}\n\nPlease log in to the dashboard to review the full audit trace.`
+               })
+             }).catch(err => console.log("Silent Email Dispatch Failed:", err));
+          }
+          // -------------------------------------
+
         } catch (err) {
           console.error("Failed to update asset PM date in DB", err);
         }
@@ -1917,13 +1934,19 @@ export default function App() {
                         {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                       </select>
                     </div>
-                    <div>
+                    <div> 
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manager Email (For Notifications)</label>
-                      <input type="email" value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} placeholder="manager@fcimg.com" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                      <select value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="">-- Select Manager Account --</option>
+                        {activeAccounts.map(u => <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Operator Email (Primary Notification)</label>
-                      <input type="email" value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} placeholder="tech@fcimg.com" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                      <select value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
+                        <option value="">-- Select Operator Account --</option>
+                        {activeAccounts.map(u => <option key={`op-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
+                      </select>
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
