@@ -110,7 +110,7 @@ export default function App() {
   const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
   const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
 
-  const [newTemplate, setNewTemplate] = useState({
+const [newTemplate, setNewTemplate] = useState({
     name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: ""
   });
 
@@ -952,17 +952,16 @@ export default function App() {
 
     setIsAddingTemplate(true);
     try {
-      const created = {
+ const created = {
         id: `SOP-${Date.now().toString().slice(-3)}`,
         name: newTemplate.name.trim(),
         interval: newTemplate.interval,
         department: newTemplate.department.trim() || "General Engineering",
         targetCategory: newTemplate.targetCategory,
-        managerEmail: newTemplate.managerEmail.trim(),
-        operatorEmail: newTemplate.operatorEmail.trim(),
+        managerEmail: newTemplate.managerEmail || "",
+        operatorEmail: newTemplate.operatorEmail || "",
         checklist: steps
       };
-
       const res = await fetch('/api/templates', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -972,10 +971,8 @@ export default function App() {
       if (res.ok) {
         const savedTemplate = await res.json();
         setPmTemplates([...pmTemplates, savedTemplate]);
-        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
+        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: "" });
         triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
-      } else {
-        triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
       }
     } finally {
       setIsAddingTemplate(false);
