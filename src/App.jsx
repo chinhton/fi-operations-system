@@ -1654,12 +1654,12 @@ export default function App() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
-                  <input 
+                <input  
                     type="text" 
                     placeholder="Search by Name, S/N, or Category..." 
                     value={assetSearch}
                     onChange={(e) => setAssetSearch(e.target.value)}
-                    className="text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none text-black font-normal"
+                    className="bg-white text-gray-900 text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-[#00A1E4] font-normal shadow-inner"
                   />
                 </div>
                 
