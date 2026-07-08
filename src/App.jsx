@@ -77,6 +77,8 @@ export default function App() {
   const [workOrders, setWorkOrders] = useState([]);
   const [filterSearch, setFilterSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState("All");
+  const [assetSearch, setAssetSearch] = useState("");
+  const [templateSearch, setTemplateSearch] = useState("");
 
   // --- FILTER ENGINE ---
   const filteredWorkOrders = workOrders.filter((wo) => {
@@ -93,17 +95,23 @@ export default function App() {
   });
 
   const [showPmModal, setShowPmModal] = useState(false);
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [activeAssetDetails, setActiveAssetDetails] = useState(null);
+  
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [completedSteps, setCompletedSteps] = useState({});
   const [pmComments, setPmComments] = useState("");
 
   const [newAsset, setNewAsset] = useState({
-    name: "", model: "", serial: "", location: "", category: "", pmFrequencies: []
+    name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: []
   });
 
+  const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
+  const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
+
   const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: ""
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: ""
   });
 
   const [newWo, setNewWo] = useState({
@@ -497,6 +505,47 @@ export default function App() {
     setShowPmModal(true);
   };
 
+  const handleOpenAssetModal = (asset) => {
+    setActiveAssetDetails(asset);
+    setNewPart({ partNumber: "", name: "", stock: "" });
+    setNewVendor({ name: "", contactInfo: "", serviceType: "" });
+    setShowAssetModal(true);
+  };
+
+  const addPart = async (e) => {
+    e.preventDefault();
+    if (!newPart.name || !newPart.partNumber) return;
+    const updatedAsset = { ...activeAssetDetails, parts: [...(activeAssetDetails.parts || []), { id: Date.now().toString(), ...newPart }] };
+    setNewPart({ partNumber: "", name: "", stock: "" });
+    setActiveAssetDetails(updatedAsset);
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch(err){}
+  };
+
+  const removePart = async (partId) => {
+    const updatedAsset = { ...activeAssetDetails, parts: activeAssetDetails.parts.filter(p => p.id !== partId) };
+    setActiveAssetDetails(updatedAsset);
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch(err){}
+  };
+
+  const addVendor = async (e) => {
+    e.preventDefault();
+    if (!newVendor.name) return;
+    const updatedAsset = { ...activeAssetDetails, vendors: [...(activeAssetDetails.vendors || []), { id: Date.now().toString(), ...newVendor }] };
+    setNewVendor({ name: "", contactInfo: "", serviceType: "" });
+    setActiveAssetDetails(updatedAsset);
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch(err){}
+  };
+
+  const removeVendor = async (vendorId) => {
+    const updatedAsset = { ...activeAssetDetails, vendors: activeAssetDetails.vendors.filter(v => v.id !== vendorId) };
+    setActiveAssetDetails(updatedAsset);
+    setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch(err){}
+  };
+
   const handleUpdateAssetStatus = async (assetId, newStatus) => {
     const targetAsset = assets.find(a => a.id === assetId);
     if (!targetAsset) return;
@@ -852,13 +901,15 @@ export default function App() {
         lastPmDate: new Date().toISOString(),
         pmFrequencies: newAsset.pmFrequencies,
         pmDates: initialPmDates,
-        manuals: [] 
+        manuals: [],
+        parts: [],
+        vendors: []
       };
 
       const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
       if (res.ok) {
         const savedAsset = await res.json(); setAssets([...assets, savedAsset]);
-        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [] });
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); changeTab("dashboard");
       }
     } finally {
@@ -890,6 +941,8 @@ export default function App() {
         interval: newTemplate.interval,
         department: newTemplate.department.trim() || "General Engineering",
         targetCategory: newTemplate.targetCategory,
+        managerEmail: newTemplate.managerEmail.trim(),
+        operatorEmail: newTemplate.operatorEmail.trim(),
         checklist: steps
       };
 
@@ -902,7 +955,7 @@ export default function App() {
       if (res.ok) {
         const savedTemplate = await res.json();
         setPmTemplates([...pmTemplates, savedTemplate]);
-        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "" });
+        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
         triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
       } else {
         triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
@@ -941,6 +994,22 @@ export default function App() {
         triggerModal("Error", "Network error while deleting.", "error");
       }
     }); 
+  };
+
+  const deleteWorkOrder = (id) => {
+    triggerModal("Confirm Deletion", "Are you sure you want to permanently delete this dispatch ticket?", "confirm", async () => {
+      try {
+        const res = await fetch(`/api/workorders?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setWorkOrders(workOrders.filter(w => w.id !== id));
+          closeModal();
+        } else {
+          triggerModal("Error", "Failed to delete work order from database.", "error");
+        }
+      } catch (err) {
+        triggerModal("Error", "Network error while deleting.", "error");
+      }
+    });
   };
 
   const deleteHistoryLog = (id) => {
@@ -1008,8 +1077,15 @@ export default function App() {
     (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
     (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase())
   );
+  
+  const filteredAssets = assets.filter(a => 
+    (a.name || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
+    (a.serial || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
+    (a.category || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
+    (a.model || "").toLowerCase().includes(assetSearch.toLowerCase())
+  );
 
-  const groupedAssets = assets.reduce((acc, asset) => {
+  const groupedAssets = filteredAssets.reduce((acc, asset) => {
     const cat = asset.category || "Uncategorized";
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(asset);
@@ -1339,7 +1415,6 @@ export default function App() {
                       </select>
                     </div>
                     
-                    {/* NEW FIELD: PM Task Protocol Auto-Filler */}
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Link PM Task Protocol (Optional)</label>
                       <select 
@@ -1392,7 +1467,6 @@ export default function App() {
                 </form>
               </div>
 
-              {/* RESTORED ACTIVE DISPATCH BOARD WRAPPER */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">Active Dispatch Board</h3>
@@ -1469,22 +1543,27 @@ export default function App() {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-right">
-                              {wo.status === "Completed" ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800">
-                                  Completed ✓
-                                </span>
-                              ) : (
-                                <select
-                                  value={wo.status}
-                                  onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
-                                  disabled={!isSystemAdmin && wo.assignedTo !== currentUser.email}
-                                  className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
-                                >
-                                  <option value="Open">Open</option>
-                                  <option value="In Progress">In Progress</option>
-                                  <option value="Completed">Mark Completed</option>
-                                </select>
-                              )}
+                              <div className="flex items-center justify-end space-x-3">
+                                {wo.status === "Completed" ? (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800">
+                                    Completed ✓
+                                  </span>
+                                ) : (
+                                  <select
+                                    value={wo.status}
+                                    onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
+                                    disabled={!isSystemAdmin && wo.assignedTo !== currentUser.email}
+                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
+                                  >
+                                    <option value="Open">Open</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Completed">Mark Completed</option>
+                                  </select>
+                                )}
+                                {(isSystemAdmin || wo.creatorEmail === currentUser.email) && (
+                                  <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-400 hover:text-red-700 text-xl font-bold leading-none transition px-1" title="Delete Work Order">&times;</button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
@@ -1558,6 +1637,13 @@ export default function App() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
                   <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
+                  <input 
+                    type="text" 
+                    placeholder="Search by Name, S/N, or Category..." 
+                    value={assetSearch}
+                    onChange={(e) => setAssetSearch(e.target.value)}
+                    className="text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none text-black font-normal"
+                  />
                 </div>
                 
                 {Object.keys(groupedAssets).length === 0 ? (
@@ -1636,6 +1722,8 @@ export default function App() {
                                     </div>
                                   </td>
                                   <td className="px-6 py-4 text-right space-x-4">
+                                    <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
+                                    <button onClick={() => handleOpenPmModal(asset.id)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                                     {isSystemAdmin && (
                                       <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                                     )}
@@ -1822,13 +1910,20 @@ export default function App() {
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
                       <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
-                    
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
                       <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
                         <option value="Global">Global (All Assets)</option>
                         {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manager Email (For Notifications)</label>
+                      <input type="email" value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} placeholder="manager@fcimg.com" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Operator Email (Primary Notification)</label>
+                      <input type="email" value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} placeholder="tech@fcimg.com" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
@@ -1843,8 +1938,24 @@ export default function App() {
                 </form>
               </div>
 
+              <div className="flex justify-end mb-4 px-1">
+                <input 
+                  type="text" 
+                  placeholder="Search SOP Templates by Name, Category, or Dept..." 
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  className="w-full md:w-80 text-xs rounded border border-gray-300 p-2.5 bg-white shadow-sm focus:outline-none focus:border-[#005596]"
+                />
+              </div>
+
               {(() => {
-                const groupedTemplates = pmTemplates.reduce((acc, template) => {
+                const filteredTemplates = pmTemplates.filter(t => 
+                  (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
+                  (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
+                  (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
+                );
+
+                const groupedTemplates = filteredTemplates.reduce((acc, template) => {
                   const cat = template.targetCategory || "Global";
                   if (!acc[cat]) acc[cat] = [];
                   acc[cat].push(template);
@@ -1852,7 +1963,7 @@ export default function App() {
                 }, {});
 
                 return Object.keys(groupedTemplates).length === 0 ? (
-                  <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No SOP templates constructed yet.</div>
+                  <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No SOP templates matching search.</div>
                 ) : (
                   Object.entries(groupedTemplates).map(([category, catTemplates]) => (
                     <div key={category} className="mb-8">
@@ -1875,12 +1986,13 @@ export default function App() {
                                 <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
                               </div>
                               <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
+                              
                               <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
                                 {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
                               </ul>
                             </div>
                             <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
-                              <span className="text-gray-500">{template.checklist.length} individual tasks</span>
+                              <span className="text-gray-500">{template.checklist.length} tasks</span>
                               {isSystemAdmin && (
                                 <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
                               )}
@@ -2091,6 +2203,81 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HARDWARE AND VENDOR MODAL */}
+      {showAssetModal && activeAssetDetails && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-entrance">
+            <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
+              <div>
+                <h3 className="font-bold text-sm tracking-wide uppercase">Hardware & Vendor Profile</h3>
+                <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">{activeAssetDetails.name} (SN: {activeAssetDetails.serial})</span>
+              </div>
+              <button onClick={() => setShowAssetModal(false)} className="text-gray-400 hover:text-white text-xl font-bold leading-none transition">&times;</button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-grow bg-gray-50">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* PARTS LIST SECTION */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                  <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Approved Parts List</h4>
+                  <div className="space-y-3 max-h-64 overflow-y-auto mb-4 pr-2">
+                    {(!activeAssetDetails.parts || activeAssetDetails.parts.length === 0) ? (
+                      <p className="text-xs text-gray-500 italic">No approved parts logged.</p>
+                    ) : (
+                      activeAssetDetails.parts.map(part => (
+                        <div key={part.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded border border-gray-100">
+                          <div>
+                            <span className="block text-xs font-bold text-gray-800">{part.name}</span>
+                            <span className="block text-[10px] text-gray-500 font-mono">PN: {part.partNumber} {part.stock && `| Stock: ${part.stock}`}</span>
+                          </div>
+                          <button onClick={() => removePart(part.id)} className="text-red-400 hover:text-red-700 text-lg font-bold leading-none">&times;</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <form onSubmit={addPart} className="bg-gray-50 p-3 rounded border border-gray-200 space-y-2">
+                    <input type="text" placeholder="Part Name (e.g., O-Ring)" value={newPart.name} onChange={e => setNewPart({...newPart, name: e.target.value})} className="w-full text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" required />
+                    <div className="flex space-x-2">
+                      <input type="text" placeholder="Part Number" value={newPart.partNumber} onChange={e => setNewPart({...newPart, partNumber: e.target.value})} className="w-2/3 text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" required />
+                      <input type="text" placeholder="Stock Qty" value={newPart.stock} onChange={e => setNewPart({...newPart, stock: e.target.value})} className="w-1/3 text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" />
+                    </div>
+                    <button type="submit" className="w-full bg-[#00A1E4] text-white text-[10px] font-bold uppercase py-2 rounded shadow-sm hover:bg-[#0081b8] transition">Add Part</button>
+                  </form>
+                </div>
+
+                {/* VENDOR MANAGEMENT SECTION */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
+                  <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Vendor Management</h4>
+                  <div className="space-y-3 max-h-64 overflow-y-auto mb-4 pr-2">
+                    {(!activeAssetDetails.vendors || activeAssetDetails.vendors.length === 0) ? (
+                      <p className="text-xs text-gray-500 italic">No approved vendors linked.</p>
+                    ) : (
+                      activeAssetDetails.vendors.map(vendor => (
+                        <div key={vendor.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded border border-gray-100">
+                          <div>
+                            <span className="block text-xs font-bold text-gray-800">{vendor.name}</span>
+                            <span className="block text-[10px] text-gray-500 font-mono">{vendor.serviceType} | {vendor.contactInfo}</span>
+                          </div>
+                          <button onClick={() => removeVendor(vendor.id)} className="text-red-400 hover:text-red-700 text-lg font-bold leading-none">&times;</button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <form onSubmit={addVendor} className="bg-gray-50 p-3 rounded border border-gray-200 space-y-2">
+                    <input type="text" placeholder="Vendor Name (e.g., Applied Materials)" value={newVendor.name} onChange={e => setNewVendor({...newVendor, name: e.target.value})} className="w-full text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" required />
+                    <div className="flex space-x-2">
+                      <input type="text" placeholder="Service/Supply Type" value={newVendor.serviceType} onChange={e => setNewVendor({...newVendor, serviceType: e.target.value})} className="w-1/2 text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" />
+                      <input type="text" placeholder="Contact/Phone" value={newVendor.contactInfo} onChange={e => setNewVendor({...newVendor, contactInfo: e.target.value})} className="w-1/2 text-[10px] p-2 rounded border border-gray-300 focus:outline-none focus:border-[#005596]" required />
+                    </div>
+                    <button type="submit" className="w-full bg-[#00A1E4] text-white text-[10px] font-bold uppercase py-2 rounded shadow-sm hover:bg-[#0081b8] transition">Add Vendor</button>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>
