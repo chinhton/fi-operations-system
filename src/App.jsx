@@ -113,6 +113,7 @@ export default function App() {
 const [newTemplate, setNewTemplate] = useState({
     name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: ""
   });
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
 
   const [newWo, setNewWo] = useState({
     title: "", description: "", assetId: "", assignedTo: "", priority: ""
@@ -934,7 +935,7 @@ const [newTemplate, setNewTemplate] = useState({
     }
   };
 
-  const handleAddTemplateSubmit = async (e) => {
+const handleAddTemplateSubmit = async (e) => {
     e.preventDefault();
     if (isAddingTemplate) return;
     
@@ -952,8 +953,8 @@ const [newTemplate, setNewTemplate] = useState({
 
     setIsAddingTemplate(true);
     try {
- const created = {
-        id: `SOP-${Date.now().toString().slice(-3)}`,
+      const payload = {
+        id: editingTemplateId || `SOP-${Date.now().toString().slice(-3)}`,
         name: newTemplate.name.trim(),
         interval: newTemplate.interval,
         department: newTemplate.department.trim() || "General Engineering",
@@ -962,21 +963,50 @@ const [newTemplate, setNewTemplate] = useState({
         operatorEmail: newTemplate.operatorEmail || "",
         checklist: steps
       };
+
       const res = await fetch('/api/templates', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(created) 
+        body: JSON.stringify(payload) 
       });
       
       if (res.ok) {
         const savedTemplate = await res.json();
-        setPmTemplates([...pmTemplates, savedTemplate]);
-        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: "" });
-        triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
+        if (editingTemplateId) {
+          setPmTemplates(pmTemplates.map(t => t.id === editingTemplateId ? savedTemplate : t));
+          triggerModal("Standard Updated", "Preventative maintenance guideline profile has been successfully updated.", "success");
+        } else {
+          setPmTemplates([...pmTemplates, savedTemplate]);
+          triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
+        }
+        
+        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
+        setEditingTemplateId(null);
+      } else {
+        triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
       }
     } finally {
       setIsAddingTemplate(false);
     }
+  };
+
+  const handleEditTemplateClick = (template) => {
+    setNewTemplate({
+      name: template.name,
+      interval: template.interval,
+      department: template.department,
+      targetCategory: template.targetCategory,
+      managerEmail: template.managerEmail || "",
+      operatorEmail: template.operatorEmail || "",
+      checklistInput: template.checklist.join('\n')
+    });
+    setEditingTemplateId(template.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditTemplate = () => {
+    setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
+    setEditingTemplateId(null);
   };
 
   const deleteAsset = (id) => { 
@@ -1473,9 +1503,12 @@ const [newTemplate, setNewTemplate] = useState({
                       <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="4" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
                     </div>
                   </div>
-                  <div className="mt-6 flex justify-end">
-                    <button type="submit" disabled={isSubmittingWo} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isSubmittingWo ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isSubmittingWo ? 'Dispatching...' : 'Dispatch Ticket'}
+                  <div className="mt-6 flex justify-end space-x-3">
+                    {editingTemplateId && (
+                      <button type="button" onClick={cancelEditTemplate} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
+                    )}
+                    <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isAddingTemplate ? 'Processing...' : (editingTemplateId ? 'Update Protocol' : 'Generate Protocol')}
                     </button>
                   </div>
                 </form>
@@ -2006,7 +2039,12 @@ const [newTemplate, setNewTemplate] = useState({
                                 <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
                               </div>
                               <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
-                              
+                              {(template.managerEmail || template.operatorEmail) && (
+                                <div className="mt-3 text-[10px] text-gray-500 font-mono bg-gray-50 p-2.5 rounded border border-gray-100 shadow-inner">
+                                  {template.managerEmail && <span className="block"><strong className="text-gray-700">Mgr Alert:</strong> {template.managerEmail}</span>}
+                                  {template.operatorEmail && <span className="block mt-1"><strong className="text-gray-700">Tech Alert:</strong> {template.operatorEmail}</span>}
+                                </div>
+                              )}
                               <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
                                 {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
                               </ul>
@@ -2014,7 +2052,10 @@ const [newTemplate, setNewTemplate] = useState({
                             <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
                               <span className="text-gray-500">{template.checklist.length} tasks</span>
                               {isSystemAdmin && (
-                                <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold">Delete Standard</button>
+                                <div className="flex space-x-4">
+                                  <button onClick={() => handleEditTemplateClick(template)} className="text-[#005596] hover:text-[#00407a] font-bold uppercase tracking-wider text-[10px]">Edit</button>
+                                  <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold uppercase tracking-wider text-[10px]">Delete</button>
+                                </div>
                               )}
                             </div>
                           </div>
