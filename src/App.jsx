@@ -36,7 +36,7 @@ const customStyles = `
   }
 `;
 
-const PM_CYCLE_OPTIONS = ["Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "Calibration (Semi-Annual)", "Calibration (Annual)"];
+const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
 
 export default function App() {
   const [users, setUsers] = useState([
@@ -205,15 +205,53 @@ const [newTemplate, setNewTemplate] = useState({
     let cycleDays = 0;
     
     switch(frequency) {
+      case "Daily": cycleDays = 1; break;
       case "Monthly": cycleDays = 30; break;
       case "Quarterly": cycleDays = 90; break;
       case "Semi-Annually":
       case "Calibration (Semi-Annual)": cycleDays = 182; break;
       case "Annually":
       case "Calibration (Annual)": cycleDays = 365; break;
+      case "2-Year": cycleDays = 730; break;
+      case "3-Year": cycleDays = 1095; break;
+      case "4-Year": cycleDays = 1460; break;
+      case "5-Year": cycleDays = 1825; break;
       default: return null;
     }
     return cycleDays - daysPassed;
+  };
+
+  const calculateNextPmDate = (lastDateStr, frequency) => {
+    if (!lastDateStr || frequency === "None" || !frequency) return null;
+    const lastDate = new Date(lastDateStr);
+
+    if (frequency === "Weekly") {
+      const nextMonday = new Date(lastDate);
+      const day = nextMonday.getDay();
+      const diff = day === 0 ? 1 : 8 - day;
+      nextMonday.setDate(nextMonday.getDate() + diff);
+      return nextMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    let cycleDays = 0;
+    
+    switch(frequency) {
+      case "Daily": cycleDays = 1; break;
+      case "Monthly": cycleDays = 30; break;
+      case "Quarterly": cycleDays = 90; break;
+      case "Semi-Annually":
+      case "Calibration (Semi-Annual)": cycleDays = 182; break;
+      case "Annually":
+      case "Calibration (Annual)": cycleDays = 365; break;
+      case "2-Year": cycleDays = 730; break;
+      case "3-Year": cycleDays = 1095; break;
+      case "4-Year": cycleDays = 1460; break;
+      case "5-Year": cycleDays = 1825; break;
+      default: return null;
+    }
+    
+    const nextDate = new Date(lastDate.getTime() + (cycleDays * 24 * 60 * 60 * 1000));
+    return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const calculateNextPmDate = (lastDateStr, frequency) => {
@@ -247,51 +285,107 @@ const [newTemplate, setNewTemplate] = useState({
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
-    fetch('/api/assets').then(res => res.json()).then(data => {
-      if (!Array.isArray(data)) return;
-      
-      const evaluatedData = data.map(asset => {
-        if (asset.status === "Corrective Maintenance") return asset; 
-        
-        let hasOverdueCalibration = false;
-        let hasDueMaint = false;
-        const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
-        
-        freqs.forEach(freq => {
-          const lastDate = asset.pmDates?.[freq] || asset.lastPmDate;
-          const daysLeft = calculateDaysRemaining(lastDate, freq);
-          const threshold = freq === "Weekly" ? 0 : 7;
-          if (daysLeft !== null && daysLeft < 0 && freq.includes("Calibration")) hasOverdueCalibration = true;
-          else if (daysLeft !== null && daysLeft <= threshold) hasDueMaint = true;
-        });
-        
-        let computedStatus = "Operational";
-        if (hasOverdueCalibration) computedStatus = "Out of Calibration";
-        else if (hasDueMaint) computedStatus = "Maintenance Due";
+    const initializeData = async () => {
+      try {
+        const [templatesRes, assetsRes, historyRes, usersRes, workOrdersRes] = await Promise.all([
+          fetch('/api/templates').catch(()=>({ok:false})),
+          fetch('/api/assets').catch(()=>({ok:false})),
+          fetch('/api/history').catch(()=>({ok:false})),
+          fetch('/api/users').catch(()=>({ok:false})),
+          fetch('/api/workorders').catch(()=>({ok:false}))
+        ]);
 
-        if (asset.status !== computedStatus) {
-          const updated = { ...asset, status: computedStatus };
-          fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }).catch(()=>console.log("Silent DB Sync Failed"));
-          return updated;
+        let loadedTemplates = [];
+        if (templatesRes.ok) {
+            const data = await templatesRes.json();
+            loadedTemplates = Array.isArray(data) ? data : [];
+            setPmTemplates(loadedTemplates);
         }
-        return asset;
-      });
-      
-      setAssets(evaluatedData);
-    }).catch(err => console.error("Error pulling assets:", err));
 
-    fetch('/api/templates').then(res => res.json()).then(data => setPmTemplates(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling templates:", err));
-    fetch('/api/history').then(res => res.json()).then(data => setHistory(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling history:", err));
-    fetch('/api/workorders').then(res => res.json()).then(data => setWorkOrders(Array.isArray(data) ? data : [])).catch(err => console.error("Error pulling work orders:", err));
-    
-    fetch('/api/users').then(res => res.json()).then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setUsers(prev => {
-            const externalUsers = data.filter(u => u.email !== "admin@fcimg.com");
-            return [prev[0], ...externalUsers];
-          });
+        if (historyRes.ok) setHistory(await historyRes.json() || []);
+        if (workOrdersRes.ok) setWorkOrders(await workOrdersRes.json() || []);
+        if (usersRes.ok) {
+            const data = await usersRes.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setUsers(prev => {
+                const externalUsers = data.filter(u => u.email !== "admin@fcimg.com");
+                return [prev[0], ...externalUsers];
+              });
+            }
         }
-      }).catch(err => console.error("Error pulling users:", err));
+
+        if (assetsRes.ok) {
+            const assetsData = await assetsRes.json();
+            if (!Array.isArray(assetsData)) return;
+
+            const todayStr = new Date().toDateString();
+
+            const evaluatedData = assetsData.map(asset => {
+                if (asset.status === "Corrective Maintenance") return asset; 
+                
+                let hasOverdueCalibration = false;
+                let hasDueMaint = false;
+                let needsDbSync = false;
+                let updatedAsset = { ...asset };
+                
+                const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+                
+                freqs.forEach(freq => {
+                    const lastDate = updatedAsset.pmDates?.[freq] || updatedAsset.lastPmDate;
+                    const daysLeft = calculateDaysRemaining(lastDate, freq);
+                    const threshold = (freq === "Weekly" || freq === "Daily") ? 0 : 7;
+                    
+                    if (daysLeft !== null && daysLeft < 0 && freq.includes("Calibration")) hasOverdueCalibration = true;
+                    else if (daysLeft !== null && daysLeft <= threshold) hasDueMaint = true;
+
+                    // --- AUTOMATED NAG EMAIL ENGINE ---
+                    if (daysLeft !== null && (daysLeft === 7 || daysLeft < 0)) {
+                        const notifKey = `notified_${freq.replace(/[^a-zA-Z0-9]/g, '')}`;
+                        // If we haven't nagged them yet TODAY...
+                        if (updatedAsset[notifKey] !== todayStr) {
+                            const matchedTemplate = loadedTemplates.find(t => t.interval === freq && (t.targetCategory === "Global" || t.targetCategory === updatedAsset.category));
+                            if (matchedTemplate && (matchedTemplate.managerEmail || matchedTemplate.operatorEmail)) {
+                                const emails = [matchedTemplate.managerEmail, matchedTemplate.operatorEmail].filter(Boolean).join(',');
+                                const statusText = daysLeft < 0 ? `OVERDUE by ${Math.abs(daysLeft)} days` : `DUE in exactly 7 days`;
+                                fetch('/api/sendEmail', {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        to: emails,
+                                        subject: `ACTION REQUIRED: ${updatedAsset.name} PM is ${statusText}`,
+                                        body: `Hello,\n\nThe following facility equipment requires immediate action:\n\nAsset: ${updatedAsset.name} (SN: ${updatedAsset.serial})\nProtocol: ${matchedTemplate.name}\nCycle: ${freq}\nStatus: ${statusText}\n\nPlease log into the FI Operations System to assign or execute the preventative maintenance protocol to restore compliance.`
+                                    })
+                                }).catch(() => {});
+                            }
+                            // Tag the asset so we don't email them again today for this frequency
+                            updatedAsset[notifKey] = todayStr;
+                            needsDbSync = true;
+                        }
+                    }
+                });
+                
+                let computedStatus = "Operational";
+                if (hasOverdueCalibration) computedStatus = "Out of Calibration";
+                else if (hasDueMaint) computedStatus = "Maintenance Due";
+
+                if (updatedAsset.status !== computedStatus) {
+                    updatedAsset.status = computedStatus;
+                    needsDbSync = true;
+                }
+
+                if (needsDbSync) {
+                    fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }).catch(()=>{});
+                }
+                return updatedAsset;
+            });
+            
+            setAssets(evaluatedData);
+        }
+      } catch (e) {
+          console.error("Initialization error:", e);
+      }
+    };
+
+    initializeData();
 
     return () => clearInterval(timer);
   }, []);
@@ -1008,6 +1102,27 @@ const handleAddTemplateSubmit = async (e) => {
     setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
     setEditingTemplateId(null);
   };
+const deleteAssetCategory = (categoryName) => {
+    triggerModal("Nuke Category", `Are you sure you want to permanently delete ALL assets in the "${categoryName}" category? This cannot be undone.`, "error", async () => {
+      try {
+        const assetsToNuke = assets.filter(a => a.category === categoryName);
+        await Promise.all(assetsToNuke.map(a => fetch(`/api/assets?id=${a.id}`, { method: 'DELETE' })));
+        setAssets(assets.filter(a => a.category !== categoryName));
+        closeModal();
+      } catch(err) { triggerModal("Error", "Failed to clear category.", "error"); }
+    });
+  };
+
+  const deleteTemplateCategory = (categoryName) => {
+    triggerModal("Nuke SOP Category", `Are you sure you want to permanently delete ALL templates locked to the "${categoryName}" category?`, "error", async () => {
+      try {
+        const templatesToNuke = pmTemplates.filter(t => t.targetCategory === categoryName);
+        await Promise.all(templatesToNuke.map(t => fetch(`/api/templates?id=${t.id}`, { method: 'DELETE' })));
+        setPmTemplates(pmTemplates.filter(t => t.targetCategory !== categoryName));
+        closeModal();
+      } catch(err) { triggerModal("Error", "Failed to clear SOP category.", "error"); }
+    });
+  };
 
   const deleteAsset = (id) => { 
     triggerModal("Confirm Removal", "Confirm permanent removal of this asset from the database?", "confirm", async () => { 
@@ -1698,8 +1813,9 @@ const handleAddTemplateSubmit = async (e) => {
                 ) : (
                   Object.entries(groupedAssets).map(([category, catAssets]) => (
                     <div key={category} className="mb-4">
-                      <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner">
-                        📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span>
+                      <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
+                        <div>📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span></div>
+                        {isSystemAdmin && <button onClick={() => deleteAssetCategory(category)} className="text-[10px] text-red-500 hover:text-red-700">Delete Category &times;</button>}
                       </div>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200 text-left">
@@ -1944,11 +2060,16 @@ const handleAddTemplateSubmit = async (e) => {
                     <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                       <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer">
+                        <option value="Daily">Daily Cycle</option>
                         <option value="Weekly">Weekly Cycle</option>
                         <option value="Monthly">Monthly Cycle</option>
                         <option value="Quarterly">Quarterly Cycle</option>
                         <option value="Semi-Annually">Semi-Annually Cycle</option>
                         <option value="Annually">Annually Cycle</option>
+                        <option value="2-Year">2-Year Cycle</option>
+                        <option value="3-Year">3-Year Cycle</option>
+                        <option value="4-Year">4-Year Cycle</option>
+                        <option value="5-Year">5-Year Cycle</option>
                         <option value="Calibration (Semi-Annual)">Calibration (Semi-Annual)</option>
                         <option value="Calibration (Annual)">Calibration (Annual)</option>
                       </select>
@@ -2020,10 +2141,11 @@ const handleAddTemplateSubmit = async (e) => {
                 ) : (
                   Object.entries(groupedTemplates).map(([category, catTemplates]) => (
                     <div key={category} className="mb-8">
-                      <div className="bg-gray-100 border border-gray-200 border-b-0 px-6 py-3 rounded-t-xl text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center justify-between shadow-inner">
-                        <span>📁 Category Lock: {category}</span>
+                      <div className="flex items-center space-x-4">
+                          <span>📁 Category Lock: {category}</span>
+                          {isSystemAdmin && category !== "Global" && <button onClick={() => deleteTemplateCategory(category)} className="text-[10px] text-red-500 hover:text-red-700">Delete Category &times;</button>}
+                        </div>
                         <span className="bg-gray-200 text-gray-600 px-2.5 py-1 rounded-full text-[10px]">{catTemplates.length} Protocol{catTemplates.length !== 1 ? 's' : ''}</span>
-                      </div>
                       <div className="bg-white p-6 rounded-b-xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-sm">
                         {catTemplates.map((template) => (
                           <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between relative hover:shadow-md transition">
