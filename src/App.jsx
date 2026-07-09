@@ -1044,6 +1044,22 @@ const handleAddTemplateSubmit = async (e) => {
         } else {
           setPmTemplates([...pmTemplates, savedTemplate]);
           triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
+
+          // --- NEW SOP NOTIFICATION EMAIL ---
+          const notifyEmails = [payload.managerEmail, payload.operatorEmail].filter(Boolean);
+          if (notifyEmails.length > 0) {
+              const mailList = Array.from(new Set(notifyEmails)).join(',');
+              fetch('/api/sendEmail', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      to: mailList,
+                      subject: `New SOP Configured: ${savedTemplate.name}`,
+                      body: `Hello,\n\nA new PM Task Configuration has been mapped in the FI Operations System.\n\nSOP Title: ${savedTemplate.name}\nCycle: ${savedTemplate.interval}\nDepartment: ${savedTemplate.department}\n\nPlease log in to review the new standards for your department.`
+                  })
+              }).catch(() => console.log("Silent Email Dispatch Failed"));
+          }
+          // ----------------------------------
         }
         
         setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
