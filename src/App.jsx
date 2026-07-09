@@ -111,9 +111,8 @@ export default function App() {
   const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
 
 const [newTemplate, setNewTemplate] = useState({
-    name: "", interval: "Monthly", department: "", targetCategory: "Global", checklistInput: "", managerEmail: "", operatorEmail: ""
+    name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: []
   });
-  const [editingTemplateId, setEditingTemplateId] = useState(null);
 
   const [newWo, setNewWo] = useState({
     title: "", description: "", assetId: "", assignedTo: "", priority: ""
@@ -1007,13 +1006,8 @@ const handleAddTemplateSubmit = async (e) => {
     
     if (!newTemplate.name) { triggerModal("Error", "SOP Template Title is strictly required.", "info"); return; }
     
-    const steps = newTemplate.checklistInput
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    if (steps.length === 0) {
-      triggerModal("Error", "Please provide at least one individual action step item.", "info");
+    if (!newTemplate.checklistSteps || newTemplate.checklistSteps.length === 0) {
+      triggerModal("Error", "Please add at least one dynamic action step.", "info");
       return;
     }
 
@@ -1027,7 +1021,7 @@ const handleAddTemplateSubmit = async (e) => {
         targetCategory: newTemplate.targetCategory,
         managerEmail: newTemplate.managerEmail || "",
         operatorEmail: newTemplate.operatorEmail || "",
-        checklist: steps
+        checklist: newTemplate.checklistSteps
       };
 
       const res = await fetch('/api/templates', { 
@@ -1045,13 +1039,11 @@ const handleAddTemplateSubmit = async (e) => {
           setPmTemplates([...pmTemplates, savedTemplate]);
           triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
 
-          // --- NEW SOP NOTIFICATION EMAIL ---
           const notifyEmails = [payload.managerEmail, payload.operatorEmail].filter(Boolean);
           if (notifyEmails.length > 0) {
               const mailList = Array.from(new Set(notifyEmails)).join(',');
               fetch('/api/sendEmail', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                       to: mailList,
                       subject: `New SOP Configured: ${savedTemplate.name}`,
@@ -1059,10 +1051,9 @@ const handleAddTemplateSubmit = async (e) => {
                   })
               }).catch(() => console.log("Silent Email Dispatch Failed"));
           }
-          // ----------------------------------
         }
         
-        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
+        setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
         setEditingTemplateId(null);
       } else {
         triggerModal("Database Error", "Failed to transfer template payload standard to Cosmos DB.", "error");
@@ -1073,6 +1064,11 @@ const handleAddTemplateSubmit = async (e) => {
   };
 
   const handleEditTemplateClick = (template) => {
+    // Backward compatibility: Convert old string arrays to object arrays on the fly
+    const mappedSteps = template.checklist.map(item => {
+      return typeof item === 'string' ? { type: 'checkbox', label: item } : item;
+    });
+    
     setNewTemplate({
       name: template.name,
       interval: template.interval,
@@ -1080,14 +1076,14 @@ const handleAddTemplateSubmit = async (e) => {
       targetCategory: template.targetCategory,
       managerEmail: template.managerEmail || "",
       operatorEmail: template.operatorEmail || "",
-      checklistInput: template.checklist.join('\n')
+      checklistSteps: mappedSteps
     });
     setEditingTemplateId(template.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEditTemplate = () => {
-    setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistInput: "" });
+    setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: "" });
     setEditingTemplateId(null);
   };
 const deleteAssetCategory = (categoryName) => {
@@ -2088,10 +2084,44 @@ const deleteAssetCategory = (categoryName) => {
                       </select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Checklist Actions (One per line)</label>
-                      <textarea value={newTemplate.checklistInput} onChange={(e) => setNewTemplate({...newTemplate, checklistInput: e.target.value})} rows="4" placeholder="Verify seal safety configurations..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
+                      
+                      {/* Existing Steps Viewer */}
+                      <div className="space-y-2 mb-4 max-h-48 overflow-y-auto pr-2">
+                        {newTemplate.checklistSteps?.map((step, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 p-3 border border-gray-200 rounded shadow-sm">
+                              <span className="text-xs text-gray-800"><strong className="uppercase text-[#00A1E4] mr-2 bg-blue-50 px-2 py-1 rounded">[{step.type}]</strong> {step.label}</span>
+                              <button type="button" onClick={() => {
+                                const newSteps = [...newTemplate.checklistSteps];
+                                newSteps.splice(idx, 1);
+                                setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                              }} className="text-red-500 hover:text-red-700 font-bold text-lg leading-none transition-colors">&times;</button>
+                          </div>
+                        ))}
+                        {(!newTemplate.checklistSteps || newTemplate.checklistSteps.length === 0) && (
+                          <div className="text-xs text-gray-400 italic p-4 border border-dashed border-gray-300 rounded bg-white text-center">No action steps added yet. Use the builder below.</div>
+                        )}
+                      </div>
+
+                      {/* The Input Engine */}
+                      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch">
+                        <select id="builderType" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
+                            <option value="checkbox">Checkbox (Done/Not Done)</option>
+                            <option value="text">Short Text (Serial, Note)</option>
+                            <option value="number">Numeric (PSI, Temp)</option>
+                            <option value="passfail">Pass/Fail Dropdown</option>
+                        </select>
+                        <input type="text" id="builderLabel" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStep').click(); }}} />
+                        <button type="button" id="btnAddStep" onClick={() => {
+                            const type = document.getElementById('builderType').value;
+                            const label = document.getElementById('builderLabel').value.trim();
+                            if(!label) return;
+                            setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
+                            document.getElementById('builderLabel').value = '';
+                        }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Step</button>
+                      </div>
                     </div>
-                  </div>
+                    </div> {/* End of Grid */}
                   <div className="mt-6 flex justify-end">
                     <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
                       {isAddingTemplate ? 'Generating Protocol...' : 'Generate Protocol'}
@@ -2156,7 +2186,13 @@ const deleteAssetCategory = (categoryName) => {
                                 </div>
                               )}
                               <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
-                                {template.checklist.map((item, idx) => <li key={idx}>{item}</li>)}
+                                {template.checklist.map((item, idx) => {
+                                  const label = typeof item === 'string' ? item : item.label;
+                                  const type = typeof item === 'string' ? 'checkbox' : item.type;
+                                  return (
+                                    <li key={idx} className="mb-1"><span className="uppercase text-[9px] font-bold text-[#00A1E4] bg-blue-50 px-1 py-0.5 rounded mr-1.5 border border-blue-100">[{type}]</span> {label}</li>
+                                  );
+                                })}
                               </ul>
                             </div>
                             <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
