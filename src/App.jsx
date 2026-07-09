@@ -254,34 +254,6 @@ const [newTemplate, setNewTemplate] = useState({
     return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const calculateNextPmDate = (lastDateStr, frequency) => {
-    if (!lastDateStr || frequency === "None" || !frequency) return null;
-    const lastDate = new Date(lastDateStr);
-
-    if (frequency === "Weekly") {
-      const nextMonday = new Date(lastDate);
-      const day = nextMonday.getDay();
-      const diff = day === 0 ? 1 : 8 - day;
-      nextMonday.setDate(nextMonday.getDate() + diff);
-      return nextMonday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    let cycleDays = 0;
-    
-    switch(frequency) {
-      case "Monthly": cycleDays = 30; break;
-      case "Quarterly": cycleDays = 90; break;
-      case "Semi-Annually":
-      case "Calibration (Semi-Annual)": cycleDays = 182; break;
-      case "Annually":
-      case "Calibration (Annual)": cycleDays = 365; break;
-      default: return null;
-    }
-    
-    const nextDate = new Date(lastDate.getTime() + (cycleDays * 24 * 60 * 60 * 1000));
-    return nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
 
