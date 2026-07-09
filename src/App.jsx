@@ -1583,7 +1583,7 @@ const deleteAssetCategory = (categoryName) => {
                                   Due: {item.displayDate}
                                 </div>
                               )}
-                              <button onClick={() => handleOpenPmModal(item.id)} className="block w-full text-right mt-2 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
+                              <button onClick={() => openPmModal(item)} className="block w-full text-right mt-2 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
                                 Execute PM &rarr;
                               </button>
                             </div>
@@ -1948,7 +1948,7 @@ const deleteAssetCategory = (categoryName) => {
                                   </td>
                                   <td className="px-6 py-4 text-right space-x-4">
                                     <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
-                                    <button onClick={() => handleOpenPmModal(asset.id)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                                    <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                                     {isSystemAdmin && (
                                       <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                                     )}
@@ -2435,64 +2435,6 @@ const deleteAssetCategory = (categoryName) => {
         </main>
       </div>
 
-      {/* QUICK EXECUTE PM MODAL */}
-      {showPmModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-entrance">
-            <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
-              <h3 className="font-bold text-sm tracking-wide uppercase">Active Maintenance Sign-Off</h3>
-              <button onClick={() => setShowPmModal(false)} className="text-white hover:text-blue-200 text-xl font-bold leading-none">&times;</button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto flex-grow">
-              <form onSubmit={handleSubmitPm} className="space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">1. Select Hardware System for Action</label>
-                  <select value={selectedAssetId} onChange={(e) => { setSelectedAssetId(e.target.value); setSelectedTemplateId(""); }} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                    <option value="">-- Choose Hardware System from Directory --</option>
-                    {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">2. Select SOP Protocol</label>
-                  <select 
-                    value={selectedTemplateId} 
-                    onChange={(e) => { setSelectedTemplateId(e.target.value); setCompletedSteps({}); }} 
-                    className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
-                    disabled={!selectedAssetId}
-                  >
-                    <option value="">-- Choose Protocol Template to Execute --</option>
-                    {pmTemplates
-                      .filter(t => !selectedAssetId || t.targetCategory === "Global" || t.targetCategory === assets.find(a => a.id === selectedAssetId)?.category)
-                      .map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name} {t.targetCategory !== "Global" ? `(Locked to ${t.targetCategory})` : ''}</option>)}
-                  </select>
-                </div>
-                {selectedTemplateId && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-5">
-                    <h4 className="font-bold text-xs text-gray-700 uppercase tracking-wide mb-4">3. Mandatory Task Checklist Steps</h4>
-                    <div className="space-y-3.5">
-                      {pmTemplates.find(t => t.id === selectedTemplateId)?.checklist.map((step, idx) => (
-                        <label key={idx} className={`flex items-start p-2 rounded cursor-pointer transition ${completedSteps[idx] ? "bg-green-50/50" : "hover:bg-gray-100"}`}>
-                          <input type="checkbox" checked={!!completedSteps[idx]} onChange={(e) => setCompletedSteps({ ...completedSteps, [idx]: e.target.checked })} className="h-4.5 w-4.5 text-[#005596] border-gray-300 rounded mt-0.5" />
-                          <span className="ml-3 text-xs text-gray-700 font-medium">{step}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-gray-100 flex justify-end space-x-3">
-                  <button type="button" onClick={() => setShowPmModal(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
-                  <button type="submit" disabled={isSubmittingPm || !selectedTemplateId} className={`bg-[#005596] hover:bg-[#005596]/95 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-widest shadow-sm transition-all ${isSubmittingPm || !selectedTemplateId ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    {isSubmittingPm ? 'Committing Action...' : 'Commit Action'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* HARDWARE AND VENDOR MODAL */}
       {showAssetModal && activeAssetDetails && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -2693,7 +2635,7 @@ const deleteAssetCategory = (categoryName) => {
            </div>
         </div>
       )}
-      
+
     </div>
   );
 }
