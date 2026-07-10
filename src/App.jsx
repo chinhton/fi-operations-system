@@ -7,10 +7,15 @@ import HistoryTab from './components/HistoryTab';
 import WorkOrdersTab from './components/WorkOrdersTab';
 import AssetsTab from './components/AssetsTab';
 import TemplatesTab from './components/TemplatesTab';
-import useAuth from './hooks/useAuth';
+import HardwareVendorModal from './components/HardwareVendorModal';
+
+// Hook Imports
 import useModals from './hooks/useModals';
+import useAuth from './hooks/useAuth';
 import useWorkOrders from './hooks/useWorkOrders';
 import useTemplates from './hooks/useTemplates';
+import useAssets from './hooks/useAssets';
+import useHistory from './hooks/useHistory';
 
 const customStyles = `
   body {
@@ -30,13 +35,12 @@ const customStyles = `
   }
 `;
 
+const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
+
 export default function App() {
-  // 1. Core Top-Level State
+  // 1. Top-Level UI State
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [history, setHistory] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [pmTemplates, setPmTemplates] = useState([]);
-  const [navOrder, setNavOrder] = useState(['dashboard', 'workOrders', 'assets', 'templates', 'history']);
+  const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
   
   // Search / Filter States
@@ -51,15 +55,24 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 2. Initialize Custom Hooks
+  // 2. Initialize Hooks
   const { customModal, triggerModal, closeModal } = useModals();
+  const { history, setHistory, deleteHistoryLog } = useHistory(triggerModal, closeModal);
 
   const {
     users, currentUser, isSystemAdmin, authMode, setAuthMode, authEmail, setAuthEmail,
-    authPassword, setAuthPassword, registerName, setRegisterName, registerRole, setRegisterRole,
-    authError, authSuccess, isRegistering, isSigningIn, handleSignIn, handleRegister, 
-    handleLogout, handleApproveUser, handleDenyUser, handleRevokeUser
+    authPassword, setAuthPassword, registerName, setRegisterName, authError, authSuccess, 
+    isRegistering, isSigningIn, handleSignIn, handleRegister, handleLogout, 
+    handleApproveUser, handleDenyUser, handleRevokeUser
   } = useAuth(changeTab, triggerModal, history, setHistory);
+
+  const { 
+    assets, setAssets, isAddingAsset, newAsset, setNewAsset, 
+    showAssetModal, setShowAssetModal, activeAssetDetails, 
+    newPart, setNewPart, newVendor, setNewVendor,
+    handleAddAssetSubmit, handleUpdateAssetStatus, deleteAsset, deleteAssetCategory, 
+    handleOpenAssetModal, addPart, removePart, addVendor, removeVendor
+  } = useAssets(triggerModal, closeModal, currentUser);
 
   const { 
     workOrders, newWo, setNewWo, isSubmittingWo, 
@@ -69,7 +82,7 @@ export default function App() {
   const {
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate,
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
-    deleteTemplate, deleteTemplateCategory
+    deleteTemplate, deleteTemplateCategory, pmTemplates, setPmTemplates
   } = useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates);
 
   // Time ticker
@@ -78,15 +91,42 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Compute stats for UI
+  // 3. Computed UI Stats
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
+  
   const operationalCount = assets.filter(a => a.status === "Operational").length;
+  const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
+  const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
+  const correctiveCount = assets.filter(a => a.status === "Corrective Maintenance").length;
+  
+  const uniqueCategories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)));
+  
   const filteredWorkOrders = workOrders.filter(w => w.title.includes(filterSearch) && (filterPriority === "All" || w.priority === filterPriority));
   
-  // (Stubbed openPmModal for Dashboard linking)
-  const openPmModal = () => { console.log("PM Modal triggered"); };
+  const filteredHistory = history.filter(log => 
+    (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
+    (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
+    (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase())
+  );
 
+  const groupedAssets = assets.filter(a => 
+    (a.name || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
+    (a.serial || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
+    (a.category || "").toLowerCase().includes(assetSearch.toLowerCase())
+  ).reduce((acc, asset) => {
+    const cat = asset.category || "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(asset);
+    return acc;
+  }, {});
+
+  // Utilities
+  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; // Add your actual date math logic here
+  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; // Add your actual date math logic here
+  const openPmModal = () => { console.log("PM Modal triggered"); }; // Link your PM modal here
+
+  // 4. Render Logic
   if (!currentUser) {
     return (
       <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
@@ -123,7 +163,6 @@ export default function App() {
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
         
-        {/* SIDEBAR NAVIGATION */}
         <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 space-y-2">
           {navOrder.map(tabId => (
              <button key={tabId} onClick={() => changeTab(tabId)} className={`w-full text-left p-3 rounded font-bold ${activeTab === tabId ? 'bg-[#005596]/10 text-[#005596]' : 'text-gray-600 hover:bg-gray-50'}`}>
@@ -137,9 +176,15 @@ export default function App() {
           )}
         </aside>
 
-        {/* MAIN CONTENT AREA */}
         <main className="flex-grow p-4 md:p-8">
-          {activeTab === "dashboard" && <DashboardTab operationalCount={operationalCount} expandedActionQueue={[]} openPmModal={openPmModal} />}
+          {activeTab === "dashboard" && (
+            <DashboardTab 
+              operationalCount={operationalCount} overdueCount={overdueCount}
+              calibrationCount={calibrationCount} correctiveCount={correctiveCount}
+              expandedActionQueue={[]} openPmModal={openPmModal} 
+              currentUser={currentUser} isSystemAdmin={isSystemAdmin}
+            />
+          )}
           
           {activeTab === "workOrders" && (
             <WorkOrdersTab 
@@ -159,12 +204,29 @@ export default function App() {
               cancelEditTemplate={cancelEditTemplate} isAddingTemplate={isAddingTemplate}
               templateSearch={templateSearch} setTemplateSearch={setTemplateSearch}
               isSystemAdmin={isSystemAdmin} deleteTemplateCategory={deleteTemplateCategory}
-              handleEditTemplateClick={handleEditTemplateClick} deleteTemplate={deleteTemplate} uniqueCategories={[]}
+              handleEditTemplateClick={handleEditTemplateClick} deleteTemplate={deleteTemplate} uniqueCategories={uniqueCategories}
             />
           )}
 
-          {activeTab === "assets" && <AssetsTab />}
-          {activeTab === "history" && <HistoryTab />}
+          {activeTab === "assets" && (
+             <AssetsTab 
+               handleAddAssetSubmit={handleAddAssetSubmit} isAddingAsset={isAddingAsset} 
+               newAsset={newAsset} setNewAsset={setNewAsset} PM_CYCLE_OPTIONS={PM_CYCLE_OPTIONS}
+               assetSearch={assetSearch} setAssetSearch={setAssetSearch} groupedAssets={groupedAssets} 
+               isSystemAdmin={isSystemAdmin} deleteAssetCategory={deleteAssetCategory} 
+               handleUpdateAssetStatus={handleUpdateAssetStatus} calculateDaysRemaining={calculateDaysRemaining} 
+               calculateNextPmDate={calculateNextPmDate} handleOpenAssetModal={handleOpenAssetModal} 
+               openPmModal={openPmModal} deleteAsset={deleteAsset}
+             />
+          )}
+
+          {activeTab === "history" && (
+             <HistoryTab 
+               filteredHistory={filteredHistory} historySearch={historySearch} 
+               setHistorySearch={setHistorySearch} isSystemAdmin={isSystemAdmin} 
+               deleteHistoryLog={deleteHistoryLog}
+             />
+          )}
 
           {activeTab === "approvals" && isSystemAdmin && (
             <ApprovalsTab 
@@ -175,6 +237,11 @@ export default function App() {
         </main>
       </div>
 
+      <HardwareVendorModal 
+        show={showAssetModal} activeAssetDetails={activeAssetDetails} onClose={() => setShowAssetModal(false)}
+        newPart={newPart} setNewPart={setNewPart} addPart={addPart} removePart={removePart}
+        newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
+      />
       <GlobalAlertModal show={customModal.show} title={customModal.title} message={customModal.message} type={customModal.type} onConfirm={customModal.onConfirm} onClose={closeModal} />
     </div>
   );
