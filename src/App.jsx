@@ -113,6 +113,7 @@ export default function App() {
   const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
   const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
 
+const [editingTemplateId, setEditingTemplateId] = useState(null);
 const [newTemplate, setNewTemplate] = useState({
     name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: []
   });
