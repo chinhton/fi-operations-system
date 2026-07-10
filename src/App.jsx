@@ -12,6 +12,7 @@ import TemplatesTab from './components/TemplatesTab';
 import ManualsTab from './components/ManualsTab';
 import HardwareVendorModal from './components/HardwareVendorModal';
 import PmExecutionModal from './components/PmExecutionModal';
+import AuthScreen from './components/AuthScreen';
 
 // Hook Imports
 import useModals from './hooks/useModals';
@@ -120,8 +121,9 @@ export default function App() {
   }, []);
 
   // 3. Computed UI Stats & Calculations
-  const pendingApprovals = users.filter(u => !u.approved);
-  const activeAccounts = users.filter(u => u.approved);
+  // Added (users || []) and (u && ...) so it NEVER crashes on undefined data
+  const pendingApprovals = (users || []).filter(u => u && !u.approved);
+  const activeAccounts = (users || []).filter(u => u && u.approved);
   
   const operationalCount = assets.filter(a => a.status === "Operational").length;
   const overdueCount = assets.filter(a => a.status === "Maintenance Due").length;
@@ -172,29 +174,18 @@ export default function App() {
   // 4. Render Logic
   if (!currentUser) {
     return (
-      <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
+      <>
         <style>{customStyles}</style>
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-entrance">
-            <h2 className="text-xl font-bold text-[#005596] mb-6">FI-Operations Auth</h2>
-            {authError && <div className="mb-4 text-red-600 text-sm font-bold">{authError}</div>}
-            {authSuccess && <div className="mb-4 text-green-600 text-sm font-bold">{authSuccess}</div>}
-            
-            <form onSubmit={authMode === "signin" ? handleSignIn : handleRegister} className="space-y-4">
-               {authMode === "register" && (
-                 <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Full Name" required className="w-full p-3 border rounded" />
-               )}
-               <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Email" required className="w-full p-3 border rounded" />
-               <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Password" required className="w-full p-3 border rounded" />
-               
-               <button type="submit" disabled={isSigningIn || isRegistering} className="w-full bg-[#005596] text-white p-3 rounded font-bold transition transform hover:-translate-y-0.5">
-                 {authMode === "signin" ? "Sign In" : "Request Access"}
-               </button>
-            </form>
-            <button onClick={() => setAuthMode(authMode === "signin" ? "register" : "signin")} className="mt-4 text-sm text-[#00A1E4] hover:underline">
-               {authMode === "signin" ? "Need an account?" : "Back to login"}
-            </button>
-        </div>
-      </div>
+        <AuthScreen 
+          authMode={authMode} setAuthMode={setAuthMode}
+          authEmail={authEmail} setAuthEmail={setAuthEmail}
+          authPassword={authPassword} setAuthPassword={setAuthPassword}
+          registerName={registerName} setRegisterName={setRegisterName}
+          authError={authError} authSuccess={authSuccess}
+          isSigningIn={isSigningIn} isRegistering={isRegistering}
+          handleSignIn={handleSignIn} handleRegister={handleRegister}
+        />
+      </>
     );
   }
 
@@ -284,6 +275,7 @@ export default function App() {
           
           {activeTab === "workOrders" && (
             <WorkOrdersTab 
+              currentUser={currentUser} 
               handleAddWorkOrder={handleAddWorkOrder} newWo={newWo} setNewWo={setNewWo}
               isSubmittingWo={isSubmittingWo} assets={assets} activeAccounts={activeAccounts}
               filterSearch={filterSearch} setFilterSearch={setFilterSearch} 
@@ -321,6 +313,7 @@ export default function App() {
 
           {activeTab === "templates" && (
             <TemplatesTab 
+              currentUser={currentUser} 
               handleAddTemplateSubmit={handleAddTemplateSubmit} newTemplate={newTemplate} setNewTemplate={setNewTemplate}
               pmTemplates={pmTemplates} activeAccounts={activeAccounts} editingTemplateId={editingTemplateId}
               cancelEditTemplate={cancelEditTemplate} isAddingTemplate={isAddingTemplate}
