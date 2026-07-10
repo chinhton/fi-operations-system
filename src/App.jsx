@@ -3,6 +3,10 @@ import GlobalAlertModal from './components/GlobalAlertModal';
 import TopHeader from './components/TopHeader';
 import HardwareVendorModal from './components/HardwareVendorModal';
 import PmExecutionModal from './components/PmExecutionModal';
+import DashboardTab from './components/DashboardTab';
+import ApprovalsTab from './components/ApprovalsTab';
+import HistoryTab from './components/HistoryTab';
+import WorkOrdersTab from './components/WorkOrdersTab';
 
 const customStyles = `
   body {
@@ -1510,279 +1514,38 @@ const deleteAssetCategory = (categoryName) => {
         {/* WORKPLACE MAIN PANEL CONTENT WINDOW */}
         <main className="flex-grow p-4 sm:p-6 lg:p-8 overflow-x-hidden relative z-0">
 
-          {activeTab === "dashboard" && (
-            <div className="space-y-8 animate-entrance">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-                  <div>
-                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Operational Health</span>
-                    <div className="text-4xl font-black mt-3 text-green-600 drop-shadow-sm">{operationalCount}</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-                  <div>
-                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Overdue Maintenance</span>
-                    <div className="text-4xl font-black mt-3 text-yellow-600 drop-shadow-sm">{overdueCount}</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-                  <div>
-                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Out Of Calibration</span>
-                    <div className="text-4xl font-black mt-3 text-red-600 drop-shadow-sm">{calibrationCount}</div>
-                  </div>
-                </div>
-                <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-                  <div>
-                    <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Corrective Action</span>
-                    <div className="text-4xl font-black mt-3 text-orange-600 drop-shadow-sm">{correctiveCount}</div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-                    <div className="bg-gradient-to-r from-[#005596] to-[#00407a] text-white px-6 py-4 flex items-center justify-between border-b border-[#003058]">
-                      <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">SOP & Maintenance Actions Queue</h3>
-                      {expandedActionQueue.length > 0 && (
-                        <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{expandedActionQueue.length} Pending</span>
-                      )}
-                    </div>
-                    <div className="divide-y divide-gray-100 max-h-[400px] overflow-y-auto">
-                      {expandedActionQueue.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400 text-xs font-medium">
-                          No pending maintenance actions. All systems are operational.
-                        </div>
-                      ) : (
-                        expandedActionQueue.map(item => (
-                          <div key={item.queueId} className="p-5 hover:bg-blue-50/50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#f97316' }}>
-                            <div>
-                              <span className="font-bold text-gray-900 text-xs block">{item.name}</span>
-                              <span className="text-[10px] text-gray-500 font-mono mt-1 block bg-gray-50 inline-block px-1.5 py-0.5 rounded">S/N: {item.serial}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
-                                {item.displayStatus}
-                              </span>
-                              {item.displayDate && (
-                                <div className="mt-1.5 text-[10px] text-gray-500 font-mono">
-                                  Due: {item.displayDate}
-                                </div>
-                              )}
-                              <button onClick={() => openPmModal(item)} className="block w-full text-right mt-2 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                                Execute PM &rarr;
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="lg:col-span-5 space-y-6">
-                  <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Operator Duty Board</h4>
-                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center space-x-4 shadow-inner">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596] border border-[#005596]/20' : 'bg-slate-200 text-slate-700 border border-slate-300'}`}>
-                        {isSystemAdmin ? 'SYS' : 'OP'}
-                      </div>
-                      <div>
-                        <span className="block text-sm font-bold text-gray-900 font-sans">{currentUser.name}</span>
-                        <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">{currentUser.email}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+{activeTab === "dashboard" && (
+            <DashboardTab 
+              operationalCount={operationalCount}
+              overdueCount={overdueCount}
+              calibrationCount={calibrationCount}
+              correctiveCount={correctiveCount}
+              expandedActionQueue={expandedActionQueue}
+              openPmModal={openPmModal}
+              currentUser={currentUser}
+              isSystemAdmin={isSystemAdmin}
+            />
           )}
 
           {activeTab === "workOrders" && (
-            <div className="space-y-8 animate-entrance">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Dispatch Work Order</h3></div>
-                <form onSubmit={handleAddWorkOrder} className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Work Order Title</label>
-                      <input type="text" value={newWo.title} onChange={(e) => setNewWo({...newWo, title: e.target.value})} placeholder="e.g. Replace worn HEPA filter in cleanroom" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset (Optional)</label>
-                      <select value={newWo.assetId} onChange={(e) => setNewWo({...newWo, assetId: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="">-- General Facility (No specific asset) --</option>
-                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} (SN: {a.serial})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign To Operator</label>
-                      <select value={newWo.assignedTo} onChange={(e) => setNewWo({...newWo, assignedTo: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="">-- Select Active Technician --</option>
-                        {activeAccounts.map(u => <option key={u.email} value={u.email}>{u.name} ({u.email})</option>)}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Link PM Task Protocol (Optional)</label>
-                      <select 
-                        value={newWo.templateId || ""} 
-                        onChange={(e) => {
-                          const selectedId = e.target.value;
-                          const template = pmTemplates.find(t => t.id === selectedId);
-                          
-                          if (template) {
-                            const checklistText = template.checklist.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
-                            setNewWo({
-                              ...newWo,
-                              templateId: selectedId,
-                              title: newWo.title || `Execute SOP: ${template.name}`,
-                              description: `[PM CHECKLIST]\n${checklistText}\n\n` + (newWo.description || "")
-                            });
-                          } else {
-                            setNewWo({ ...newWo, templateId: "" });
-                          }
-                        }} 
-                        className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-bold text-[#005596]"
-                      >
-                        <option value="">-- Select Standard Protocol --</option>
-                        {pmTemplates.map(t => <option key={t.id} value={t.id}>[{t.interval}] {t.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Priority Level</label>
-                      <select value={newWo.priority} onChange={(e) => setNewWo({...newWo, priority: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer font-medium">
-                        <option value="" disabled>-- Select Priority --</option>
-                        <option value="95 - Emergency">95 - Emergency</option>
-                        <option value="90 - Compliance">90 - Compliance</option>
-                        <option value="80 - Reactive">80 - Reactive</option>
-                        <option value="70 - PM">70 - PM</option>
-                        <option value="60 - Service">60 - Service</option>
-                        <option value="50 - Deferred">50 - Deferred</option>
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
-                      <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="4" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
-                    </div>
-                  </div>
-                  <div className="mt-6 flex justify-end space-x-3">
-                    {editingTemplateId && (
-                      <button type="button" onClick={cancelEditTemplate} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
-                    )}
-                    <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isAddingTemplate ? 'Processing...' : (editingTemplateId ? 'Update Protocol' : 'Generate Protocol')}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
-                  <h3 className="font-bold text-sm tracking-wide uppercase">Active Dispatch Board</h3>
-                  <div className="flex gap-4 text-black font-normal">
-                    <input 
-                      type="text" 
-                      placeholder="Search tickets or operators..." 
-                      value={filterSearch}
-                      onChange={(e) => setFilterSearch(e.target.value)}
-                      className="text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none"
-                    />
-                    <select 
-                      value={filterPriority}
-                      onChange={(e) => setFilterPriority(e.target.value)}
-                      className="text-xs rounded border-gray-300 px-3 py-1.5 focus:outline-none cursor-pointer"
-                    >
-                      <option value="All">All Priorities</option>
-                      <option value="95">95 - Emergency</option>
-                      <option value="90">90 - Compliance</option>
-                      <option value="80">80 - Reactive</option>
-                      <option value="70">70 - PM</option>
-                      <option value="60">60 - Service</option>
-                      <option value="50">50 - Deferred</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-left">
-                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                      <tr>
-                        <th className="px-6 py-3.5">Ticket Info</th>
-                        <th className="px-6 py-3.5">Priority</th>
-                        <th className="px-6 py-3.5">Target Hardware</th>
-                        <th className="px-6 py-3.5">Assigned To</th>
-                        <th className="px-6 py-3.5 text-right">Job Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs">
-                      {filteredWorkOrders.length === 0 ? (
-                        <tr><td colSpan="5" className="px-6 py-12 text-center text-gray-400 text-xs">No active work orders match your search criteria.</td></tr>
-                      ) : (
-                        filteredWorkOrders.map((wo) => (
-                          <tr key={wo.id} className="hover:bg-gray-50/55 transition">
-                            <td className="px-6 py-4">
-                              <span className="font-bold text-gray-900 block">{wo.title}</span>
-                              <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">
-                                {wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()} by <span className="font-bold text-[#005596]">{wo.createdBy || 'System'}</span>
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${
-                                wo.priority?.includes('95') || wo.priority === 'Critical' ? 'bg-red-600 text-white animate-pulse' : 
-                                wo.priority?.includes('90') || wo.priority === 'High' ? 'bg-orange-100 text-orange-800 border border-orange-200' : 
-                                wo.priority?.includes('80') ? 'bg-yellow-100 text-yellow-800' : 
-                                wo.priority?.includes('70') ? 'bg-[#005596]/10 text-[#005596]' : 
-                                wo.priority?.includes('60') ? 'bg-green-100 text-green-800' : 
-                                wo.priority === 'Medium' ? 'bg-blue-100 text-blue-800' : 
-                                'bg-gray-100 text-gray-500'
-                              }`}>
-                                {wo.priority}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              {wo.assetId ? (
-                                <span className="font-medium text-[#005596]">{assets.find(a => a.id === wo.assetId)?.name || 'Unknown'}</span>
-                              ) : (
-                                <span className="text-gray-500 italic text-[10px]">Facility General</span>
-                              )}
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center space-x-2">
-                                <span className={`w-2 h-2 rounded-full ${wo.assignedTo === currentUser.email ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
-                                <span className="font-mono text-gray-700">{wo.assignedTo}</span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end space-x-3">
-                                {wo.status === "Completed" ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800">
-                                    Completed ✓
-                                  </span>
-                                ) : (
-                                  <select
-                                    value={wo.status}
-                                    onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
-                                    disabled={!isSystemAdmin && wo.assignedTo !== currentUser.email}
-                                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
-                                  >
-                                    <option value="Open">Open</option>
-                                    <option value="In Progress">In Progress</option>
-                                    <option value="Completed">Mark Completed</option>
-                                  </select>
-                                )}
-                                {(isSystemAdmin || wo.creatorEmail === currentUser.email) && (
-                                  <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-400 hover:text-red-700 text-xl font-bold leading-none transition px-1" title="Delete Work Order">&times;</button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <WorkOrdersTab 
+              handleAddWorkOrder={handleAddWorkOrder}
+              isSubmittingWo={isSubmittingWo}
+              newWo={newWo}
+              setNewWo={setNewWo}
+              assets={assets}
+              activeAccounts={activeAccounts}
+              pmTemplates={pmTemplates}
+              filterSearch={filterSearch}
+              setFilterSearch={setFilterSearch}
+              filterPriority={filterPriority}
+              setFilterPriority={setFilterPriority}
+              filteredWorkOrders={filteredWorkOrders}
+              currentUser={currentUser}
+              isSystemAdmin={isSystemAdmin}
+              handleUpdateWoStatus={handleUpdateWoStatus}
+              deleteWorkOrder={deleteWorkOrder}
+            />
           )}
         
           {activeTab === "assets" && (
@@ -2279,143 +2042,23 @@ const deleteAssetCategory = (categoryName) => {
           )}
 
           {activeTab === "history" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-entrance">
-              <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
-                <h3 className="font-bold text-sm tracking-wide uppercase">Traceable Activity Logs & History Records</h3>
-                <span className="text-xs text-gray-400 font-semibold">{filteredHistory.length} records matching</span>
-              </div>
-              <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <span className="text-xs text-gray-600 max-w-lg hidden md:block">
-                  This log officially timestamps and records all executed PMs, protocol sign-offs, and administrative actions performed within the system.
-                </span>
-                <input 
-                  type="text" 
-                  value={historySearch} 
-                  onChange={(e) => setHistorySearch(e.target.value)} 
-                  placeholder="Filter by Asset, Tech, or SOP..." 
-                  className="w-full md:w-64 text-xs rounded border border-gray-300 shadow-sm p-2 bg-white focus:outline-none focus:border-[#005596]" 
-                />
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-left">
-                  <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                    <tr>
-                      <th className="px-6 py-3.5">Timestamp</th>
-                      <th className="px-6 py-3.5">Asset & Category</th>
-                      <th className="px-6 py-3.5">Executed Protocol</th>
-                      <th className="px-6 py-3.5">Technician / Inspector</th>
-                      <th className="px-6 py-3.5">Execution Status</th>
-                      <th className="px-6 py-3.5">Operating Notes</th>
-                      {isSystemAdmin && <th className="px-6 py-3.5 text-right">Admin</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {filteredHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan={isSystemAdmin ? "7" : "6"} className="px-6 py-12 text-center text-gray-400 text-xs">
-                          No historical log entries found matching criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredHistory.map((log) => (
-                        <tr key={log.id} className="hover:bg-gray-50/50 transition">
-                          <td className="px-6 py-4 text-gray-500 font-mono whitespace-nowrap">{log.timestamp}</td>
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-gray-900 block">{log.assetName}</span>
-                            <span className="text-[10px] text-gray-400 font-mono">{log.assetId}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-gray-800 block">{log.templateName}</span>
-                            <span className="text-[10px] bg-blue-50 text-[#005596] font-semibold px-1.5 py-0.5 rounded mt-0.5 inline-block">{log.interval} Cycle</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-gray-900 block">{log.technician}</span>
-                            <span className="text-xs text-gray-500 font-mono block">{log.email}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${log.status === "Completed Pass" ? "bg-green-100 text-green-800" : log.status === "Incomplete Log" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
-                              {log.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-600 max-w-xs break-words">{log.comments}</td>
-                          {isSystemAdmin && (
-                            <td className="px-6 py-4 text-right">
-                              <button onClick={() => deleteHistoryLog(log.id)} className="text-[10px] font-bold text-red-500 hover:text-red-800 transition uppercase tracking-wider">Delete</button>
-                            </td>
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <HistoryTab 
+              filteredHistory={filteredHistory}
+              historySearch={historySearch}
+              setHistorySearch={setHistorySearch}
+              isSystemAdmin={isSystemAdmin}
+              deleteHistoryLog={deleteHistoryLog}
+            />
           )}
 
           {activeTab === "approvals" && isSystemAdmin && (
-            <div className="space-y-8 max-w-3xl mx-auto animate-entrance">
-              {/* CARD 1: PENDING ACCOUNT REQUESTS */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4 flex items-center justify-between">
-                  <h3 className="font-bold text-sm tracking-wide uppercase">🔑 Pending Account Approvals</h3>
-                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold">{pendingApprovals.length} Gate Requests</span>
-                </div>
-                <div className="p-6">
-                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-                    {pendingApprovals.length === 0 ? (
-                      <div className="p-6 text-center text-gray-400 text-xs font-sans">No pending registration requests. All tokens are processed.</div>
-                    ) : (
-                      pendingApprovals.map((u) => (
-                        <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                          <div>
-                            <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
-                            <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
-                          </div>
-                          <div className="flex space-x-2">
-                            <button onClick={() => handleApproveUser(u.email)} className="bg-green-600 hover:bg-green-700 text-white text-[11px] font-bold uppercase py-1.5 px-3 rounded shadow transition">Approve Access</button>
-                            <button onClick={() => handleDenyUser(u.email)} className="border border-red-200 text-red-600 hover:bg-red-50 text-[11px] font-bold uppercase py-1.5 px-3 rounded transition">Decline</button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* CARD 2: ACTIVE AUTHORIZED USERS DIRECTORY */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
-                  <h3 className="font-bold text-sm tracking-wide uppercase">🟢 Active Authorized Accounts</h3>
-                  <span className="text-xs bg-gray-700 px-2 py-0.5 rounded-full font-bold">{activeAccounts.length} Total Users</span>
-                </div>
-                <div className="p-6">
-                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-                    {activeAccounts.map((u) => (
-                      <div key={u.email} className="p-4 bg-white hover:bg-gray-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition">
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${u.role === 'admin' || u.role === 'System Admin' ? 'bg-blue-100 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
-                              {u.role}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
-                        </div>
-                        <div>
-                          {u.email === "admin@fcimg.com" ? (
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider px-3 py-1.5 block">Root Immutable</span>
-                          ) : (
-                            <button onClick={() => handleRevokeUser(u.email)} className="text-xs font-bold text-red-600 hover:text-red-800 transition py-1.5 px-3 uppercase tracking-wider">
-                              Revoke Access
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ApprovalsTab 
+              pendingApprovals={pendingApprovals}
+              activeAccounts={activeAccounts}
+              handleApproveUser={handleApproveUser}
+              handleDenyUser={handleDenyUser}
+              handleRevokeUser={handleRevokeUser}
+            />
           )}
 
         </main>
