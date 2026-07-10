@@ -1,11 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function AssetsTab({
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
-  assetSearch, setAssetSearch, groupedAssets, isSystemAdmin, deleteAssetCategory,
-  handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
-  handleOpenAssetModal, openPmModal, deleteAsset
+  assets, // <-- Pass raw assets here instead of the search states
+  isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
+  calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, 
+  openPmModal, deleteAsset
 }) {
+  // Moved from App.jsx!
+  const [assetSearch, setAssetSearch] = useState("");
+
+  // Local grouping logic
+  const groupedAssets = (assets || []).filter(a => 
+    (a.name || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
+    (a.serial || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
+    (a.category || "").toLowerCase().includes(assetSearch.toLowerCase())
+  ).reduce((acc, asset) => {
+    const cat = asset.category || "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(asset);
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-8 animate-entrance">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

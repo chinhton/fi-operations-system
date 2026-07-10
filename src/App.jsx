@@ -15,6 +15,7 @@ import PmExecutionModal from './components/PmExecutionModal';
 import AuthScreen from './components/AuthScreen';
 import KpiBanner from './components/KpiBanner';
 import SidebarNav from './components/SidebarNav';
+import GlobalModals from './components/GlobalModals';
 
 // Hook Imports
 import useModals from './hooks/useModals';
@@ -59,13 +60,6 @@ export default function App() {
   const [pmTemplates, setPmTemplates] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
   const [users, setUsers] = useState([]);
-
-  // Search / Filter States
-  const [filterSearch, setFilterSearch] = useState("");
-  const [filterPriority, setFilterPriority] = useState("All");
-  const [assetSearch, setAssetSearch] = useState("");
-  const [templateSearch, setTemplateSearch] = useState("");
-  const [historySearch, setHistorySearch] = useState("");
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -141,25 +135,6 @@ export default function App() {
   const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
   const uniqueCategories = Array.from(new Set((assets || []).map(a => a.category).filter(Boolean)));
   
-  const filteredWorkOrders = workOrders.filter(w => w.title.includes(filterSearch) && (filterPriority === "All" || w.priority === filterPriority));
-  
-  const filteredHistory = history.filter(log => 
-    (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
-    (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
-    (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase())
-  );
-
-  const groupedAssets = assets.filter(a => 
-    (a.name || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
-    (a.serial || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
-    (a.category || "").toLowerCase().includes(assetSearch.toLowerCase())
-  ).reduce((acc, asset) => {
-    const cat = asset.category || "Uncategorized";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(asset);
-    return acc;
-  }, {});
-
   const navData = {
     dashboard: { icon: '📊', label: 'Operations Dashboard' },
     workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
@@ -231,9 +206,8 @@ export default function App() {
               currentUser={currentUser} 
               handleAddWorkOrder={handleAddWorkOrder} newWo={newWo} setNewWo={setNewWo}
               isSubmittingWo={isSubmittingWo} assets={assets} activeAccounts={activeAccounts}
-              filterSearch={filterSearch} setFilterSearch={setFilterSearch} 
-              filterPriority={filterPriority} setFilterPriority={setFilterPriority}
-              filteredWorkOrders={filteredWorkOrders} isSystemAdmin={isSystemAdmin}
+              workOrders={workOrders}
+              isSystemAdmin={isSystemAdmin}
               handleUpdateWoStatus={handleUpdateWoStatus} deleteWorkOrder={deleteWorkOrder}
               pmTemplates={pmTemplates}
             />
@@ -243,7 +217,7 @@ export default function App() {
              <AssetsTab 
                handleAddAssetSubmit={handleAddAssetSubmit} isAddingAsset={isAddingAsset} 
                newAsset={newAsset} setNewAsset={setNewAsset} PM_CYCLE_OPTIONS={PM_CYCLE_OPTIONS}
-               assetSearch={assetSearch} setAssetSearch={setAssetSearch} groupedAssets={groupedAssets} 
+               assets={assets}
                isSystemAdmin={isSystemAdmin} deleteAssetCategory={deleteAssetCategory} 
                handleUpdateAssetStatus={handleUpdateAssetStatus} calculateDaysRemaining={calculateDaysRemaining} 
                calculateNextPmDate={calculateNextPmDate} handleOpenAssetModal={handleOpenAssetModal} 
@@ -270,7 +244,6 @@ export default function App() {
               handleAddTemplateSubmit={handleAddTemplateSubmit} newTemplate={newTemplate} setNewTemplate={setNewTemplate}
               pmTemplates={pmTemplates} activeAccounts={activeAccounts} editingTemplateId={editingTemplateId}
               cancelEditTemplate={cancelEditTemplate} isAddingTemplate={isAddingTemplate}
-              templateSearch={templateSearch} setTemplateSearch={setTemplateSearch}
               isSystemAdmin={isSystemAdmin} deleteTemplateCategory={deleteTemplateCategory}
               handleEditTemplateClick={handleEditTemplateClick} deleteTemplate={deleteTemplate} uniqueCategories={uniqueCategories}
             />
@@ -278,8 +251,8 @@ export default function App() {
 
           {activeTab === "history" && (
              <HistoryTab 
-               filteredHistory={filteredHistory} historySearch={historySearch} 
-               setHistorySearch={setHistorySearch} isSystemAdmin={isSystemAdmin} 
+               history={history}
+               isSystemAdmin={isSystemAdmin} 
                deleteHistoryLog={deleteHistoryLog}
              />
           )}
@@ -294,23 +267,16 @@ export default function App() {
       </div>
 
       {/* GLOBAL MODALS */}
-      {showAssetModal && activeAssetDetails && (
-        <HardwareVendorModal 
-          show={showAssetModal} activeAssetDetails={activeAssetDetails} onClose={() => setShowAssetModal(false)}
-          newPart={newPart} setNewPart={setNewPart} addPart={addPart} removePart={removePart}
-          newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
-        />
-      )}
-      
-      <PmExecutionModal 
+      <GlobalModals 
+        showAssetModal={showAssetModal} activeAssetDetails={activeAssetDetails} setShowAssetModal={setShowAssetModal}
+        newPart={newPart} setNewPart={setNewPart} addPart={addPart} removePart={removePart}
+        newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
         isPmModalOpen={isPmModalOpen} closePmModal={closePmModal} handlePmSubmit={handlePmSubmit}
-        selectedPmAsset={selectedPmAsset} selectedPmTemplate={selectedPmTemplate} 
-        setSelectedPmTemplate={setSelectedPmTemplate} pmTemplates={pmTemplates} pmAnswers={pmAnswers} 
-        setPmAnswers={setPmAnswers} pmStatusState={pmStatusState} setPmStatusState={setPmStatusState} 
-        pmComments={pmComments} setPmComments={setPmComments} isSubmittingPm={isSubmittingPm}
+        selectedPmAsset={selectedPmAsset} selectedPmTemplate={selectedPmTemplate} setSelectedPmTemplate={setSelectedPmTemplate}
+        pmTemplates={pmTemplates} pmAnswers={pmAnswers} setPmAnswers={setPmAnswers} pmStatusState={pmStatusState}
+        setPmStatusState={setPmStatusState} pmComments={pmComments} setPmComments={setPmComments} isSubmittingPm={isSubmittingPm}
+        customModal={customModal} closeModal={closeModal}
       />
-
-      <GlobalAlertModal show={customModal.show} title={customModal.title} message={customModal.message} type={customModal.type} onConfirm={customModal.onConfirm} onClose={closeModal} />
     </div>
   );
 }

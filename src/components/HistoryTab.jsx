@@ -1,9 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react'; // Make sure useState is imported
 
-export default function HistoryTab({ 
-  filteredHistory, historySearch, setHistorySearch, 
-  isSystemAdmin, deleteHistoryLog 
-}) {
+export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog }) {
+  // We moved this from App.jsx!
+  const [historySearch, setHistorySearch] = useState("");
+  
+  const filteredHistory = history.filter(log => 
+    (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
+    (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
+    (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase())
+  );
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-entrance">
       <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">

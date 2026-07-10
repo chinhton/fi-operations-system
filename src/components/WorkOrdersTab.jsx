@@ -1,12 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function WorkOrdersTab({
   handleAddWorkOrder, isSubmittingWo, newWo, setNewWo, 
   assets, activeAccounts, pmTemplates, 
-  filterSearch, setFilterSearch, filterPriority, setFilterPriority, 
-  filteredWorkOrders, currentUser, isSystemAdmin, 
+  workOrders, currentUser, isSystemAdmin, // <-- Replaced the filter props with raw workOrders
   handleUpdateWoStatus, deleteWorkOrder
 }) {
+  // Moved from App.jsx!
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterPriority, setFilterPriority] = useState("All");
+
+  // Local filtering logic
+  const filteredWorkOrders = (workOrders || []).filter(w => 
+    (w.title || "").toLowerCase().includes(filterSearch.toLowerCase()) && 
+    (filterPriority === "All" || w.priority === filterPriority)
+  );
+
   return (
     <div className="space-y-8 animate-entrance">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -156,7 +165,7 @@ export default function WorkOrdersTab({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
-                        <span className={`w-2 h-2 rounded-full ${wo.assignedTo === currentUser.email ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                        <span className={`w-2 h-2 rounded-full ${wo.assignedTo === currentUser?.email ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
                         <span className="font-mono text-gray-700">{wo.assignedTo}</span>
                       </div>
                     </td>
@@ -170,15 +179,15 @@ export default function WorkOrdersTab({
                           <select
                             value={wo.status}
                             onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
-                            disabled={!isSystemAdmin && wo.assignedTo !== currentUser.email}
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
+                            disabled={!isSystemAdmin && wo.assignedTo !== currentUser?.email}
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser?.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
                           >
                             <option value="Open">Open</option>
                             <option value="In Progress">In Progress</option>
                             <option value="Completed">Mark Completed</option>
                           </select>
                         )}
-                        {(isSystemAdmin || wo.creatorEmail === currentUser.email) && (
+                        {(isSystemAdmin || wo.creatorEmail === currentUser?.email) && (
                           <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-400 hover:text-red-700 text-xl font-bold leading-none transition px-1" title="Delete Work Order">&times;</button>
                         )}
                       </div>

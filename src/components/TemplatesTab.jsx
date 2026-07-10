@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function TemplatesTab({
   handleAddTemplateSubmit, newTemplate, setNewTemplate, 
   uniqueCategories, activeAccounts, editingTemplateId, cancelEditTemplate, 
-  isAddingTemplate, templateSearch, setTemplateSearch, pmTemplates, 
+  isAddingTemplate, pmTemplates, // <-- Removed search props, kept raw pmTemplates
   isSystemAdmin, deleteTemplateCategory, handleEditTemplateClick, deleteTemplate
 }) {
+  // Moved from App.jsx!
+  const [templateSearch, setTemplateSearch] = useState("");
+
   return (
     <div className="space-y-8 animate-entrance">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -117,7 +120,7 @@ export default function TemplatesTab({
       </div>
 
       {(() => {
-        const filteredTemplates = pmTemplates.filter(t => 
+        const filteredTemplates = (pmTemplates || []).filter(t => 
           (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
           (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
           (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
