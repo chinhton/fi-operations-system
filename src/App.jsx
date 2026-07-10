@@ -16,6 +16,9 @@ import useWorkOrders from './hooks/useWorkOrders';
 import useTemplates from './hooks/useTemplates';
 import useAssets from './hooks/useAssets';
 import useHistory from './hooks/useHistory';
+import useCosmosSync from './hooks/useCosmosSync';
+import useManuals from './hooks/useManuals';
+import usePmExecution from './hooks/usePmExecution';
 
 const customStyles = `
   body {
@@ -55,12 +58,12 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 2. Initialize Hooks
+  // 2. Initialize Hooks (Safely INSIDE the component)
   const { customModal, triggerModal, closeModal } = useModals();
   const { history, setHistory, deleteHistoryLog } = useHistory(triggerModal, closeModal);
 
   const {
-    users, currentUser, isSystemAdmin, authMode, setAuthMode, authEmail, setAuthEmail,
+    users, setUsers, currentUser, isSystemAdmin, authMode, setAuthMode, authEmail, setAuthEmail,
     authPassword, setAuthPassword, registerName, setRegisterName, authError, authSuccess, 
     isRegistering, isSigningIn, handleSignIn, handleRegister, handleLogout, 
     handleApproveUser, handleDenyUser, handleRevokeUser
@@ -75,16 +78,33 @@ export default function App() {
   } = useAssets(triggerModal, closeModal, currentUser);
 
   const { 
-    workOrders, newWo, setNewWo, isSubmittingWo, 
+    workOrders, setWorkOrders, newWo, setNewWo, isSubmittingWo, 
     handleAddWorkOrder, handleUpdateWoStatus, deleteWorkOrder 
   } = useWorkOrders(currentUser, users, assets, triggerModal, closeModal, setHistory);
 
   const {
-    pmTemplates, setPmTemplates, // Extracted safely
+    pmTemplates, setPmTemplates, 
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate,
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
     deleteTemplate, deleteTemplateCategory
-  } = useTemplates(triggerModal, closeModal); // Nothing passed here!
+  } = useTemplates(triggerModal, closeModal);
+
+  // Initialize missing hooks for Blob Storage and PM Emails
+  const { 
+    manualAssetIds, setManualAssetIds, manualFile, manualText, setManualText, 
+    isAttachingManual, viewingManualAsset, setViewingManualAsset, activeManualIndex, 
+    setActiveManualIndex, manualFileInputRef, handleManualFileChange, 
+    handleAttachManualSubmit, handleRemoveManual 
+  } = useManuals(assets, setAssets, setHistory, currentUser, triggerModal, closeModal);
+
+  const { 
+    isPmModalOpen, selectedPmAsset, selectedPmTemplate, setSelectedPmTemplate, 
+    pmAnswers, setPmAnswers, pmStatusState, setPmStatusState, pmComments, 
+    setPmComments, isSubmittingPm, openPmModal, closePmModal, handlePmSubmit 
+  } = usePmExecution(assets, setAssets, history, setHistory, currentUser, triggerModal);
+
+  // Hydrate all state from Azure Cosmos DB on load (Called AFTER all setters are defined)
+  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
   // Time ticker
   useEffect(() => {
@@ -125,7 +145,6 @@ export default function App() {
   // Utilities
   const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; // Add your actual date math logic here
   const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; // Add your actual date math logic here
-  const openPmModal = () => { console.log("PM Modal triggered"); }; // Link your PM modal here
 
   // 4. Render Logic
   if (!currentUser) {
@@ -195,7 +214,7 @@ export default function App() {
               filterPriority={filterPriority} setFilterPriority={setFilterPriority}
               filteredWorkOrders={filteredWorkOrders} isSystemAdmin={isSystemAdmin}
               handleUpdateWoStatus={handleUpdateWoStatus} deleteWorkOrder={deleteWorkOrder}
-              pmTemplates={pmTemplates} /* <--- Added this back in! */
+              pmTemplates={pmTemplates}
             />
           )}
 
