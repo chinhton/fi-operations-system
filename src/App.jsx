@@ -7,6 +7,9 @@ import DashboardTab from './components/DashboardTab';
 import ApprovalsTab from './components/ApprovalsTab';
 import HistoryTab from './components/HistoryTab';
 import WorkOrdersTab from './components/WorkOrdersTab';
+import AssetsTab from './components/AssetsTab';
+import ManualsTab from './components/ManualsTab';
+import TemplatesTab from './components/TemplatesTab';
 
 const customStyles = `
   body {
@@ -1549,496 +1552,66 @@ const deleteAssetCategory = (categoryName) => {
           )}
         
           {activeTab === "assets" && (
-            <div className="space-y-8 animate-entrance">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
-                <form onSubmit={handleAddAssetSubmit} className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
-                      <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
-                      <input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
-                      <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
-                      <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
-                      <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    
-                    <div className="md:col-span-1">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
-                      <div className="flex flex-wrap gap-3 mt-2.5">
-                        {PM_CYCLE_OPTIONS.map(freq => (
-                          <label key={freq} className="flex items-center space-x-1.5 cursor-pointer text-xs text-gray-700 font-medium bg-gray-50 px-2 py-1.5 rounded border border-gray-200 hover:bg-gray-100 transition">
-                            <input
-                              type="checkbox"
-                              checked={newAsset.pmFrequencies?.includes(freq) || false}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewAsset({ ...newAsset, pmFrequencies: [...(newAsset.pmFrequencies || []), freq] });
-                                } else {
-                                  setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
-                                }
-                              }}
-                              className="w-3.5 h-3.5 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
-                            />
-                            <span>{freq}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-
-                  </div>
-                  <div className="mt-6 flex justify-end">
-                    <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isAddingAsset ? 'Committing...' : 'Commit Asset'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-              
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
-                  <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
-                <input  
-                    type="text" 
-                    placeholder="Search by Name, S/N, or Category..." 
-                    value={assetSearch}
-                    onChange={(e) => setAssetSearch(e.target.value)}
-                    className="bg-white text-gray-900 text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-[#00A1E4] font-normal shadow-inner"
-                  />
-                </div>
-                
-                {Object.keys(groupedAssets).length === 0 ? (
-                  <div className="p-8 text-center text-xs text-gray-500">No assets registered in the database.</div>
-                ) : (
-                  Object.entries(groupedAssets).map(([category, catAssets]) => (
-                    <div key={category} className="mb-4">
-                      <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
-                        <div>📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span></div>
-                        {isSystemAdmin && <button onClick={() => deleteAssetCategory(category)} className="text-[10px] text-red-500 hover:text-red-700">Delete Category &times;</button>}
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 text-left">
-                          <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                            <tr>
-                              <th className="px-6 py-3.5">Asset Name</th>
-                              <th className="px-6 py-3.5">Model / Serial No</th>
-                              <th className="px-6 py-3.5">Status & PM Cycle Tracker</th>
-                              <th className="px-6 py-3.5 text-right">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 text-xs">
-                            {catAssets.map((asset) => {
-                              const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
-                              
-                              return (
-                                <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
-                                  <td className="px-6 py-4">
-                                    <span className="font-bold text-gray-900 block">{asset.name}</span>
-                                  </td>
-                                  <td className="px-6 py-4 font-mono">
-                                    <span className="block text-gray-700">Mod: {asset.model}</span>
-                                    <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <select
-                                      value={asset.status}
-                                      onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
-                                      className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                                        asset.status === "Operational" ? "bg-green-100 text-green-800" :
-                                        asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                                        asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                                        "bg-orange-100 text-orange-800"
-                                      }`}
-                                    >
-                                      <option value="Operational">Operational</option>
-                                      <option value="Maintenance Due">Maintenance Due</option>
-                                      <option value="Out of Calibration">Out of Calibration</option>
-                                      <option value="Corrective Maintenance">Corrective Action</option>
-                                    </select>
-                                    
-                                    <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
-                                      {freqs.length === 0 ? (
-                                        <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
-                                      ) : (
-                                        freqs.map(freq => {
-                                          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-                                          const daysRemaining = calculateDaysRemaining(targetDate, freq);
-                                          
-                                          return (
-                                            <div key={freq} className="flex flex-col text-[10px]">
-                                              <div className="flex justify-between items-center mb-0.5">
-                                                <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                                {daysRemaining !== null ? (
-                                                  <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                    ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
-                                                  </span>
-                                                ) : (
-                                                  <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
-                                                )}
-                                              </div>
-                                              {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
-                                            </div>
-                                          );
-                                        })
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 text-right space-x-4">
-                                    <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
-                                    <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
-                                    {isSystemAdmin && (
-                                      <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <AssetsTab 
+              handleAddAssetSubmit={handleAddAssetSubmit}
+              isAddingAsset={isAddingAsset}
+              newAsset={newAsset}
+              setNewAsset={setNewAsset}
+              PM_CYCLE_OPTIONS={PM_CYCLE_OPTIONS}
+              assetSearch={assetSearch}
+              setAssetSearch={setAssetSearch}
+              groupedAssets={groupedAssets}
+              isSystemAdmin={isSystemAdmin}
+              deleteAssetCategory={deleteAssetCategory}
+              handleUpdateAssetStatus={handleUpdateAssetStatus}
+              calculateDaysRemaining={calculateDaysRemaining}
+              calculateNextPmDate={calculateNextPmDate}
+              handleOpenAssetModal={handleOpenAssetModal}
+              openPmModal={openPmModal}
+              deleteAsset={deleteAsset}
+            />
           )}
 
           {activeTab === "manuals" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
-              <div className="lg:col-span-5 space-y-6">
-                
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
-                    <h3 className="font-bold text-xs uppercase tracking-wider">📚 Document Library</h3>
-                    <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assetsWithManuals.length} systems</span>
-                  </div>
-                  <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-                    {assetsWithManuals.length === 0 ? (
-                      <div className="p-6 text-center text-gray-500 text-xs">No documentation manuals currently attached to any systems. Use the upload tool to attach a file.</div>
-                    ) : (
-                      assetsWithManuals.map(asset => (
-                        <div 
-                          key={asset.id} 
-                          onClick={() => { setViewingManualAsset(asset); setActiveManualIndex(0); }}
-                          className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManualAsset?.id === asset.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
-                        >
-                          <div>
-                            <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
-                            <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">
-                              {asset.manuals ? `${asset.manuals.length} documents` : (asset.manual ? "1 document" : "")}
-                            </span>
-                          </div>
-                          <span className="text-[#005596] text-lg font-bold">➔</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                  <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Attach Documentation Manual</h3></div>
-                  <form onSubmit={handleAttachManualSubmit} className="p-5 space-y-5">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Fleet Assets (Select Multiple)</label>
-                      <div className="max-h-40 overflow-y-auto border border-gray-300 rounded p-3 bg-white space-y-2 shadow-inner">
-                        {assets.length === 0 ? (
-                          <div className="text-xs text-gray-400 italic">No assets registered in directory.</div>
-                        ) : (
-                          assets.map(a => (
-                            <label key={a.id} className="flex items-center space-x-3 text-xs cursor-pointer hover:bg-gray-50 p-1 rounded transition">
-                              <input 
-                                type="checkbox" 
-                                checked={manualAssetIds.includes(a.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setManualAssetIds([...manualAssetIds, a.id]);
-                                  } else {
-                                    setManualAssetIds(manualAssetIds.filter(id => id !== a.id));
-                                  }
-                                }}
-                                className="w-4 h-4 rounded border-gray-300 text-[#005596] focus:ring-[#005596]" 
-                              />
-                              <span className="font-medium text-gray-700">{a.name} <span className="text-gray-400 font-mono text-[10px] ml-1">(SN: {a.serial})</span></span>
-                            </label>
-                          ))
-                        )}
-                      </div>
-                      {manualAssetIds.length > 0 && (
-                        <div className="mt-1.5 text-[10px] text-[#005596] font-bold">
-                          {manualAssetIds.length} asset(s) selected for bulk upload mapping.
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload Manual File</label>
-                      <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-slate-50 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100" onClick={() => manualFileInputRef.current.click()}>
-                        <span className="text-2xl mb-1">📁</span><span className="text-[11px] text-gray-500 font-semibold uppercase">{manualFile ? manualFile.name : "Select manual file"}</span>
-                        <input type="file" ref={manualFileInputRef} onChange={handleManualFileChange} className="hidden" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Quick Manual SOP Text Layout</label>
-                      <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
-                    </div>
-                    <button type="submit" disabled={isAttachingManual} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isAttachingManual ? 'Uploading Data...' : 'Distribute Manual to Assets'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 space-y-6">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px] flex flex-col justify-between h-full">
-                  <div>
-                    <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
-                      <h3 className="font-bold text-xs uppercase tracking-wider">Embedded Manual / SOP Guidelines Reader</h3>
-                    </div>
-                    
-                    {viewingManualAsset && ((viewingManualAsset.manuals && viewingManualAsset.manuals.length > 0) || viewingManualAsset.manual) ? (
-                      <div className="p-6 space-y-5 flex-grow flex flex-col">
-                        
-                        {(() => {
-                          const currentManuals = viewingManualAsset.manuals || (viewingManualAsset.manual ? [{...viewingManualAsset.manual, id: viewingManualAsset.manual.id || 'LEGACY-DOC'}] : []);
-                          const activeManual = currentManuals[activeManualIndex] || currentManuals[0];
-                          
-                          return (
-                            <>
-                              {currentManuals.length > 1 && (
-                                <div className="flex space-x-2 border-b border-gray-100 pb-3 mb-4 overflow-x-auto">
-                                  {currentManuals.map((doc, idx) => (
-                                    <button 
-                                      key={doc.id || idx}
-                                      onClick={() => setActiveManualIndex(idx)}
-                                      className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition whitespace-nowrap ${activeManualIndex === idx ? 'bg-[#005596] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                                    >
-                                      {doc.fileName.length > 20 ? doc.fileName.substring(0, 20) + '...' : doc.fileName}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="flex justify-between items-start mb-4">
-                                <div>
-                                  <h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4>
-                                  <span className="text-xs text-gray-500 block font-mono mt-1">SN: {viewingManualAsset.serial} • Doc: {activeManual.fileName}</span>
-                                </div>
-                                <div className="flex space-x-2">
-                                  <a href={activeManual.fileData} download={activeManual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
-                                  {isSystemAdmin && (
-                                    <button onClick={() => handleRemoveManual(viewingManualAsset.id, activeManual.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner flex-grow">
-                                {activeManual.manualText}
-                              </div>
-                            </>
-                          );
-                        })()}
-
-                      </div>
-                    ) : (
-                      <div className="p-12 text-center text-gray-400 mt-20"><span className="text-4xl block mb-3">📖</span><p className="text-sm font-semibold">Select an asset from the Document Library<br/>to inspect its attached manuals.</p></div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ManualsTab 
+              assetsWithManuals={assetsWithManuals}
+              viewingManualAsset={viewingManualAsset}
+              setViewingManualAsset={setViewingManualAsset}
+              activeManualIndex={activeManualIndex}
+              setActiveManualIndex={setActiveManualIndex}
+              handleAttachManualSubmit={handleAttachManualSubmit}
+              assets={assets}
+              manualAssetIds={manualAssetIds}
+              setManualAssetIds={setManualAssetIds}
+              manualFileInputRef={manualFileInputRef}
+              manualFile={manualFile}
+              handleManualFileChange={handleManualFileChange}
+              manualText={manualText}
+              setManualText={setManualText}
+              isAttachingManual={isAttachingManual}
+              isSystemAdmin={isSystemAdmin}
+              handleRemoveManual={handleRemoveManual}
+            />
           )}
 
           {activeTab === "templates" && (
-            <div className="space-y-8 animate-entrance">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Template</h3></div>
-                <form onSubmit={handleAddTemplateSubmit} className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
-                      <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
-                      <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer">
-                        <option value="Daily">Daily Cycle</option>
-                        <option value="Weekly">Weekly Cycle</option>
-                        <option value="Monthly">Monthly Cycle</option>
-                        <option value="Quarterly">Quarterly Cycle</option>
-                        <option value="Semi-Annually">Semi-Annually Cycle</option>
-                        <option value="Annually">Annually Cycle</option>
-                        <option value="2-Year">2-Year Cycle</option>
-                        <option value="3-Year">3-Year Cycle</option>
-                        <option value="4-Year">4-Year Cycle</option>
-                        <option value="5-Year">5-Year Cycle</option>
-                        <option value="Calibration (Semi-Annual)">Calibration (Semi-Annual)</option>
-                        <option value="Calibration (Annual)">Calibration (Annual)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
-                      <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
-                      <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="Global">Global (All Assets)</option>
-                        {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                      </select>
-                    </div>
-                    <div> 
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manager Email (For Notifications)</label>
-                      <select value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="">-- Select Manager Account --</option>
-                        {activeAccounts.map(u => <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Operator Email (Primary Notification)</label>
-                      <select value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer">
-                        <option value="">-- Select Operator Account --</option>
-                        {activeAccounts.map(u => <option key={`op-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
-                      </select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
-                      
-                      {/* Existing Steps Viewer */}
-                      <div className="space-y-2 mb-4 max-h-48 overflow-y-auto pr-2">
-                        {newTemplate.checklistSteps?.map((step, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-gray-50 p-3 border border-gray-200 rounded shadow-sm">
-                              <span className="text-xs text-gray-800"><strong className="uppercase text-[#00A1E4] mr-2 bg-blue-50 px-2 py-1 rounded">[{step.type}]</strong> {step.label}</span>
-                              <button type="button" onClick={() => {
-                                const newSteps = [...newTemplate.checklistSteps];
-                                newSteps.splice(idx, 1);
-                                setNewTemplate({...newTemplate, checklistSteps: newSteps});
-                              }} className="text-red-500 hover:text-red-700 font-bold text-lg leading-none transition-colors">&times;</button>
-                          </div>
-                        ))}
-                        {(!newTemplate.checklistSteps || newTemplate.checklistSteps.length === 0) && (
-                          <div className="text-xs text-gray-400 italic p-4 border border-dashed border-gray-300 rounded bg-white text-center">No action steps added yet. Use the builder below.</div>
-                        )}
-                      </div>
-
-                      {/* The Input Engine */}
-                      <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch">
-                        <select id="builderType" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
-                            <option value="checkbox">Checkbox (Done/Not Done)</option>
-                            <option value="text">Short Text (Serial, Note)</option>
-                            <option value="number">Numeric (PSI, Temp)</option>
-                            <option value="passfail">Pass/Fail Dropdown</option>
-                        </select>
-                        <input type="text" id="builderLabel" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStep').click(); }}} />
-                        <button type="button" id="btnAddStep" onClick={() => {
-                            const type = document.getElementById('builderType').value;
-                            const label = document.getElementById('builderLabel').value.trim();
-                            if(!label) return;
-                            setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
-                            document.getElementById('builderLabel').value = '';
-                        }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Step</button>
-                      </div>
-                    </div>
-                    </div> {/* End of Grid */}
-                  <div className="mt-6 flex justify-end">
-                    <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                      {isAddingTemplate ? 'Generating Protocol...' : 'Generate Protocol'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <div className="flex justify-end mb-4 px-1">
-                <input 
-                  type="text" 
-                  placeholder="Search SOP Templates by Name, Category, or Dept..." 
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  className="w-full md:w-80 text-xs rounded border border-gray-300 p-2.5 bg-white shadow-sm focus:outline-none focus:border-[#005596]"
-                />
-              </div>
-
-              {(() => {
-                const filteredTemplates = pmTemplates.filter(t => 
-                  (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-                  (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-                  (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
-                );
-
-                const groupedTemplates = filteredTemplates.reduce((acc, template) => {
-                  const cat = template.targetCategory || "Global";
-                  if (!acc[cat]) acc[cat] = [];
-                  acc[cat].push(template);
-                  return acc;
-                }, {});
-
-                return Object.keys(groupedTemplates).length === 0 ? (
-                  <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No SOP templates matching search.</div>
-                ) : (
-                  Object.entries(groupedTemplates).map(([category, catTemplates]) => (
-                    <div key={category} className="mb-8">
-                      <div className="flex items-center space-x-4">
-                          <span>📁 Category Lock: {category}</span>
-                          {isSystemAdmin && category !== "Global" && <button onClick={() => deleteTemplateCategory(category)} className="text-[10px] text-red-500 hover:text-red-700">Delete Category &times;</button>}
-                        </div>
-                        <span className="bg-gray-200 text-gray-600 px-2.5 py-1 rounded-full text-[10px]">{catTemplates.length} Protocol{catTemplates.length !== 1 ? 's' : ''}</span>
-                      <div className="bg-white p-6 rounded-b-xl border border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-6 shadow-sm">
-                        {catTemplates.map((template) => (
-                          <div key={template.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col justify-between relative hover:shadow-md transition">
-                            {template.targetCategory !== "Global" && (
-                              <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] font-bold px-2 py-1 uppercase rounded-bl-lg shadow-sm border-b border-l border-yellow-500 z-10">Locked: {template.targetCategory}</div>
-                            )}
-                            <div className="p-5">
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase">{template.id}</span>
-                                  <h4 className="font-bold text-base text-gray-900 mt-0.5 leading-tight">{template.name}</h4>
-                                </div>
-                                <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
-                              </div>
-                              <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
-                              {(template.managerEmail || template.operatorEmail) && (
-                                <div className="mt-3 text-[10px] text-gray-500 font-mono bg-gray-50 p-2.5 rounded border border-gray-100 shadow-inner">
-                                  {template.managerEmail && <span className="block"><strong className="text-gray-700">Mgr Alert:</strong> {template.managerEmail}</span>}
-                                  {template.operatorEmail && <span className="block mt-1"><strong className="text-gray-700">Tech Alert:</strong> {template.operatorEmail}</span>}
-                                </div>
-                              )}
-                              <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
-                                {template.checklist.map((item, idx) => {
-                                  const label = typeof item === 'string' ? item : item.label;
-                                  const type = typeof item === 'string' ? 'checkbox' : item.type;
-                                  return (
-                                    <li key={idx} className="mb-1"><span className="uppercase text-[9px] font-bold text-[#00A1E4] bg-blue-50 px-1 py-0.5 rounded mr-1.5 border border-blue-100">[{type}]</span> {label}</li>
-                                  );
-                                })}
-                              </ul>
-                            </div>
-                            <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-xs">
-                              <span className="text-gray-500">{template.checklist.length} tasks</span>
-                              {isSystemAdmin && (
-                                <div className="flex space-x-4">
-                                  <button onClick={() => handleEditTemplateClick(template)} className="text-[#005596] hover:text-[#00407a] font-bold uppercase tracking-wider text-[10px]">Edit</button>
-                                  <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold uppercase tracking-wider text-[10px]">Delete</button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                );
-              })()}
-            </div>
+            <TemplatesTab 
+              handleAddTemplateSubmit={handleAddTemplateSubmit}
+              newTemplate={newTemplate}
+              setNewTemplate={setNewTemplate}
+              uniqueCategories={uniqueCategories}
+              activeAccounts={activeAccounts}
+              editingTemplateId={editingTemplateId}
+              cancelEditTemplate={cancelEditTemplate}
+              isAddingTemplate={isAddingTemplate}
+              templateSearch={templateSearch}
+              setTemplateSearch={setTemplateSearch}
+              pmTemplates={pmTemplates}
+              isSystemAdmin={isSystemAdmin}
+              deleteTemplateCategory={deleteTemplateCategory}
+              handleEditTemplateClick={handleEditTemplateClick}
+              deleteTemplate={deleteTemplate}
+            />
           )}
 
           {activeTab === "history" && (
