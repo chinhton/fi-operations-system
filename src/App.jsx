@@ -13,6 +13,8 @@ import ManualsTab from './components/ManualsTab';
 import HardwareVendorModal from './components/HardwareVendorModal';
 import PmExecutionModal from './components/PmExecutionModal';
 import AuthScreen from './components/AuthScreen';
+import KpiBanner from './components/KpiBanner';
+import SidebarNav from './components/SidebarNav';
 
 // Hook Imports
 import useModals from './hooks/useModals';
@@ -81,7 +83,7 @@ export default function App() {
     handleApproveUser, handleDenyUser, handleRevokeUser
   } = useAuth(changeTab, triggerModal, history, setHistory);
 
-  // Cosmos DB Hydration (Runs safely inside the component!)
+  // Cosmos DB Hydration
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
   const { 
@@ -121,7 +123,6 @@ export default function App() {
   }, []);
 
   // 3. Computed UI Stats & Calculations
-  // Added (users || []) and (u && ...) so it NEVER crashes on undefined data
   const pendingApprovals = (users || []).filter(u => u && !u.approved);
   const activeAccounts = (users || []).filter(u => u && u.approved);
   
@@ -168,8 +169,8 @@ export default function App() {
     history: { icon: '📜', label: 'Executed Audits', badge: history.length }
   };
 
-  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; // Placeholder logic
-  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; // Placeholder logic
+  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; 
+  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; 
 
   // 4. Render Logic
   if (!currentUser) {
@@ -195,72 +196,24 @@ export default function App() {
       
       <TopHeader currentTime={currentTime} currentUser={currentUser} isSystemAdmin={isSystemAdmin} handleLogout={handleLogout} />
 
-      {/* COMPLIANCE KPI TRACKER BANNER */}
-      <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-md relative overflow-hidden">
-        <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl"></div>
-        <div className="max-w-full mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
-          <div onClick={() => changeTab('workOrders')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Pending Actions</span>
-            <div className="text-3xl sm:text-4xl font-black mt-2 text-yellow-300 drop-shadow-md">{workOrders.filter(w => w.status !== "Completed").length}</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Schedules in queue &rarr;</div>
-          </div>
-          <div onClick={() => changeTab('assets')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Facility Assets</span>
-            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{assets.length}</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Monitored high-value systems &rarr;</div>
-          </div>
-          <div onClick={() => changeTab('dashboard')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Compliance Factor</span>
-            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{complianceRate}%</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Optimal health ratio &rarr;</div>
-          </div>
-          <div onClick={() => changeTab('history')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
-            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Executed Audits</span>
-            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{history.length}</div>
-            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Traceable sign-off operations &rarr;</div>
-          </div>
-        </div>
-      </section>
+      <KpiBanner 
+        changeTab={changeTab}
+        workOrdersCount={workOrders.filter(w => w.status !== "Completed").length}
+        assetsCount={assets.length}
+        complianceRate={complianceRate}
+        historyCount={history.length}
+      />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
         
-        {/* SIDEBAR NAVIGATION */}
-        <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 space-y-2">
-          {navOrder.map((tabId) => {
-            const info = navData[tabId];
-            if (!info) return null;
-            return (
-              <button 
-                key={tabId} 
-                onClick={() => changeTab(tabId)} 
-                className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span>{info.icon}</span> <span>{info.label}</span>
-                </div>
-                {info.badge !== undefined && info.badge !== 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
-                    {info.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          
-          {isSystemAdmin && (
-            <button 
-              onClick={() => changeTab("approvals")} 
-              className={`w-full flex items-center justify-between px-3 py-3 mt-4 border-t text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "approvals" ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
-            >
-              <div className="flex items-center space-x-3">
-                <span>🔑</span> <span>Account Approvals</span>
-              </div>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ${activeTab === "approvals" ? "bg-red-600 text-white" : "bg-red-100 text-red-700"}`}>
-                {pendingApprovals.length}
-              </span>
-            </button>
-          )}
-        </aside>
+        <SidebarNav 
+          navOrder={navOrder}
+          navData={navData}
+          activeTab={activeTab}
+          changeTab={changeTab}
+          isSystemAdmin={isSystemAdmin}
+          pendingApprovalsCount={pendingApprovals.length}
+        />
 
         {/* MAIN CONTENT AREA */}
         <main className="flex-grow p-4 md:p-8">
