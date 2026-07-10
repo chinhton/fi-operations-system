@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+
+// UI Components
 import GlobalAlertModal from './components/GlobalAlertModal';
 import TopHeader from './components/TopHeader';
 import DashboardTab from './components/DashboardTab';
@@ -7,7 +9,9 @@ import HistoryTab from './components/HistoryTab';
 import WorkOrdersTab from './components/WorkOrdersTab';
 import AssetsTab from './components/AssetsTab';
 import TemplatesTab from './components/TemplatesTab';
+import ManualsTab from './components/ManualsTab';
 import HardwareVendorModal from './components/HardwareVendorModal';
+import PmExecutionModal from './components/PmExecutionModal';
 
 // Hook Imports
 import useModals from './hooks/useModals';
@@ -43,9 +47,16 @@ const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annua
 export default function App() {
   // 1. Top-Level UI State
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'templates', 'history']);
+  const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
   
+  // Shared States (Hydrated by Cosmos DB)
+  const [history, setHistory] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [pmTemplates, setPmTemplates] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [users, setUsers] = useState([]);
+
   // Search / Filter States
   const [filterSearch, setFilterSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState("All");
@@ -58,38 +69,37 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 2. Initialize Hooks (Safely INSIDE the component)
+  // 2. Initialize Hooks
   const { customModal, triggerModal, closeModal } = useModals();
-  const { history, setHistory, deleteHistoryLog } = useHistory(triggerModal, closeModal);
+  const { deleteHistoryLog } = useHistory(triggerModal, closeModal);
 
   const {
-    users, setUsers, currentUser, isSystemAdmin, authMode, setAuthMode, authEmail, setAuthEmail,
+    currentUser, isSystemAdmin, authMode, setAuthMode, authEmail, setAuthEmail,
     authPassword, setAuthPassword, registerName, setRegisterName, authError, authSuccess, 
     isRegistering, isSigningIn, handleSignIn, handleRegister, handleLogout, 
     handleApproveUser, handleDenyUser, handleRevokeUser
   } = useAuth(changeTab, triggerModal, history, setHistory);
 
+  // Cosmos DB Hydration (Runs safely inside the component!)
+  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
+
   const { 
-    assets, setAssets, isAddingAsset, newAsset, setNewAsset, 
-    showAssetModal, setShowAssetModal, activeAssetDetails, 
-    newPart, setNewPart, newVendor, setNewVendor,
+    isAddingAsset, newAsset, setNewAsset, showAssetModal, setShowAssetModal, 
+    activeAssetDetails, newPart, setNewPart, newVendor, setNewVendor,
     handleAddAssetSubmit, handleUpdateAssetStatus, deleteAsset, deleteAssetCategory, 
     handleOpenAssetModal, addPart, removePart, addVendor, removeVendor
   } = useAssets(triggerModal, closeModal, currentUser);
 
   const { 
-    workOrders, setWorkOrders, newWo, setNewWo, isSubmittingWo, 
-    handleAddWorkOrder, handleUpdateWoStatus, deleteWorkOrder 
+    newWo, setNewWo, isSubmittingWo, handleAddWorkOrder, handleUpdateWoStatus, deleteWorkOrder 
   } = useWorkOrders(currentUser, users, assets, triggerModal, closeModal, setHistory);
 
   const {
-    pmTemplates, setPmTemplates, 
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate,
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
     deleteTemplate, deleteTemplateCategory
-  } = useTemplates(triggerModal, closeModal);
+  } = useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates);
 
-  // Initialize missing hooks for Blob Storage and PM Emails
   const { 
     manualAssetIds, setManualAssetIds, manualFile, manualText, setManualText, 
     isAttachingManual, viewingManualAsset, setViewingManualAsset, activeManualIndex, 
@@ -103,16 +113,13 @@ export default function App() {
     setPmComments, isSubmittingPm, openPmModal, closePmModal, handlePmSubmit 
   } = usePmExecution(assets, setAssets, history, setHistory, currentUser, triggerModal);
 
-  // Hydrate all state from Azure Cosmos DB on load (Called AFTER all setters are defined)
-  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
-
   // Time ticker
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // 3. Computed UI Stats
+  // 3. Computed UI Stats & Calculations
   const pendingApprovals = users.filter(u => !u.approved);
   const activeAccounts = users.filter(u => u.approved);
   
@@ -121,6 +128,14 @@ export default function App() {
   const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
   const correctiveCount = assets.filter(a => a.status === "Corrective Maintenance").length;
   
+  const complianceRate = (() => { 
+    if (assets.length === 0) return 100; 
+    const nonCompliant = overdueCount + calibrationCount + correctiveCount; 
+    return Math.round(((assets.length - nonCompliant) / assets.length) * 100); 
+  })();
+
+  const manualCount = assets.reduce((sum, a) => sum + (a.manuals ? a.manuals.length : (a.manual ? 1 : 0)), 0);
+  const assetsWithManuals = assets.filter(a => (a.manuals && a.manuals.length > 0) || a.manual);
   const uniqueCategories = Array.from(new Set((assets || []).map(a => a.category).filter(Boolean)));
   
   const filteredWorkOrders = workOrders.filter(w => w.title.includes(filterSearch) && (filterPriority === "All" || w.priority === filterPriority));
@@ -142,16 +157,24 @@ export default function App() {
     return acc;
   }, {});
 
-  // Utilities
-  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; // Add your actual date math logic here
-  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; // Add your actual date math logic here
+  const navData = {
+    dashboard: { icon: '📊', label: 'Operations Dashboard' },
+    workOrders: { icon: '🔧', label: 'Dispatch Work Orders', badge: workOrders.filter(w => w.status !== "Completed").length },
+    assets: { icon: '🏭', label: 'Facility Assets', badge: assets.length },
+    manuals: { icon: '📖', label: 'Equipment Manuals', badge: manualCount },
+    templates: { icon: '⚙️', label: 'PM Task Configurations', badge: pmTemplates.length },
+    history: { icon: '📜', label: 'Executed Audits', badge: history.length }
+  };
+
+  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; }; // Placeholder logic
+  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; }; // Placeholder logic
 
   // 4. Render Logic
   if (!currentUser) {
     return (
       <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
         <style>{customStyles}</style>
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 text-center animate-entrance">
             <h2 className="text-xl font-bold text-[#005596] mb-6">FI-Operations Auth</h2>
             {authError && <div className="mb-4 text-red-600 text-sm font-bold">{authError}</div>}
             {authSuccess && <div className="mb-4 text-green-600 text-sm font-bold">{authSuccess}</div>}
@@ -163,11 +186,11 @@ export default function App() {
                <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="Email" required className="w-full p-3 border rounded" />
                <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Password" required className="w-full p-3 border rounded" />
                
-               <button type="submit" disabled={isSigningIn || isRegistering} className="w-full bg-[#005596] text-white p-3 rounded font-bold">
+               <button type="submit" disabled={isSigningIn || isRegistering} className="w-full bg-[#005596] text-white p-3 rounded font-bold transition transform hover:-translate-y-0.5">
                  {authMode === "signin" ? "Sign In" : "Request Access"}
                </button>
             </form>
-            <button onClick={() => setAuthMode(authMode === "signin" ? "register" : "signin")} className="mt-4 text-sm text-[#00A1E4]">
+            <button onClick={() => setAuthMode(authMode === "signin" ? "register" : "signin")} className="mt-4 text-sm text-[#00A1E4] hover:underline">
                {authMode === "signin" ? "Need an account?" : "Back to login"}
             </button>
         </div>
@@ -181,21 +204,74 @@ export default function App() {
       
       <TopHeader currentTime={currentTime} currentUser={currentUser} isSystemAdmin={isSystemAdmin} handleLogout={handleLogout} />
 
+      {/* COMPLIANCE KPI TRACKER BANNER */}
+      <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-md relative overflow-hidden">
+        <div className="absolute inset-0 bg-white/5 backdrop-blur-3xl"></div>
+        <div className="max-w-full mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+          <div onClick={() => changeTab('workOrders')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Pending Actions</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 text-yellow-300 drop-shadow-md">{workOrders.filter(w => w.status !== "Completed").length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Schedules in queue &rarr;</div>
+          </div>
+          <div onClick={() => changeTab('assets')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Facility Assets</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{assets.length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Monitored high-value systems &rarr;</div>
+          </div>
+          <div onClick={() => changeTab('dashboard')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Compliance Factor</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{complianceRate}%</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Optimal health ratio &rarr;</div>
+          </div>
+          <div onClick={() => changeTab('history')} className="bg-white/10 backdrop-blur-md rounded-xl p-5 border border-white/20 shadow-lg transform hover:-translate-y-1 hover:bg-white/20 transition-all duration-300 cursor-pointer">
+            <span className="text-[10px] uppercase font-bold tracking-widest text-blue-100 drop-shadow-sm">Executed Audits</span>
+            <div className="text-3xl sm:text-4xl font-black mt-2 drop-shadow-md">{history.length}</div>
+            <div className="text-[11px] text-blue-200 mt-2 font-bold tracking-wide">Traceable sign-off operations &rarr;</div>
+          </div>
+        </div>
+      </section>
+
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
         
+        {/* SIDEBAR NAVIGATION */}
         <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 space-y-2">
-          {navOrder.map(tabId => (
-             <button key={tabId} onClick={() => changeTab(tabId)} className={`w-full text-left p-3 rounded font-bold ${activeTab === tabId ? 'bg-[#005596]/10 text-[#005596]' : 'text-gray-600 hover:bg-gray-50'}`}>
-                {tabId.toUpperCase()}
-             </button>
-          ))}
+          {navOrder.map((tabId) => {
+            const info = navData[tabId];
+            if (!info) return null;
+            return (
+              <button 
+                key={tabId} 
+                onClick={() => changeTab(tabId)} 
+                className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
+              >
+                <div className="flex items-center space-x-3">
+                  <span>{info.icon}</span> <span>{info.label}</span>
+                </div>
+                {info.badge !== undefined && info.badge !== 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
+                    {info.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          
           {isSystemAdmin && (
-            <button onClick={() => changeTab('approvals')} className={`w-full text-left p-3 rounded font-bold mt-4 border-t ${activeTab === 'approvals' ? 'bg-red-50 text-red-700' : 'text-gray-600'}`}>
-                ACCOUNT APPROVALS ({pendingApprovals.length})
+            <button 
+              onClick={() => changeTab("approvals")} 
+              className={`w-full flex items-center justify-between px-3 py-3 mt-4 border-t text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "approvals" ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
+            >
+              <div className="flex items-center space-x-3">
+                <span>🔑</span> <span>Account Approvals</span>
+              </div>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ${activeTab === "approvals" ? "bg-red-600 text-white" : "bg-red-100 text-red-700"}`}>
+                {pendingApprovals.length}
+              </span>
             </button>
           )}
         </aside>
 
+        {/* MAIN CONTENT AREA */}
         <main className="flex-grow p-4 md:p-8">
           {activeTab === "dashboard" && (
             <DashboardTab 
@@ -218,17 +294,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === "templates" && (
-            <TemplatesTab 
-              handleAddTemplateSubmit={handleAddTemplateSubmit} newTemplate={newTemplate} setNewTemplate={setNewTemplate}
-              pmTemplates={pmTemplates} activeAccounts={activeAccounts} editingTemplateId={editingTemplateId}
-              cancelEditTemplate={cancelEditTemplate} isAddingTemplate={isAddingTemplate}
-              templateSearch={templateSearch} setTemplateSearch={setTemplateSearch}
-              isSystemAdmin={isSystemAdmin} deleteTemplateCategory={deleteTemplateCategory}
-              handleEditTemplateClick={handleEditTemplateClick} deleteTemplate={deleteTemplate} uniqueCategories={uniqueCategories}
-            />
-          )}
-
           {activeTab === "assets" && (
              <AssetsTab 
                handleAddAssetSubmit={handleAddAssetSubmit} isAddingAsset={isAddingAsset} 
@@ -239,6 +304,30 @@ export default function App() {
                calculateNextPmDate={calculateNextPmDate} handleOpenAssetModal={handleOpenAssetModal} 
                openPmModal={openPmModal} deleteAsset={deleteAsset}
              />
+          )}
+
+          {activeTab === "manuals" && (
+            <ManualsTab 
+              assetsWithManuals={assetsWithManuals} viewingManualAsset={viewingManualAsset} 
+              setViewingManualAsset={setViewingManualAsset} activeManualIndex={activeManualIndex} 
+              setActiveManualIndex={setActiveManualIndex} handleAttachManualSubmit={handleAttachManualSubmit} 
+              assets={assets} manualAssetIds={manualAssetIds} setManualAssetIds={setManualAssetIds} 
+              manualFileInputRef={manualFileInputRef} manualFile={manualFile} 
+              handleManualFileChange={handleManualFileChange} manualText={manualText} 
+              setManualText={setManualText} isAttachingManual={isAttachingManual} 
+              isSystemAdmin={isSystemAdmin} handleRemoveManual={handleRemoveManual}
+            />
+          )}
+
+          {activeTab === "templates" && (
+            <TemplatesTab 
+              handleAddTemplateSubmit={handleAddTemplateSubmit} newTemplate={newTemplate} setNewTemplate={setNewTemplate}
+              pmTemplates={pmTemplates} activeAccounts={activeAccounts} editingTemplateId={editingTemplateId}
+              cancelEditTemplate={cancelEditTemplate} isAddingTemplate={isAddingTemplate}
+              templateSearch={templateSearch} setTemplateSearch={setTemplateSearch}
+              isSystemAdmin={isSystemAdmin} deleteTemplateCategory={deleteTemplateCategory}
+              handleEditTemplateClick={handleEditTemplateClick} deleteTemplate={deleteTemplate} uniqueCategories={uniqueCategories}
+            />
           )}
 
           {activeTab === "history" && (
@@ -258,6 +347,7 @@ export default function App() {
         </main>
       </div>
 
+      {/* GLOBAL MODALS */}
       {showAssetModal && activeAssetDetails && (
         <HardwareVendorModal 
           show={showAssetModal} activeAssetDetails={activeAssetDetails} onClose={() => setShowAssetModal(false)}
@@ -265,6 +355,15 @@ export default function App() {
           newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
         />
       )}
+      
+      <PmExecutionModal 
+        isPmModalOpen={isPmModalOpen} closePmModal={closePmModal} handlePmSubmit={handlePmSubmit}
+        selectedPmAsset={selectedPmAsset} selectedPmTemplate={selectedPmTemplate} 
+        setSelectedPmTemplate={setSelectedPmTemplate} pmTemplates={pmTemplates} pmAnswers={pmAnswers} 
+        setPmAnswers={setPmAnswers} pmStatusState={pmStatusState} setPmStatusState={setPmStatusState} 
+        pmComments={pmComments} setPmComments={setPmComments} isSubmittingPm={isSubmittingPm}
+      />
+
       <GlobalAlertModal show={customModal.show} title={customModal.title} message={customModal.message} type={customModal.type} onConfirm={customModal.onConfirm} onClose={closeModal} />
     </div>
   );
