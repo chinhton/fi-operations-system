@@ -60,7 +60,21 @@ app.http('sendEmail', {
             const poller = await client.beginSend(emailMessage);
             const response = await poller.pollUntilDone();
 
-            return createResponse(200, { message: "Email sent successfully via Azure ACS!", messageId: response.id });
+            // Check if Azure ACTUALLY successfully routed it, or if it dropped it.
+            if (response.status === "Succeeded") {
+                return createResponse(200, { 
+                    message: "Email sent successfully via Azure ACS!", 
+                    messageId: response.id,
+                    status: response.status 
+                });
+            } else {
+                // If it fails here, Azure dropped it due to policy, suppression, or bad domain config.
+                return createResponse(400, { 
+                    error: "Azure accepted the payload, but the mail server rejected delivery.", 
+                    status: response.status,
+                    details: response.error || "No downstream error provided by ACS."
+                });
+            }
             
         } catch (error) {
             // This will capture the exact Node.js crash reason and force it into your Network tab
