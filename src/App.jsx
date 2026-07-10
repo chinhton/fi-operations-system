@@ -80,10 +80,11 @@ export default function App() {
   } = useWorkOrders(currentUser, users, assets, triggerModal, closeModal, setHistory);
 
   const {
+    pmTemplates, setPmTemplates, // Extracted safely
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate,
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
-    deleteTemplate, deleteTemplateCategory, pmTemplates, setPmTemplates
-  } = useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates);
+    deleteTemplate, deleteTemplateCategory
+  } = useTemplates(triggerModal, closeModal); // Nothing passed here!
 
   // Time ticker
   useEffect(() => {

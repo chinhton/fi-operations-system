@@ -1,6 +1,8 @@
 import { useState } from 'react';
 
-export default function useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates) {
+export default function useTemplates(triggerModal, closeModal) {
+  // WE MOVED THE STATE INSIDE THE HOOK
+  const [pmTemplates, setPmTemplates] = useState([]); 
   const [newTemplate, setNewTemplate] = useState({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [isAddingTemplate, setIsAddingTemplate] = useState(false);
@@ -76,5 +78,10 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
     });
   };
 
-  return { newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate, handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, deleteTemplate, deleteTemplateCategory };
+  return { 
+    pmTemplates, setPmTemplates,
+    newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate, 
+    handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
+    deleteTemplate, deleteTemplateCategory 
+  };
 }
