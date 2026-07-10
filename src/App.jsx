@@ -95,10 +95,14 @@ export default function App() {
   // 4. Master Props Object
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS,
+    expandedActionQueue: [], 
+    
+    // Spread the hooks FIRST...
+    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
+    
+    // Put live data LAST so it NEVER gets overwritten!
     history, setHistory, assets, setAssets, pmTemplates, setPmTemplates, workOrders, setWorkOrders, users, setUsers,
     calculateDaysRemaining, calculateNextPmDate,
-    expandedActionQueue: [], // <-- THE MISSING PROP THAT CAUSED THE CRASH!
-    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats
   };
 
   return (
