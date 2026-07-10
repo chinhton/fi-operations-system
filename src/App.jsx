@@ -93,11 +93,11 @@ export default function App() {
   }
 
   // 4. Master Props Object
-  // This bundles every single variable and function into one object so we can pass it down cleanly.
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS,
     history, setHistory, assets, setAssets, pmTemplates, setPmTemplates, workOrders, setWorkOrders, users, setUsers,
     calculateDaysRemaining, calculateNextPmDate,
+    expandedActionQueue: [], // <-- THE MISSING PROP THAT CAUSED THE CRASH!
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats
   };
 
@@ -108,10 +108,10 @@ export default function App() {
       
       <KpiBanner 
         changeTab={changeTab} 
-        workOrdersCount={workOrders.filter(w => w.status !== "Completed").length}
-        assetsCount={assets.length} 
-        complianceRate={stats.complianceRate} 
-        historyCount={history.length}
+        workOrdersCount={(workOrders || []).filter(w => w.status !== "Completed").length}
+        assetsCount={(assets || []).length} 
+        complianceRate={stats.complianceRate || 100} 
+        historyCount={(history || []).length}
       />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">

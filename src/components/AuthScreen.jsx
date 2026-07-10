@@ -9,13 +9,12 @@ export default function AuthScreen({
     <div className="min-h-screen animated-gradient-bg flex flex-col justify-center items-center px-4 py-12 antialiased">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 animate-entrance overflow-hidden">
         
-        {/* RESTORED FAIRCHILD IMAGING LOGO HEADER */}
         <div className="bg-[#005596] px-8 py-8 text-center text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-tr from-black/10 to-transparent"></div>
           <div className="mb-4 flex justify-center relative z-10">
             <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded-xl bg-white p-3 shadow-md transform hover:scale-105 transition-transform duration-300" />
           </div>
-          <h2 className="text-xl font-bold tracking-tight font-sans relative z-10 drop-shadow-sm">FI-Operations Auth</h2>
+          <h2 className="text-xl font-bold tracking-tight font-sans relative z-10 drop-shadow-sm">FI-Operations Management System</h2>
         </div>
 
         <div className="p-8">

@@ -9,7 +9,8 @@ export default function SidebarNav({
   pendingApprovalsCount 
 }) {
   return (
-    <aside className="w-full md:w-64 bg-white border-r border-gray-200 p-4 space-y-2">
+    // Added flex-shrink-0 to prevent the massive data tables from squishing the sidebar
+    <aside className="w-full md:w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 space-y-2">
       {navOrder.map((tabId) => {
         const info = navData[tabId];
         if (!info) return null;
