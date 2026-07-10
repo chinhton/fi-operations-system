@@ -161,9 +161,7 @@ const [newTemplate, setNewTemplate] = useState({
   const [selectedPmAsset, setSelectedPmAsset] = useState(null);
   const [selectedPmTemplate, setSelectedPmTemplate] = useState("");
   const [pmAnswers, setPmAnswers] = useState({});
-  const [pmComments, setPmComments] = useState("");
   const [pmStatusState, setPmStatusState] = useState("Operational");
-  const [isSubmittingPm, setIsSubmittingPm] = useState(false);
 
   const changeTab = (tabId) => {
     setActiveTab(tabId);
