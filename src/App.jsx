@@ -1401,28 +1401,12 @@ const deleteAssetCategory = (categoryName) => {
       <style>{customStyles}</style>
 
       {/* HEADER BAR */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="px-4 sm:px-6 lg:px-8 py-5">
-          <TopHeader 
-            currentTime={currentTime} 
-            currentUser={currentUser} 
-            isSystemAdmin={isSystemAdmin} 
-            handleLogout={handleLogout} 
-          />
-
-          <div className="flex items-center space-x-6">
-            <div className="hidden lg:block text-right border-r border-gray-200 pr-6">
-               <span className="block text-xs font-bold text-gray-800">{currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
-               <span className="block text-[10px] text-gray-500 font-mono mt-0.5">{currentTime.toLocaleTimeString('en-US')}</span>
-            </div>
-            <div className="text-right hidden sm:block">
-              <span className="text-xs font-bold text-gray-900 block font-sans">{currentUser.name}</span>
-              <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>{currentUser.role}</span>
-            </div>
-            <button onClick={handleLogout} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">Sign Out</button>
-          </div>
-        </div>
-      </header>
+      <TopHeader 
+        currentTime={currentTime} 
+        currentUser={currentUser} 
+        isSystemAdmin={isSystemAdmin} 
+        handleLogout={handleLogout} 
+      />
 
       {/* COMPLIANCE KPI TRACKER BANNER */}
       <section className="bg-gradient-to-r from-[#005596] to-[#00A1E4] text-white py-6 px-4 sm:px-6 lg:px-8 shadow-md relative overflow-hidden">
@@ -1596,7 +1580,7 @@ const deleteAssetCategory = (categoryName) => {
                 </div>
                 <div className="lg:col-span-5 space-y-6">
                   <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
-                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Technician Duty Board</h4>
+                    <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Operator Duty Board</h4>
                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center space-x-4 shadow-inner">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596] border border-[#005596]/20' : 'bg-slate-200 text-slate-700 border border-slate-300'}`}>
                         {isSystemAdmin ? 'SYS' : 'OP'}
