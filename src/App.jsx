@@ -101,7 +101,7 @@ export default function App() {
   const calibrationCount = assets.filter(a => a.status === "Out of Calibration").length;
   const correctiveCount = assets.filter(a => a.status === "Corrective Maintenance").length;
   
-  const uniqueCategories = Array.from(new Set(assets.map(a => a.category).filter(Boolean)));
+  const uniqueCategories = Array.from(new Set((assets || []).map(a => a.category).filter(Boolean)));
   
   const filteredWorkOrders = workOrders.filter(w => w.title.includes(filterSearch) && (filterPriority === "All" || w.priority === filterPriority));
   
@@ -195,6 +195,7 @@ export default function App() {
               filterPriority={filterPriority} setFilterPriority={setFilterPriority}
               filteredWorkOrders={filteredWorkOrders} isSystemAdmin={isSystemAdmin}
               handleUpdateWoStatus={handleUpdateWoStatus} deleteWorkOrder={deleteWorkOrder}
+              pmTemplates={pmTemplates} /* <--- Added this back in! */
             />
           )}
 
@@ -238,11 +239,13 @@ export default function App() {
         </main>
       </div>
 
-      <HardwareVendorModal 
-        show={showAssetModal} activeAssetDetails={activeAssetDetails} onClose={() => setShowAssetModal(false)}
-        newPart={newPart} setNewPart={setNewPart} addPart={addPart} removePart={removePart}
-        newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
-      />
+      {showAssetModal && activeAssetDetails && (
+        <HardwareVendorModal 
+          show={showAssetModal} activeAssetDetails={activeAssetDetails} onClose={() => setShowAssetModal(false)}
+          newPart={newPart} setNewPart={setNewPart} addPart={addPart} removePart={removePart}
+          newVendor={newVendor} setNewVendor={setNewVendor} addVendor={addVendor} removeVendor={removeVendor}
+        />
+      )}
       <GlobalAlertModal show={customModal.show} title={customModal.title} message={customModal.message} type={customModal.type} onConfirm={customModal.onConfirm} onClose={closeModal} />
     </div>
   );
