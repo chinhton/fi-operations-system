@@ -1,16 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function useAuth(changeTab, triggerModal, history, setHistory) {
-  const [users, setUsers] = useState([
-    {
-      id: "USER-ADMIN",
-      name: "System Administrator",
-      email: "admin@fcimg.com",
-      password: "admin",
-      role: "System Admin",
-      approved: true
-    }
-  ]);
+  
+useEffect(() => {
+    const fetchLiveUsers = async () => {
+      try {
+        const res = await fetch('/api/users');
+        if (res.ok) {
+          const liveData = await res.json();
+          // Only overwrite if it actually found users in the database
+          if (liveData && liveData.length > 0) {
+            setUsers(liveData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync users from Cosmos DB:", err);
+      }
+    };
+    
+    fetchLiveUsers();
+  }, []);
 
   const [currentUser, setCurrentUser] = useState(() => {
     const savedSession = localStorage.getItem('fi_oms_session');
