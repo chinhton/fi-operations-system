@@ -3,18 +3,25 @@ import { useState } from 'react';
 export default function useHistory(triggerModal, closeModal) {
   const [history, setHistory] = useState([]);
 
-  const deleteHistoryLog = (id) => {
-    triggerModal("Delete Audit Record", "Delete this system log permanently? This overrides compliance tracking.", "confirm", async () => {
-      try {
-        await fetch(`/api/history?id=${id}`, { method: 'DELETE' });
-        setHistory(history.filter(h => h.id !== id));
-        closeModal();
-      } catch (err) {
-        closeModal();
-        triggerModal("Error", "Failed to delete log from database.", "error");
+  const deleteHistoryLog = async (id) => {
+    try {
+      const res = await fetch(`/api/history?id=${id}`, { method: 'DELETE' });
+      
+      // The Magic Fix: If the backend successfully deleted it, OR if it says it's already gone (404), wipe it from the UI.
+      if (res.ok || res.status === 404) {
+        setHistory(prevHistory => prevHistory.filter(log => log.id !== id));
+      } else {
+        console.error("Backend refused deletion.");
       }
-    });
+    } catch (err) {
+      console.error("Network error deleting history log:", err);
+    }
   };
 
-  return { history, setHistory, deleteHistoryLog };
+  // MUST RETURN THESE so the rest of the application can use them!
+  return {
+    history,
+    setHistory,
+    deleteHistoryLog
+  };
 }
