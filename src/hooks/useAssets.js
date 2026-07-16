@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function useAssets(triggerModal, closeModal, currentUser) {
   const [assets, setAssets] = useState([]);
@@ -10,6 +10,26 @@ export default function useAssets(triggerModal, closeModal, currentUser) {
   const [activeAssetDetails, setActiveAssetDetails] = useState(null);
   const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
   const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
+
+  // --- THE FIX: Cosmos DB Sync Pipeline ---
+  useEffect(() => {
+    const fetchLiveAssets = async () => {
+      try {
+        const res = await fetch('/api/assets');
+        if (res.ok) {
+          const liveData = await res.json();
+          if (liveData && liveData.length > 0) {
+            setAssets(liveData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync assets from Cosmos DB:", err);
+      }
+    };
+    
+    fetchLiveAssets();
+  }, []);
+  // ----------------------------------------
 
   const handleAddAssetSubmit = async (e) => {
     e.preventDefault();
