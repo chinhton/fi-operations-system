@@ -68,7 +68,7 @@ export default function App() {
   const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, auth.currentUser);  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates);
   const manualHooks = useManuals(assets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(assets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
-
+  const woHooks = useWorkOrders(auth.currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(users, assets, workOrders, pmTemplates, history);
 
   // Utilities
