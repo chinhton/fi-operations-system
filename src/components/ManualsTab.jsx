@@ -133,9 +133,27 @@ export default function ManualsTab({
                           )}
                         </div>
                       </div>
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono whitespace-pre-wrap text-gray-700 h-[500px] overflow-y-auto shadow-inner flex-grow">
-                        {activeManual.manualText}
+                      
+                      {/* NEW EMBEDDED PDF VIEWER LOGIC */}
+                      <div className="w-full h-[500px] border border-gray-200 rounded-lg overflow-hidden shadow-inner flex-grow bg-gray-50">
+                        {activeManual.fileData ? (
+                          <iframe 
+                            src={activeManual.fileData} 
+                            title={activeManual.fileName}
+                            className="w-full h-full"
+                            frameBorder="0"
+                          >
+                            <p className="p-4 text-gray-500 text-xs">
+                              Your browser does not support inline PDFs. <a href={activeManual.fileData} download={activeManual.fileName} className="text-[#005596] underline">Download the manual here</a>.
+                            </p>
+                          </iframe>
+                        ) : (
+                          <div className="p-4 text-xs font-mono whitespace-pre-wrap text-gray-700 h-full overflow-y-auto">
+                            {activeManual.manualText || "No manual text or file provided."}
+                          </div>
+                        )}
                       </div>
+                      
                     </>
                   );
                 })()}
