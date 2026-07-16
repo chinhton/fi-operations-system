@@ -1,11 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function AssetsTab({
+  assets = [], // <--- THE FIX: Grab the raw assets array directly!
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
-  assetSearch, setAssetSearch, groupedAssets, isSystemAdmin, deleteAssetCategory,
+  isSystemAdmin, deleteAssetCategory,
   handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
   handleOpenAssetModal, openPmModal, deleteAsset
 }) {
+  
+  // 1. Move the search bar state locally inside this component
+  const [assetSearch, setAssetSearch] = useState("");
+
+  // 2. Filter the raw assets based on what the user types in the search bar
+  const filteredAssets = assets.filter(a =>
+    a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.category?.toLowerCase().includes(assetSearch.toLowerCase())
+  );
+
+  // 3. Group the filtered assets by category so the HTML can loop through them
+  const groupedAssets = filteredAssets.reduce((acc, asset) => {
+    const cat = asset.category || "Uncategorized";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(asset);
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-8 animate-entrance">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -77,11 +97,9 @@ export default function AssetsTab({
           />
         </div>
         
-        {/* Added fallback to prevent Object.keys crash */}
         {Object.keys(groupedAssets || {}).length === 0 ? (
           <div className="p-8 text-center text-xs text-gray-500">No assets registered in the database.</div>
         ) : (
-          /* Added fallback to prevent Object.entries crash */
           Object.entries(groupedAssets || {}).map(([category, catAssets]) => (
             <div key={category} className="mb-4">
               <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
