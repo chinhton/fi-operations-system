@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-export default function useAssets(triggerModal, closeModal, currentUser) {
-  const [assets, setAssets] = useState([]);
+// Notice it now receives `assets` and `setAssets` right here at the top!
+export default function useAssets(assets, setAssets, triggerModal, closeModal, currentUser) {
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
   
@@ -10,30 +10,6 @@ export default function useAssets(triggerModal, closeModal, currentUser) {
   const [activeAssetDetails, setActiveAssetDetails] = useState(null);
   const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
   const [newVendor, setNewVendor] = useState({ name: "", contactInfo: "", serviceType: "" });
-
-  // --- THE FIX: Cosmos DB Sync Pipeline ---
-  useEffect(() => {
-    const fetchLiveAssets = async () => {
-      try {
-        const res = await fetch('/api/assets');
-        console.log("Azure API Status (Assets):", res.status); // WIRETAP 1
-        
-        if (res.ok) {
-          const liveData = await res.json();
-          console.log("Raw Data from Azure:", liveData); // WIRETAP 2
-          
-          if (liveData && liveData.length > 0) {
-            setAssets(liveData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to sync assets from Cosmos DB:", err);
-      }
-    };
-    
-    fetchLiveAssets();
-  }, []);
-  // ----------------------------------------
 
   const handleAddAssetSubmit = async (e) => {
     e.preventDefault();
@@ -60,7 +36,10 @@ export default function useAssets(triggerModal, closeModal, currentUser) {
       const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
       if (res.ok) {
         const savedAsset = await res.json(); 
-        setAssets([...assets, savedAsset]);
+        
+        // This now instantly updates the Master App.jsx state!
+        setAssets([...assets, savedAsset]); 
+        
         setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); 
       }

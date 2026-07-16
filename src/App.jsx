@@ -65,8 +65,7 @@ export default function App() {
 
   useCosmosSync(auth.currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
-  const assetHooks = useAssets(modals.triggerModal, modals.closeModal, auth.currentUser);
-  const woHooks = useWorkOrders(auth.currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
+  const assetHooks = useAssets(assets, setAssets, modals.triggerModal, modals.closeModal, auth.currentUser);  const woHooks = useWorkOrders(auth.currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates);
   const manualHooks = useManuals(assets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(assets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
