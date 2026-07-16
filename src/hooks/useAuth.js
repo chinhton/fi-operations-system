@@ -188,19 +188,42 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
 
   const handleRevokeUser = (email) => {
     triggerModal("Revoke Corporate Access", `Are you sure you want to permanently terminate access credentials for ${email}?`, "confirm", async () => {
-      const targetUser = users.find(u => u.email === email);
+      
+      // FIX 1: Enforce lowercase matching to prevent casing mismatches
+      const targetUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+      // FIX 2: Safety guard. If the user isn't found in state, stop before crashing.
+      if (!targetUser) {
+        console.error(`Could not locate ${email} in local state to delete.`);
+        triggerModal("Error", "User data not synced properly. Please refresh the page and try again.", "error");
+        return;
+      }
+
       if (targetUser.email === "admin@fcimg.com") {
         triggerModal("Action Blocked", "System Admin account access restrictions cannot self-terminate.", "error");
         return;
       }
 
-      setUsers(prevUsers => prevUsers.filter(u => u.email !== email));
+      setUsers(prevUsers => prevUsers.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
 
       if (targetUser && targetUser.id) {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           
-          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Incomplete Log", comments: `Admin permanently revoked corporate access token for account: ${email}` };
+          // Added a fallback for currentUser variables just in case the session is stale
+          const revokeLog = { 
+            id: `LOG-${Date.now().toString().slice(-4)}`, 
+            timestamp: new Date().toLocaleString(), 
+            assetId: "SYS-REVOKE", 
+            assetName: "User Authentication Services", 
+            templateName: "User Access Termination", 
+            interval: "On-Demand", 
+            technician: currentUser?.name || "System", 
+            email: currentUser?.email || "system@fcimg.com", 
+            status: "Incomplete Log", 
+            comments: `Admin permanently revoked corporate access token for account: ${email}` 
+          };
+          
           const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
           if (res.ok) {
             const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
