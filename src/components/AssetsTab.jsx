@@ -77,10 +77,12 @@ export default function AssetsTab({
           />
         </div>
         
-        {Object.keys(groupedAssets).length === 0 ? (
+        {/* Added fallback to prevent Object.keys crash */}
+        {Object.keys(groupedAssets || {}).length === 0 ? (
           <div className="p-8 text-center text-xs text-gray-500">No assets registered in the database.</div>
         ) : (
-          Object.entries(groupedAssets).map(([category, catAssets]) => (
+          /* Added fallback to prevent Object.entries crash */
+          Object.entries(groupedAssets || {}).map(([category, catAssets]) => (
             <div key={category} className="mb-4">
               <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
                 <div>📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span></div>
