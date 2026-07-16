@@ -17,6 +17,9 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     return savedSession ? JSON.parse(savedSession) : null;
   });
 
+  // THE MISSING LOAD-BEARING WALL: Check if current user is an admin
+  const isSystemAdmin = currentUser && (currentUser.role === 'System Admin' || currentUser.role === 'admin');
+
   const [authMode, setAuthMode] = useState("signin"); 
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -211,10 +214,11 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     });
   };
 
-  // Return everything App.jsx needs to function
+  // Return everything App.jsx needs to function, including the missing isSystemAdmin!
   return {
     users, setUsers,
     currentUser, setCurrentUser,
+    isSystemAdmin,
     authMode, setAuthMode,
     authEmail, setAuthEmail,
     authPassword, setAuthPassword,
