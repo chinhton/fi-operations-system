@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
-// Notice it now receives `assets` and `setAssets` right here at the top!
-export default function useAssets(assets, setAssets, triggerModal, closeModal, currentUser) {
+// Notice history and setHistory are now pulled in here!
+export default function useAssets(assets, setAssets, history, setHistory, triggerModal, closeModal, currentUser) {
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
   
@@ -37,9 +37,33 @@ export default function useAssets(assets, setAssets, triggerModal, closeModal, c
       if (res.ok) {
         const savedAsset = await res.json(); 
         
-        // This now instantly updates the Master App.jsx state!
         setAssets([...assets, savedAsset]); 
         
+        // --- THE FIX: Create the Audit Log ---
+        const auditLog = {
+          id: `LOG-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
+          date: new Date().toLocaleString(),
+          assetId: savedAsset.id,
+          assetName: savedAsset.name,
+          templateName: "Asset Registration",
+          interval: "On-Demand",
+          technician: currentUser?.name || "System Administrator",
+          status: "Completed Pass",
+          comments: `Registered new facility asset: ${savedAsset.name} (Model: ${savedAsset.model}, S/N: ${savedAsset.serial})`
+        };
+
+        try {
+          const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) });
+          if (logRes.ok) {
+            const savedLog = await logRes.json();
+            // Instantly update the Executed Audits tab!
+            setHistory(prev => [savedLog, ...prev]);
+          }
+        } catch (logErr) {
+          console.error("Failed to write audit log:", logErr);
+        }
+        // -------------------------------------
+
         setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); 
       }
