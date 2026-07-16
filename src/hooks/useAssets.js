@@ -16,8 +16,12 @@ export default function useAssets(triggerModal, closeModal, currentUser) {
     const fetchLiveAssets = async () => {
       try {
         const res = await fetch('/api/assets');
+        console.log("Azure API Status (Assets):", res.status); // WIRETAP 1
+        
         if (res.ok) {
           const liveData = await res.json();
+          console.log("Raw Data from Azure:", liveData); // WIRETAP 2
+          
           if (liveData && liveData.length > 0) {
             setAssets(liveData);
           }
