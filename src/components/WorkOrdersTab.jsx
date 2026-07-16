@@ -188,7 +188,7 @@ export default function WorkOrdersTab({
                           </select>
                         )}
                         {(isSystemAdmin || wo.creatorEmail === currentUser?.email) && (
-                          <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-400 hover:text-red-700 text-xl font-bold leading-none transition px-1" title="Delete Work Order">&times;</button>
+                          <button onClick={() => deleteWorkOrder(wo.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                         )}
                       </div>
                     </td>

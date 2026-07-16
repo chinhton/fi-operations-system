@@ -1,27 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 export default function AssetsTab({
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
-  assets, // <-- Pass raw assets here instead of the search states
-  isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
-  calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, 
-  openPmModal, deleteAsset
+  assetSearch, setAssetSearch, groupedAssets, isSystemAdmin, deleteAssetCategory,
+  handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
+  handleOpenAssetModal, openPmModal, deleteAsset
 }) {
-  // Moved from App.jsx!
-  const [assetSearch, setAssetSearch] = useState("");
-
-  // Local grouping logic
-  const groupedAssets = (assets || []).filter(a => 
-    (a.name || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
-    (a.serial || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
-    (a.category || "").toLowerCase().includes(assetSearch.toLowerCase())
-  ).reduce((acc, asset) => {
-    const cat = asset.category || "Uncategorized";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(asset);
-    return acc;
-  }, {});
-
   return (
     <div className="space-y-8 animate-entrance">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -173,7 +157,7 @@ export default function AssetsTab({
                             <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
                             <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                             {isSystemAdmin && (
-                              <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                            <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                             )}
                           </td>
                         </tr>
