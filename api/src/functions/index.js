@@ -54,7 +54,28 @@ async function processRoute(request, containerId) {
             const id = request.query.get('id');
             if (!id) return createResponse(400, { error: "Missing ID for deletion." });
             
-            await container.item(id, id).delete();
+            // 1. Ask Cosmos DB what the partition key path is for this specific container
+            const { resource: containerDef } = await container.read();
+            // Removes the leading slash (e.g., "/category" becomes "category")
+            const pkPath = containerDef.partitionKey.paths[0].substring(1); 
+            
+            // 2. Perform a cross-partition query to find the item and grab its actual partition key value
+            const querySpec = {
+                query: "SELECT * FROM c WHERE c.id = @id",
+                parameters: [{ name: "@id", value: id }]
+            };
+            const { resources } = await container.items.query(querySpec).fetchAll();
+            
+            if (resources.length === 0) {
+                return createResponse(404, { error: "Item not found in database." });
+            }
+            
+            const item = resources[0];
+            const pkValue = item[pkPath]; 
+            
+            // 3. Delete the item using the exact, correct Partition Key
+            await container.item(id, pkValue !== undefined ? pkValue : id).delete();
+            
             return createResponse(200, { message: "Item permanently deleted from database." });
         }
     } catch (error) {
