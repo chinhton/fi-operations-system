@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function AuthScreen({
   authMode, setAuthMode, authEmail, setAuthEmail, authPassword, setAuthPassword,
-  registerName, setRegisterName, authError, authSuccess, isSigningIn, isRegistering,
+  registerName, setRegisterName, registerRole, setRegisterRole, authError, authSuccess, isSigningIn, isRegistering,
   handleSignIn, handleRegister
 }) {
   return (
@@ -23,10 +23,20 @@ export default function AuthScreen({
 
           <form onSubmit={authMode === "signin" ? handleSignIn : handleRegister} className="space-y-5">
             {authMode === "register" && (
-              <div>
-                <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Full Name</label>
-                <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none" />
-              </div>
+              <>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Full Name</label>
+                  <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Requested Access Level</label>
+                  <select value={registerRole} onChange={(e) => setRegisterRole(e.target.value)} className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none">
+                    <option value="Operator">Standard Operator</option>
+                    <option value="Department Manager">Department Manager</option>
+                    <option value="System Admin">System Administrator</option>
+                  </select>
+                </div>
+              </>
             )}
             <div>
               <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Corporate Email Address</label>

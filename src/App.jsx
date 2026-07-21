@@ -41,21 +41,16 @@ const customStyles = `
 const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
 
 export default function App() {
-  // 1. Core State
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem("fi_current_tab") || "dashboard";
-  });
-  
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
   const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- Data State ---
+  // --- RAW Data State ---
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
   const [users, setUsers] = useState([]);
-  // -----------------------------------------------------------
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -63,21 +58,31 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 2. Custom Hooks
   const modals = useModals();
   const historyHooks = useHistory(modals.triggerModal, modals.closeModal);
   const auth = useAuth(changeTab, modals.triggerModal, history, setHistory);
 
   useCosmosSync(auth.currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
-  const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, auth.currentUser);
-  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
-  const manualHooks = useManuals(assets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(assets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(auth.currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
-  const stats = useDashboardStats(users, assets, workOrders, pmTemplates, history);
+  // --- ROLE-BASED VISIBILITY FILTERING ---
+  // Calculates exactly what the user is allowed to see based on their role
+  const isGodMode = auth.isSystemAdmin;
+  const userEmail = auth.currentUser?.email;
 
-  // Utilities
+  const visibleAssets = isGodMode ? assets : assets.filter(a => a.managerEmail === userEmail || a.operatorEmail === userEmail);
+  const visibleWorkOrders = isGodMode ? workOrders : workOrders.filter(w => w.managerEmail === userEmail || w.operatorEmail === userEmail);
+  const visibleTemplates = isGodMode ? pmTemplates : pmTemplates.filter(t => t.managerEmail === userEmail || t.operatorEmail === userEmail);
+  const visibleUsers = isGodMode ? users : users.filter(u => u.email === userEmail);
+  // ---------------------------------------
+
+  // Hooks process ONLY the filtered "visible" data
+  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, auth.currentUser);
+  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
+  const manualHooks = useManuals(visibleAssets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
+  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
+  const woHooks = useWorkOrders(auth.currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
+
   const calculateDaysRemaining = (lastDateStr, freq) => { return 30; };
   const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; };
 
@@ -89,23 +94,13 @@ export default function App() {
   // --- GLOBAL AUDIT TRAIL INTERCEPTOR ---
   useEffect(() => {
     if (!auth.currentUser) return;
-
     const originalFetch = window.fetch;
 
     window.fetch = async (...args) => {
       const [url, config] = args;
-      
       const response = await originalFetch(url, config);
 
-      if (
-        response.ok && 
-        config && 
-        ['POST', 'PUT', 'DELETE'].includes(config.method) &&
-        typeof url === 'string' &&
-        !url.includes('/api/history') && 
-        !url.includes('/api/sendEmail')  
-      ) {
-        
+      if (response.ok && config && ['POST', 'PUT', 'DELETE'].includes(config.method) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
         let actionName = "System Event";
         if (url.includes('/api/assets')) actionName = "Facility Asset";
         if (url.includes('/api/workorders')) actionName = "Work Order/PM";
@@ -121,41 +116,19 @@ export default function App() {
         }
 
         const actionTaken = config.method === 'DELETE' ? 'Deleted' : 'Created/Updated';
-        
-        const auditLog = { 
-            id: `LOG-${Date.now().toString().slice(-4)}`, 
-            timestamp: new Date().toLocaleString(), 
-            assetId: "SYS-AUTO", 
-            assetName: actionName, 
-            templateName: `${actionTaken} Record`, 
-            interval: "Automated", 
-            technician: auth.currentUser.name, 
-            email: auth.currentUser.email, 
-            status: "Completed Pass", 
-            comments: `Automated Tracker: ${auth.currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} ${itemName ? `(${itemName})` : ''}.` 
-        };
+        const auditLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTO", assetName: actionName, templateName: `${actionTaken} Record`, interval: "Automated", technician: auth.currentUser.name, email: auth.currentUser.email, status: "Completed Pass", comments: `Automated Tracker: ${auth.currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} ${itemName ? `(${itemName})` : ''}.` };
 
-        originalFetch('/api/history', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(auditLog) 
-        })
+        originalFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) })
         .then(res => res.json())
-        .then(savedLog => {
-            setHistory(prev => [savedLog, ...prev]);
-        }).catch(err => console.error("Auto-audit failed:", err));
+        .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(err => console.error("Auto-audit failed:", err));
       }
-
       return response;
     };
 
-    return () => {
-      window.fetch = originalFetch;
-    };
+    return () => { window.fetch = originalFetch; };
   }, [auth.currentUser, setHistory]); 
-  // ----------------------------------------
 
-  // 3. Render
+  // Render Authentication
   if (!auth.currentUser) {
     return (
       <>
@@ -165,16 +138,16 @@ export default function App() {
     );
   }
 
-  // 4. Master Props Object
+  // Master Props Object (Passes ONLY authorized arrays downwards)
   const masterProps = {
-    activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS,
-    expandedActionQueue: [], 
-    
-    // Spread the hooks FIRST...
+    activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
-    // Put live data LAST so it NEVER gets overwritten!
-    history, setHistory, assets, setAssets, pmTemplates, setPmTemplates, workOrders, setWorkOrders, users, setUsers,
+    history, setHistory, 
+    assets: visibleAssets, setAssets, 
+    pmTemplates: visibleTemplates, setPmTemplates, 
+    workOrders: visibleWorkOrders, setWorkOrders, 
+    users: visibleUsers, setUsers,
     calculateDaysRemaining, calculateNextPmDate,
   };
 
@@ -185,14 +158,14 @@ export default function App() {
       
       <KpiBanner 
         changeTab={changeTab} 
-        workOrdersCount={(workOrders || []).filter(w => w.status !== "Completed").length}
-        assetsCount={(assets || []).length} 
+        workOrdersCount={(visibleWorkOrders || []).filter(w => w.status !== "Completed").length}
+        assetsCount={(visibleAssets || []).length} 
         complianceRate={stats.complianceRate || 100} 
         historyCount={(history || []).length}
       />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
-        <SidebarNav navOrder={navOrder} pendingApprovalsCount={stats.pendingApprovals.length} {...masterProps} />
+        <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? stats.pendingApprovals.length : 0} {...masterProps} />
         <ContentRouter {...masterProps} />
       </div>
 
