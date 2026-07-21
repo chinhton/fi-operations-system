@@ -45,10 +45,8 @@ export default function App() {
   const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
   
-  // --- IMPERSONATION STATE ---
   const [impersonatedRole, setImpersonatedRole] = useState("System Admin");
 
-  // --- RAW Data State ---
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
@@ -69,20 +67,17 @@ export default function App() {
 
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
-  // --- ROLE-BASED VISIBILITY FILTERING (3-TIER HIERARCHY) ---
   const userEmail = currentUser?.email;
   const realRole = currentUser?.role;
+  const userDept = currentUser?.department; 
   
   const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
   const activeRole = isRealAdmin ? impersonatedRole : realRole;
-  
   const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
-  const isManager = activeRole === 'Department Manager';
 
   const filterHierarchy = (item) => {
-    if (isGodMode) return true; // Tier 1
-    if (isManager) return item.managerEmail === userEmail || item.operatorEmail === userEmail; // Tier 2
-    return item.operatorEmail === userEmail; // Tier 3
+    if (isGodMode || userDept === "Production Manufacturing") return true; 
+    return item.department === userDept || item.operatorEmail === userEmail; 
   };
 
   const visibleAssets = assets.filter(filterHierarchy);
@@ -90,11 +85,9 @@ export default function App() {
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
   const visibleUsers = users.filter(u => {
-    if (isGodMode) return true; 
-    if (isManager) return u.email === userEmail || u.role === 'Operator'; 
-    return u.email === userEmail; 
+    if (isGodMode || userDept === "Production Manufacturing") return true; 
+    return u.department === userDept || u.email === userEmail; 
   });
-  // -----------------------------------------------------------
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
@@ -111,9 +104,31 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- STABILIZED GLOBAL AUDIT TRAIL & EMAIL INTERCEPTOR ---
-  // A ref ensures we always have access to the latest user data inside the fetch interceptor 
-  // without causing the useEffect to constantly tear down and rebuild.
+  // --- NEW: UNIVERSAL EMAIL TRIGGER FUNCTION ---
+  const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
+    try {
+      const emailPayload = {
+        to: toAddress || "admin@fcimg.com",
+        subject: subjectLine,
+        body: bodyText
+      };
+      
+      console.log("🚀 Dispatched Email Payload:", emailPayload);
+      
+      await fetch('/api/sendEmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailPayload)
+      });
+      
+      return true;
+    } catch (err) {
+      console.error("❌ Email Blast Failed:", err);
+      return false;
+    }
+  };
+  // ----------------------------------------------
+
   const userRef = useRef(currentUser);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
 
@@ -143,7 +158,6 @@ export default function App() {
             tabSource = "Account Approvals Tab"; 
         }
 
-        // UNIVERSAL AUTO-REFRESH
         if (actionName === "Facility Asset") {
             originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
         } else if (actionName === "PM Configuration") {
@@ -159,7 +173,6 @@ export default function App() {
             }).catch(console.error);
         }
 
-        // GENERATE AUDIT LOG
         let itemName = "";
         let itemDetails = {};
         if (config.body) {
@@ -192,32 +205,21 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // FIRE AUTOMATED EMAIL BLAST
+        // Uses the new Global triggerEmailAlert for automated background notifications!
         if (actionName === "Facility Asset" || actionName === "PM Configuration") {
-             const emailPayload = {
-                 to: itemDetails.managerEmail || itemDetails.operatorEmail || "admin@fcimg.com", 
-                 subject: `FI-OMS Alert: ${actionName} ${actionTaken}`,
-                 body: `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
-             };
-             
-             console.log("Triggering Email Blast Payload:", emailPayload); // Added for terminal debugging
-
-             originalFetch('/api/sendEmail', {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(emailPayload)
-             }).catch(err => console.error("Automated email dispatch failed:", err));
+             triggerEmailAlert(
+                 itemDetails.operatorEmail || "admin@fcimg.com", 
+                 `FI-OMS Alert: ${actionName} ${actionTaken}`,
+                 `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
+             );
         }
       }
       return response;
     };
 
-    // The interceptor now runs completely isolated from react state changes
     return () => { window.fetch = originalFetch; };
   }, []); 
-  // ----------------------------------------
 
-  // Render Authentication
   if (!currentUser) {
     return (
       <>
@@ -227,10 +229,8 @@ export default function App() {
     );
   }
 
-  // Create an effective user object to fool the downstream components based on "View As"
   const effectiveUser = { ...currentUser, role: activeRole };
   
-  // Master Props Object
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     impersonatedRole, setImpersonatedRole, isRealAdmin,
@@ -238,6 +238,7 @@ export default function App() {
     
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
+    triggerEmailAlert, // <-- Pass the email engine down to the rest of the app
 
     history, setHistory, 
     assets: visibleAssets, setAssets, 

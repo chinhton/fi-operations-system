@@ -1,13 +1,11 @@
 import { useState } from 'react';
 
-// Notice history and setHistory are now pulled in here!
 export default function useAssets(assets, setAssets, history, setHistory, triggerModal, closeModal, currentUser) {
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   
-  // Added managerEmail and operatorEmail to the default state
-  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", managerEmail: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
+  // Swapped managerEmail for department
+  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
   
-  // Asset Modal State
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [activeAssetDetails, setActiveAssetDetails] = useState(null);
   const [newPart, setNewPart] = useState({ partNumber: "", name: "", stock: "" });
@@ -28,7 +26,8 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
         id: `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
         ...newAsset, 
         category: newAsset.category.trim() || "Uncategorized", 
-        managerEmail: newAsset.managerEmail || "",
+        parentId: newAsset.parentId || "",
+        department: newAsset.department || "",
         operatorEmail: newAsset.operatorEmail || "",
         status: "Operational", 
         lastPmDate: new Date().toISOString(),
@@ -40,10 +39,8 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
       const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
       if (res.ok) {
         const savedAsset = await res.json(); 
-        
         setAssets([...assets, savedAsset]); 
         
-        // --- THE FIX: Create the Audit Log ---
         const auditLog = {
           id: `LOG-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
           date: new Date().toLocaleString(),
@@ -60,16 +57,13 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
           const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) });
           if (logRes.ok) {
             const savedLog = await logRes.json();
-            // Instantly update the Executed Audits tab!
             setHistory(prev => [savedLog, ...prev]);
           }
         } catch (logErr) {
           console.error("Failed to write audit log:", logErr);
         }
-        // -------------------------------------
 
-        // Reset state with the new email fields included
-        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", managerEmail: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); 
       }
     } finally { setIsAddingAsset(false); }
@@ -114,7 +108,6 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
     setShowAssetModal(true);
   };
 
-  // Vendor & Part Management
   const updateAssetSubDoc = async (updatedAsset) => {
     setActiveAssetDetails(updatedAsset);
     setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));

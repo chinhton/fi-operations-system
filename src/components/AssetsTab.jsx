@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 
+// Hardcoded departments to match your operations
+const CORPORATE_DEPARTMENTS = ["Facilities", "Production Vangie", "Production Chris", "Production Manufacturing"];
+
 export default function AssetsTab({
   assets = [],
   users = [],
@@ -53,7 +56,7 @@ export default function AssetsTab({
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
-              <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
+              <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
             </div>
             <div>
               <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Link To Facility Asset (Sub-Equipment)</label>
@@ -69,22 +72,22 @@ export default function AssetsTab({
               </select>
             </div>
 
-            {/* ROW 3: Personnel Assignment */}
+            {/* ROW 3: Department & Personnel Assignment */}
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#005596]">Assign Department Manager</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#005596]">Assign Department</label>
               <select 
-                value={newAsset.managerEmail || ""} 
-                onChange={(e) => setNewAsset({...newAsset, managerEmail: e.target.value})} 
+                value={newAsset.department || ""} 
+                onChange={(e) => setNewAsset({...newAsset, department: e.target.value})} 
                 className="w-full text-xs rounded border-[#005596]/30 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-2.5 border bg-blue-50/30 outline-none"
               >
-                <option value="">-- Leave Unassigned --</option>
-                {users.map(u => (
-                  <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.role})</option>
+                <option value="">-- Unassigned (Global View) --</option>
+                {CORPORATE_DEPARTMENTS.map(dept => (
+                  <option key={`dept-${dept}`} value={dept}>{dept}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#00A1E4]">Assign Operator</label>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#00A1E4]">Assign Operator (Optional)</label>
               <select 
                 value={newAsset.operatorEmail || ""} 
                 onChange={(e) => setNewAsset({...newAsset, operatorEmail: e.target.value})} 
@@ -177,8 +180,9 @@ export default function AssetsTab({
                                </span>
                             )}
 
-                            <div className="mt-1.5 flex gap-1">
-                              {asset.managerEmail && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Manager: ${asset.managerEmail}`}>MGR Assigned</span>}
+                            {/* Department & Operator Badges */}
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${asset.department}`}>DEPT: {asset.department}</span>}
                               {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
                             </div>
                           </td>
