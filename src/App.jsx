@@ -42,7 +42,9 @@ const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annua
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
-  const [navOrder] = useState(['dashboard','assets', 'manuals', 'templates', 'history']);
+  
+  // Notice 'workOrders' is permanently removed from the nav to keep the UI strictly focused on Assets/PMs
+  const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
   
   // --- IMPERSONATION STATE ---
@@ -65,7 +67,6 @@ export default function App() {
   const historyHooks = useHistory(modals.triggerModal, modals.closeModal);
   const auth = useAuth(changeTab, modals.triggerModal, history, setHistory);
   
-  // Destructure for safe useEffect dependencies
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
@@ -74,29 +75,22 @@ export default function App() {
   const userEmail = currentUser?.email;
   const realRole = currentUser?.role;
   
-  // 1. Check if they are legally an admin in the database
   const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
-
-  // 2. Determine their active role (If real admin, use the toggle. If not, use their real role)
   const activeRole = isRealAdmin ? impersonatedRole : realRole;
   
-  // 3. Identify their exact tier level based on the active role
   const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
   const isManager = activeRole === 'Department Manager';
 
-  // 4. Global Data Filter Logic
   const filterHierarchy = (item) => {
     if (isGodMode) return true; // Tier 1
     if (isManager) return item.managerEmail === userEmail || item.operatorEmail === userEmail; // Tier 2
     return item.operatorEmail === userEmail; // Tier 3
   };
 
-  // 5. Apply the filters globally to all system data
   const visibleAssets = assets.filter(filterHierarchy);
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
-  // 6. User Directory Filtering (Dictates assignment dropdowns)
   const visibleUsers = users.filter(u => {
     if (isGodMode) return true; 
     if (isManager) return u.email === userEmail || u.role === 'Operator'; 
@@ -104,7 +98,6 @@ export default function App() {
   });
   // -----------------------------------------------------------
 
-  // Hooks process ONLY the filtered "visible" data
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
   const manualHooks = useManuals(visibleAssets, setAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
@@ -120,7 +113,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- GLOBAL AUDIT TRAIL & AUTO-REFRESH INTERCEPTOR ---
+  // --- GLOBAL AUDIT TRAIL, AUTO-REFRESH & EMAIL INTERCEPTOR ---
   useEffect(() => {
     if (!currentUser) return;
     const originalFetch = window.fetch;
@@ -131,24 +124,31 @@ export default function App() {
 
       if (response.ok && config && ['POST', 'PUT', 'DELETE'].includes(config.method) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
         
-        // 1. DETERMINE WHAT WAS MODIFIED
+        // 1. DETERMINE WHAT WAS MODIFIED AND WHICH EXACT TAB IT CAME FROM
         let actionName = "System Event";
-        if (url.includes('/api/assets')) actionName = "Facility Asset";
-        if (url.includes('/api/workorders')) actionName = "Work Order/PM";
-        if (url.includes('/api/pmTemplates')) actionName = "PM Configuration";
-        if (url.includes('/api/users')) actionName = "User Directory";
+        let tabSource = "System Background";
+
+        if (url.includes('/api/assets')) { 
+            actionName = "Facility Asset"; 
+            tabSource = "Facility Assets Tab"; 
+        }
+        if (url.includes('/api/pmTemplates')) { 
+            actionName = "PM Configuration"; 
+            tabSource = "PM Task Configurations Tab"; 
+        }
+        if (url.includes('/api/users')) { 
+            actionName = "User Directory"; 
+            tabSource = "Account Approvals Tab"; 
+        }
 
         // 2. UNIVERSAL AUTO-REFRESH
         if (actionName === "Facility Asset") {
             originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
-        } else if (actionName === "Work Order/PM") {
-            originalFetch('/api/workorders').then(r => r.json()).then(setWorkOrders).catch(console.error);
         } else if (actionName === "PM Configuration") {
             originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error);
         } else if (actionName === "User Directory") {
             originalFetch('/api/users').then(r => r.json()).then(data => {
                 setUsers(data);
-                
                 const updatedMe = data.find(u => u.email === currentUser.email);
                 if (updatedMe) {
                     setCurrentUser(updatedMe);
@@ -157,11 +157,13 @@ export default function App() {
             }).catch(console.error);
         }
 
-        // 3. GENERATE THE AUDIT LOG
+        // 3. GENERATE THE AUDIT LOG WITH TAB IDENTIFIER
         let itemName = "";
+        let itemDetails = {};
         if (config.body) {
             try {
                 const parsedBody = JSON.parse(config.body);
+                itemDetails = parsedBody;
                 itemName = parsedBody.name || parsedBody.title || parsedBody.id || "";
             } catch (e) {}
         }
@@ -176,7 +178,7 @@ export default function App() {
             timestamp: new Date().toLocaleString(), 
             assetId: "SYS-AUTO", 
             assetName: actionName, 
-            templateName: `${actionTaken} Record`, 
+            templateName: `System Action - ${tabSource}`, // Exactly indicates the tab
             interval: "Automated", 
             technician: currentUser.name, 
             email: currentUser.email, 
@@ -187,12 +189,27 @@ export default function App() {
         originalFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) })
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
+
+        // 4. FIRE AUTOMATED EMAIL BLAST FOR CMMS ALERTS
+        if (actionName === "Facility Asset" || actionName === "PM Configuration") {
+             const emailPayload = {
+                 to: itemDetails.managerEmail || "admin@fcimg.com", // Sends to the assigned manager or defaults to Admin
+                 subject: `FI-OMS Alert: ${actionName} ${actionTaken}`,
+                 body: `System Notification:\n\n${currentUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
+             };
+
+             originalFetch('/api/sendEmail', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(emailPayload)
+             }).catch(err => console.error("Automated email dispatch failed:", err));
+        }
       }
       return response;
     };
 
     return () => { window.fetch = originalFetch; };
-  }, [currentUser, setCurrentUser, setHistory, setAssets, setWorkOrders, setPmTemplates, setUsers]); 
+  }, [currentUser, setCurrentUser, setHistory, setAssets, setPmTemplates, setUsers]); 
   // ----------------------------------------
 
   // Render Authentication
