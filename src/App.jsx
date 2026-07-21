@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // Layout Components
 import TopHeader from './components/TopHeader';
@@ -42,8 +42,6 @@ const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annua
 
 export default function App() {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
-  
-  // Notice 'workOrders' is permanently removed from the nav to keep the UI strictly focused on Assets/PMs
   const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
   
@@ -113,18 +111,22 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- GLOBAL AUDIT TRAIL, AUTO-REFRESH & EMAIL INTERCEPTOR ---
+  // --- STABILIZED GLOBAL AUDIT TRAIL & EMAIL INTERCEPTOR ---
+  // A ref ensures we always have access to the latest user data inside the fetch interceptor 
+  // without causing the useEffect to constantly tear down and rebuild.
+  const userRef = useRef(currentUser);
+  useEffect(() => { userRef.current = currentUser; }, [currentUser]);
+
   useEffect(() => {
-    if (!currentUser) return;
     const originalFetch = window.fetch;
 
     window.fetch = async (...args) => {
       const [url, config] = args;
       const response = await originalFetch(url, config);
+      const activeUser = userRef.current;
 
-      if (response.ok && config && ['POST', 'PUT', 'DELETE'].includes(config.method) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
+      if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
         
-        // 1. DETERMINE WHAT WAS MODIFIED AND WHICH EXACT TAB IT CAME FROM
         let actionName = "System Event";
         let tabSource = "System Background";
 
@@ -141,7 +143,7 @@ export default function App() {
             tabSource = "Account Approvals Tab"; 
         }
 
-        // 2. UNIVERSAL AUTO-REFRESH
+        // UNIVERSAL AUTO-REFRESH
         if (actionName === "Facility Asset") {
             originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
         } else if (actionName === "PM Configuration") {
@@ -149,7 +151,7 @@ export default function App() {
         } else if (actionName === "User Directory") {
             originalFetch('/api/users').then(r => r.json()).then(data => {
                 setUsers(data);
-                const updatedMe = data.find(u => u.email === currentUser.email);
+                const updatedMe = data.find(u => u.email === activeUser.email);
                 if (updatedMe) {
                     setCurrentUser(updatedMe);
                     localStorage.setItem('fi_oms_session', JSON.stringify(updatedMe));
@@ -157,7 +159,7 @@ export default function App() {
             }).catch(console.error);
         }
 
-        // 3. GENERATE THE AUDIT LOG WITH TAB IDENTIFIER
+        // GENERATE AUDIT LOG
         let itemName = "";
         let itemDetails = {};
         if (config.body) {
@@ -168,20 +170,20 @@ export default function App() {
             } catch (e) {}
         }
 
-        const actionTaken = config.method === 'DELETE' ? 'Deleted' : 'Created/Updated';
+        const actionTaken = config.method.toUpperCase() === 'DELETE' ? 'Deleted' : 'Created/Updated';
         const logComment = itemName 
-            ? `Automated Tracker: ${currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
-            : `Automated Tracker: ${currentUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
+            ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
+            : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
 
         const auditLog = { 
             id: `LOG-${Date.now().toString().slice(-4)}`, 
             timestamp: new Date().toLocaleString(), 
             assetId: "SYS-AUTO", 
             assetName: actionName, 
-            templateName: `System Action - ${tabSource}`, // Exactly indicates the tab
+            templateName: `System Action - ${tabSource}`,
             interval: "Automated", 
-            technician: currentUser.name, 
-            email: currentUser.email, 
+            technician: activeUser.name, 
+            email: activeUser.email, 
             status: "Completed Pass", 
             comments: logComment 
         };
@@ -190,13 +192,15 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // 4. FIRE AUTOMATED EMAIL BLAST FOR CMMS ALERTS
+        // FIRE AUTOMATED EMAIL BLAST
         if (actionName === "Facility Asset" || actionName === "PM Configuration") {
              const emailPayload = {
-                 to: itemDetails.managerEmail || "admin@fcimg.com", // Sends to the assigned manager or defaults to Admin
+                 to: itemDetails.managerEmail || itemDetails.operatorEmail || "admin@fcimg.com", 
                  subject: `FI-OMS Alert: ${actionName} ${actionTaken}`,
-                 body: `System Notification:\n\n${currentUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
+                 body: `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
              };
+             
+             console.log("Triggering Email Blast Payload:", emailPayload); // Added for terminal debugging
 
              originalFetch('/api/sendEmail', {
                  method: 'POST',
@@ -208,8 +212,9 @@ export default function App() {
       return response;
     };
 
+    // The interceptor now runs completely isolated from react state changes
     return () => { window.fetch = originalFetch; };
-  }, [currentUser, setCurrentUser, setHistory, setAssets, setPmTemplates, setUsers]); 
+  }, []); 
   // ----------------------------------------
 
   // Render Authentication
@@ -222,7 +227,7 @@ export default function App() {
     );
   }
 
-  // --- THE FIX: Create an effective user object to fool the downstream components ---
+  // Create an effective user object to fool the downstream components based on "View As"
   const effectiveUser = { ...currentUser, role: activeRole };
   
   // Master Props Object
@@ -231,7 +236,6 @@ export default function App() {
     impersonatedRole, setImpersonatedRole, isRealAdmin,
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
-    // Override the auth props so the UI respects the impersonation toggle!
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
 
