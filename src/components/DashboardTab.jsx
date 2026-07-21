@@ -2,8 +2,8 @@ import React from 'react';
 
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
-  expandedActionQueue, openPmModal, currentUser, isSystemAdmin,
-  workOrders, pmTemplates
+  openPmModal, currentUser, isSystemAdmin,
+  workOrders, pmTemplates, assets // <-- Brought in assets to feed the Admin View
 }) {
   
   // 1. Grab assigned Work Orders (Visible to Operator OR Manager)
@@ -17,8 +17,53 @@ export default function DashboardTab({
     t.operatorEmail === currentUser.email || t.managerEmail === currentUser.email
   );
 
-  // 3. Merge them together
+  // 3. Merge them together for the standard user view
   const myAssignedTasks = [...assignedWorkOrders, ...assignedTemplates];
+
+  // 4. --- NEW: BUILD THE GLOBAL ADMIN QUEUE ---
+  // Sweeps the database for anything assigned to an operator or needing attention
+  const adminGlobalQueue = [];
+  
+  if (assets) {
+    assets.forEach(asset => {
+      // If it has an operator assigned OR is out of operational status
+      if (asset.operatorEmail || asset.status !== "Operational") {
+        adminGlobalQueue.push({
+          queueId: `ast-${asset.id}`,
+          name: asset.name,
+          serial: asset.serial || "N/A",
+          badgeColor: asset.status === "Operational" ? "bg-green-100 text-green-800" :
+                      asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
+                      asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
+                      "bg-orange-100 text-orange-800",
+          displayStatus: asset.status,
+          displayDate: asset.lastPmDate ? new Date(asset.lastPmDate).toLocaleDateString() : "N/A",
+          assignedTo: asset.operatorEmail || "Unassigned",
+          rawItem: asset,
+          type: 'asset'
+        });
+      }
+    });
+  }
+
+  if (pmTemplates) {
+    pmTemplates.forEach(pm => {
+      if (pm.operatorEmail) {
+        adminGlobalQueue.push({
+          queueId: `pm-${pm.id}`,
+          name: pm.title || pm.name || "PM Configuration Task",
+          serial: pm.targetAsset || "General Assignment",
+          badgeColor: "bg-blue-100 text-[#005596]",
+          displayStatus: pm.status || "Active Task",
+          displayDate: "Recurring Schedule",
+          assignedTo: pm.operatorEmail,
+          rawItem: pm,
+          type: 'pm'
+        });
+      }
+    });
+  }
+  // --------------------------------------------
 
   return (
     <div className="space-y-8 animate-entrance">
@@ -60,34 +105,43 @@ export default function DashboardTab({
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-6">
               <div className="bg-gradient-to-r from-slate-700 to-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-900">
                 <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">Global Maintenance Actions Queue (Admin)</h3>
-                {expandedActionQueue.length > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{expandedActionQueue.length} Pending</span>
+                {adminGlobalQueue.length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{adminGlobalQueue.length} Pending</span>
                 )}
               </div>
               <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-                {expandedActionQueue.length === 0 ? (
+                {adminGlobalQueue.length === 0 ? (
                   <div className="p-8 text-center text-gray-400 text-xs font-medium">
                     No pending maintenance actions. All systems are operational.
                   </div>
                 ) : (
-                  expandedActionQueue.map(item => (
-                    <div key={item.queueId} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#f97316' }}>
-                      <div>
-                        <span className="font-bold text-gray-900 text-xs block">{item.name}</span>
-                        <span className="text-[10px] text-gray-500 font-mono mt-1 block bg-gray-50 inline-block px-1.5 py-0.5 rounded">S/N: {item.serial}</span>
+                  adminGlobalQueue.map(item => (
+                    <div key={item.queueId} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : item.badgeColor.includes('yellow') ? '#eab308' : '#00A1E4' }}>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3">
+                          <span className="font-bold text-gray-900 text-sm block">{item.name}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                            {item.displayStatus}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                          <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                          <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
+                            OP: {item.assignedTo}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
-                          {item.displayStatus}
-                        </span>
+                      <div className="text-right ml-4">
                         {item.displayDate && (
-                          <div className="mt-1.5 text-[10px] text-gray-500 font-mono">
+                          <div className="mb-2 text-[10px] text-gray-500 font-mono">
                             Due: {item.displayDate}
                           </div>
                         )}
-                        <button onClick={() => openPmModal(item)} className="block w-full text-right mt-2 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                          Execute PM &rarr;
-                        </button>
+                        {item.type === 'asset' && (
+                          <button onClick={() => openPmModal(item.rawItem)} className="block w-full text-right mt-1 text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
+                            Execute PM &rarr;
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
