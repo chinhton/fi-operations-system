@@ -136,7 +136,7 @@ export default function TemplatesTab({
                   }} 
                   className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer shadow-sm"
                 >
-                  <option value="">-- Do Not Attach A Manual --</option>
+                  <option value="">-- Select a Manual (Optional) --</option>
                   {availableManuals.map((manual, idx) => (
                     <option key={manual.id || idx} value={manual.fileName}>
                       {manual.assetName} - {manual.fileName}
