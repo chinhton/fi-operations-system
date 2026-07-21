@@ -61,26 +61,28 @@ export default function App() {
   const modals = useModals();
   const historyHooks = useHistory(modals.triggerModal, modals.closeModal);
   const auth = useAuth(changeTab, modals.triggerModal, history, setHistory);
+  
+  // Destructure for safe useEffect dependencies
+  const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  useCosmosSync(auth.currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
+  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
   // --- ROLE-BASED VISIBILITY FILTERING ---
-  // Calculates exactly what the user is allowed to see based on their role
-  const isGodMode = auth.isSystemAdmin;
-  const userEmail = auth.currentUser?.email;
+  const isGodMode = isSystemAdmin;
+  const userEmail = currentUser?.email;
 
   const visibleAssets = isGodMode ? assets : assets.filter(a => a.managerEmail === userEmail || a.operatorEmail === userEmail);
   const visibleWorkOrders = isGodMode ? workOrders : workOrders.filter(w => w.managerEmail === userEmail || w.operatorEmail === userEmail);
   const visibleTemplates = isGodMode ? pmTemplates : pmTemplates.filter(t => t.managerEmail === userEmail || t.operatorEmail === userEmail);
-  const visibleUsers = isGodMode ? users : users.filter(u => u.email === userEmail);
+  const visibleUsers = (isGodMode || currentUser?.role === 'Department Manager') ? users : users.filter(u => u.email === userEmail);
   // ---------------------------------------
 
   // Hooks process ONLY the filtered "visible" data
-  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, auth.currentUser);
+  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
-  const manualHooks = useManuals(visibleAssets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(auth.currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  const manualHooks = useManuals(visibleAssets, setAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
+  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   const calculateDaysRemaining = (lastDateStr, freq) => { return 30; };
@@ -91,9 +93,9 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- GLOBAL AUDIT TRAIL INTERCEPTOR ---
+  // --- GLOBAL AUDIT TRAIL & AUTO-REFRESH INTERCEPTOR ---
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!currentUser) return;
     const originalFetch = window.fetch;
 
     window.fetch = async (...args) => {
@@ -101,12 +103,34 @@ export default function App() {
       const response = await originalFetch(url, config);
 
       if (response.ok && config && ['POST', 'PUT', 'DELETE'].includes(config.method) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
+        
+        // 1. DETERMINE WHAT WAS MODIFIED
         let actionName = "System Event";
         if (url.includes('/api/assets')) actionName = "Facility Asset";
         if (url.includes('/api/workorders')) actionName = "Work Order/PM";
         if (url.includes('/api/pmTemplates')) actionName = "PM Configuration";
         if (url.includes('/api/users')) actionName = "User Directory";
 
+        // 2. UNIVERSAL AUTO-REFRESH
+        if (actionName === "Facility Asset") {
+            originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
+        } else if (actionName === "Work Order/PM") {
+            originalFetch('/api/workorders').then(r => r.json()).then(setWorkOrders).catch(console.error);
+        } else if (actionName === "PM Configuration") {
+            originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error);
+        } else if (actionName === "User Directory") {
+            originalFetch('/api/users').then(r => r.json()).then(data => {
+                setUsers(data);
+                
+                const updatedMe = data.find(u => u.email === currentUser.email);
+                if (updatedMe) {
+                    setCurrentUser(updatedMe);
+                    localStorage.setItem('fi_oms_session', JSON.stringify(updatedMe));
+                }
+            }).catch(console.error);
+        }
+
+        // 3. GENERATE THE AUDIT LOG
         let itemName = "";
         if (config.body) {
             try {
@@ -116,20 +140,36 @@ export default function App() {
         }
 
         const actionTaken = config.method === 'DELETE' ? 'Deleted' : 'Created/Updated';
-        const auditLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTO", assetName: actionName, templateName: `${actionTaken} Record`, interval: "Automated", technician: auth.currentUser.name, email: auth.currentUser.email, status: "Completed Pass", comments: `Automated Tracker: ${auth.currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} ${itemName ? `(${itemName})` : ''}.` };
+        const logComment = itemName 
+            ? `Automated Tracker: ${currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
+            : `Automated Tracker: ${currentUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
+
+        const auditLog = { 
+            id: `LOG-${Date.now().toString().slice(-4)}`, 
+            timestamp: new Date().toLocaleString(), 
+            assetId: "SYS-AUTO", 
+            assetName: actionName, 
+            templateName: `${actionTaken} Record`, 
+            interval: "Automated", 
+            technician: currentUser.name, 
+            email: currentUser.email, 
+            status: "Completed Pass", 
+            comments: logComment 
+        };
 
         originalFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) })
         .then(res => res.json())
-        .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(err => console.error("Auto-audit failed:", err));
+        .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
       }
       return response;
     };
 
     return () => { window.fetch = originalFetch; };
-  }, [auth.currentUser, setHistory]); 
+  }, [currentUser, setCurrentUser, setHistory, setAssets, setWorkOrders, setPmTemplates, setUsers]); 
+  // ----------------------------------------
 
   // Render Authentication
-  if (!auth.currentUser) {
+  if (!currentUser) {
     return (
       <>
         <style>{customStyles}</style>
@@ -138,7 +178,7 @@ export default function App() {
     );
   }
 
-  // Master Props Object (Passes ONLY authorized arrays downwards)
+  // Master Props Object
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
