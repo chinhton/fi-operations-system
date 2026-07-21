@@ -42,7 +42,6 @@ const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annua
 
 export default function App() {
   // 1. Core State
-  // Initialize state by checking local storage first, fallback to "dashboard"
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem("fi_current_tab") || "dashboard";
   });
@@ -50,11 +49,17 @@ export default function App() {
   const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // ... (Data State definitions stay the exact same) ...
+  // --- Data State (This is what got accidentally deleted!) ---
+  const [history, setHistory] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [pmTemplates, setPmTemplates] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]);
+  const [users, setUsers] = useState([]);
+  // -----------------------------------------------------------
 
   const changeTab = (tab) => {
     setActiveTab(tab);
-    localStorage.setItem("fi_current_tab", tab); // Write the new tab to browser memory
+    localStorage.setItem("fi_current_tab", tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
