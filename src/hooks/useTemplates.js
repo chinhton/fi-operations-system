@@ -1,11 +1,28 @@
 import { useState } from 'react';
 
-export default function useTemplates(triggerModal, closeModal) {
+export default function useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates) {
   // WE MOVED THE STATE INSIDE THE HOOK
   const [pmTemplates, setPmTemplates] = useState([]); 
-  const [newTemplate, setNewTemplate] = useState({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [isAddingTemplate, setIsAddingTemplate] = useState(false);
+
+  // --- THE FIX: MOVED INSIDE THE HOOK ---
+  const handleTemplateManualUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // Saves the Base64 PDF data directly into the newTemplate state
+        setNewTemplate({ 
+          ...newTemplate, 
+          attachedManualName: file.name,
+          attachedManualData: reader.result 
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  // --------------------------------------
 
   const handleAddTemplateSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +43,10 @@ export default function useTemplates(triggerModal, closeModal) {
         targetCategory: newTemplate.targetCategory,
         managerEmail: newTemplate.managerEmail || "",
         operatorEmail: newTemplate.operatorEmail || "",
-        checklist: newTemplate.checklistSteps
+        checklist: newTemplate.checklistSteps,
+        // Also ensure the manual data gets sent to the database!
+        attachedManualName: newTemplate.attachedManualName || null,
+        attachedManualData: newTemplate.attachedManualData || null
       };
 
       const res = await fetch('/api/templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -78,26 +98,12 @@ export default function useTemplates(triggerModal, closeModal) {
     });
   };
 
+  // --- THE FIX: ADDED TO THE RETURN BLOCK ---
   return { 
     pmTemplates, setPmTemplates,
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate, 
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
-    deleteTemplate, deleteTemplateCategory 
+    deleteTemplate, deleteTemplateCategory,
+    handleTemplateManualUpload // <--- Exposed here!
   };
 }
-
-const handleTemplateManualUpload = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      // Saves the Base64 PDF data directly into the newTemplate state
-      setNewTemplate({ 
-        ...newTemplate, 
-        attachedManualName: file.name,
-        attachedManualData: reader.result 
-      });
-    };
-    reader.readAsDataURL(file);
-  }
-};

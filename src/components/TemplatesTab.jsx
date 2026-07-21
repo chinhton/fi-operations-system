@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 export default function TemplatesTab({
   handleAddTemplateSubmit, newTemplate, setNewTemplate, 
   uniqueCategories, activeAccounts, editingTemplateId, cancelEditTemplate, 
-  isAddingTemplate, pmTemplates, // <-- Removed search props, kept raw pmTemplates
-  isSystemAdmin, deleteTemplateCategory, handleEditTemplateClick, deleteTemplate
+  isAddingTemplate, pmTemplates, 
+  isSystemAdmin, deleteTemplateCategory, handleEditTemplateClick, deleteTemplate,
+  handleTemplateManualUpload // <--- Added to props here!
 }) {
   // Moved from App.jsx!
   const [templateSearch, setTemplateSearch] = useState("");
@@ -61,6 +62,7 @@ export default function TemplatesTab({
                 {activeAccounts.map(u => <option key={`op-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
               </select>
             </div>
+            
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
               
@@ -97,7 +99,29 @@ export default function TemplatesTab({
                 }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Step</button>
               </div>
             </div>
-            </div> 
+
+            {/* --- NEW FILE UPLOAD BLOCK --- */}
+            <div className="md:col-span-2 p-4 bg-slate-50 border border-dashed border-gray-300 rounded-lg">
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                Attach SOP / Equipment Manual (Optional)
+              </label>
+              <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <input 
+                  type="file" 
+                  accept="application/pdf"
+                  onChange={handleTemplateManualUpload}
+                  className="text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-[#005596] file:text-white hover:file:bg-[#003058] cursor-pointer"
+                />
+                {newTemplate.attachedManualName && (
+                  <span className="text-xs text-green-600 font-bold flex items-center bg-green-50 px-3 py-1.5 rounded border border-green-200">
+                    ✅ {newTemplate.attachedManualName}
+                  </span>
+                )}
+              </div>
+            </div>
+            {/* ------------------------------- */}
+
+          </div> 
           <div className="mt-6 flex justify-end space-x-3">
             {editingTemplateId && (
               <button type="button" onClick={cancelEditTemplate} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
@@ -158,12 +182,21 @@ export default function TemplatesTab({
                         <span className="bg-blue-50 text-[#005596] text-[10px] font-bold px-2 py-1 rounded uppercase">{template.interval}</span>
                       </div>
                       <div className="mt-2 text-xs text-[#00A1E4] font-semibold">Managed by: {template.department}</div>
+                      
                       {(template.managerEmail || template.operatorEmail) && (
                         <div className="mt-3 text-[10px] text-gray-500 font-mono bg-gray-50 p-2.5 rounded border border-gray-100 shadow-inner">
                           {template.managerEmail && <span className="block"><strong className="text-gray-700">Mgr Alert:</strong> {template.managerEmail}</span>}
                           {template.operatorEmail && <span className="block mt-1"><strong className="text-gray-700">Tech Alert:</strong> {template.operatorEmail}</span>}
                         </div>
                       )}
+
+                      {/* --- INDICATOR FOR ATTACHED MANUAL --- */}
+                      {template.attachedManualName && (
+                        <div className="mt-3 text-[10px] text-green-700 font-bold bg-green-50 p-2.5 rounded border border-green-200 shadow-inner flex items-center">
+                           📎 Attached: {template.attachedManualName}
+                        </div>
+                      )}
+                      
                       <ul className="mt-4 space-y-1.5 pl-4 list-decimal text-xs text-gray-600">
                         {template.checklist.map((item, idx) => {
                           const label = typeof item === 'string' ? item : item.label;
@@ -193,23 +226,3 @@ export default function TemplatesTab({
     </div>
   );
 }
-
-{/* Add this into the form,  right under the Email dropdowns */}
-<div className="col-span-full mt-4 p-4 bg-slate-50 border border-dashed border-gray-300 rounded-lg">
-  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-    Attach SOP / Equipment Manual (Optional)
-  </label>
-  <div className="flex items-center space-x-4">
-    <input 
-      type="file" 
-      accept="application/pdf"
-      onChange={handleTemplateManualUpload}
-      className="text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-[#005596] file:text-white hover:file:bg-[#003058] cursor-pointer"
-    />
-    {newTemplate.attachedManualName && (
-      <span className="text-xs text-green-600 font-bold flex items-center">
-        ✅ {newTemplate.attachedManualName} Attached
-      </span>
-    )}
-  </div>
-</div>
