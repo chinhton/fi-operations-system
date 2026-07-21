@@ -20,7 +20,7 @@ export default function DashboardTab({
   // 3. Merge them together for the standard user view
   const myAssignedTasks = [...assignedWorkOrders, ...assignedTemplates];
 
-  // 4. --- NEW: BUILD THE GLOBAL ADMIN QUEUE ---
+  // 4. --- BUILD THE GLOBAL ADMIN QUEUE ---
   // Sweeps the database for anything assigned to an operator or needing attention
   const adminGlobalQueue = [];
   
@@ -180,7 +180,13 @@ export default function DashboardTab({
                       </div>
                     </div>
                     <div className="text-right ml-4">
-                      <button className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm">
+                      <button 
+                        onClick={() => {
+                          const associatedAsset = (assets || []).find(a => a.name === task.targetAsset || a.category === task.targetCategory) || task;
+                          openPmModal(associatedAsset);
+                        }}
+                        className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                      >
                         Open Assignment
                       </button>
                     </div>
