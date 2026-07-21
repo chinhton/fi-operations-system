@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react'; // <-- Added useState here!
 
 export default function ManualsTab({
   assetsWithManuals, viewingManualAsset, setViewingManualAsset, 
@@ -7,6 +7,11 @@ export default function ManualsTab({
   manualFile, handleManualFileChange, manualText, setManualText, 
   isAttachingManual, isSystemAdmin, handleRemoveManual
 }) {
+
+  // --- THE FIX: Full-Screen State ---
+  const [isMaximized, setIsMaximized] = useState(false);
+  // ----------------------------------
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
       <div className="lg:col-span-5 space-y-6">
@@ -23,7 +28,11 @@ export default function ManualsTab({
               assetsWithManuals.map(asset => (
                 <div 
                   key={asset.id} 
-                  onClick={() => { setViewingManualAsset(asset); setActiveManualIndex(0); }}
+                  onClick={() => { 
+                    setViewingManualAsset(asset); 
+                    setActiveManualIndex(0); 
+                    setIsMaximized(false); // Reset maximize state when switching assets
+                  }}
                   className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManualAsset?.id === asset.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
                 >
                   <div>
@@ -127,6 +136,9 @@ export default function ManualsTab({
                           <span className="text-xs text-gray-500 block font-mono mt-1">SN: {viewingManualAsset.serial} • Doc: {activeManual.fileName}</span>
                         </div>
                         <div className="flex space-x-2">
+                          {/* THE FIX: Added Maximize Button */}
+                          <button onClick={() => setIsMaximized(true)} className="bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🖥️ Maximize</button>
+                          
                           <a href={activeManual.fileData} download={activeManual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
                           {isSystemAdmin && (
                             <button onClick={() => handleRemoveManual(viewingManualAsset.id, activeManual.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
@@ -134,13 +146,24 @@ export default function ManualsTab({
                         </div>
                       </div>
                       
-                      {/* NEW EMBEDDED PDF VIEWER LOGIC */}
-                      <div className="w-full h-[500px] border border-gray-200 rounded-lg overflow-hidden shadow-inner flex-grow bg-gray-50">
+                      {/* DYNAMIC VIEWER: Toggles between normal and full-screen overlay based on isMaximized */}
+                      <div className={isMaximized 
+                        ? "fixed inset-0 z-[9999] bg-black/90 p-4 md:p-8 flex flex-col" 
+                        : "w-full h-[500px] border border-gray-200 rounded-lg overflow-hidden shadow-inner flex-grow bg-gray-50"
+                      }>
+                        {isMaximized && (
+                          <div className="flex justify-end mb-4">
+                            <button onClick={() => setIsMaximized(false)} className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">
+                              Close Fullscreen ✖
+                            </button>
+                          </div>
+                        )}
+                        
                         {activeManual.fileData ? (
                           <iframe 
                             src={activeManual.fileData} 
                             title={activeManual.fileName}
-                            className="w-full h-full"
+                            className={`w-full ${isMaximized ? 'flex-grow rounded-lg bg-white' : 'h-full'}`}
                             frameBorder="0"
                           >
                             <p className="p-4 text-gray-500 text-xs">
@@ -148,7 +171,7 @@ export default function ManualsTab({
                             </p>
                           </iframe>
                         ) : (
-                          <div className="p-4 text-xs font-mono whitespace-pre-wrap text-gray-700 h-full overflow-y-auto">
+                          <div className="p-4 text-xs font-mono whitespace-pre-wrap text-gray-700 h-full overflow-y-auto bg-white rounded-lg">
                             {activeManual.manualText || "No manual text or file provided."}
                           </div>
                         )}
