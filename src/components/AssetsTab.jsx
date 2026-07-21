@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 
 export default function AssetsTab({
-  assets = [], // <--- THE FIX: Grab the raw assets array directly!
+  assets = [],
+  users = [], // <--- PULLING IN THE USERS DIRECTORY
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory,
   handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
@@ -28,10 +29,13 @@ export default function AssetsTab({
 
   return (
     <div className="space-y-8 animate-entrance">
+      {/* ASSET REGISTRATION FORM */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
         <form onSubmit={handleAddAssetSubmit} className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* ROW 1 */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
               <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
@@ -44,6 +48,8 @@ export default function AssetsTab({
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
               <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
             </div>
+            
+            {/* ROW 2 */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
               <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
@@ -52,8 +58,36 @@ export default function AssetsTab({
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
               <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#005596]">Assign Department Manager</label>
+              <select 
+                value={newAsset.managerEmail || ""} 
+                onChange={(e) => setNewAsset({...newAsset, managerEmail: e.target.value})} 
+                className="w-full text-xs rounded border-[#005596]/30 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-2.5 border bg-blue-50/30 outline-none"
+              >
+                <option value="">-- Leave Unassigned --</option>
+                {users.map(u => (
+                  <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.role})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ROW 3 */}
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#00A1E4]">Assign Operator</label>
+              <select 
+                value={newAsset.operatorEmail || ""} 
+                onChange={(e) => setNewAsset({...newAsset, operatorEmail: e.target.value})} 
+                className="w-full text-xs rounded border-[#00A1E4]/30 shadow-sm focus:border-[#00A1E4] focus:ring-1 focus:ring-[#00A1E4] p-2.5 border bg-sky-50/30 outline-none"
+              >
+                <option value="">-- Leave Unassigned --</option>
+                {users.map(u => (
+                  <option key={`opr-${u.email}`} value={u.email}>{u.name} ({u.role})</option>
+                ))}
+              </select>
+            </div>
             
-            <div className="md:col-span-1">
+            <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
               <div className="flex flex-wrap gap-3 mt-2.5">
                 {PM_CYCLE_OPTIONS.map(freq => (
@@ -77,14 +111,15 @@ export default function AssetsTab({
             </div>
 
           </div>
-          <div className="mt-6 flex justify-end">
-            <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
+          <div className="mt-6 flex justify-end pt-4 border-t border-gray-100">
+            <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 shadow-md hover:shadow-lg text-white px-6 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all transform hover:-translate-y-0.5 ${isAddingAsset ? 'opacity-50 cursor-not-allowed transform-none shadow-none' : ''}`}>
               {isAddingAsset ? 'Committing...' : 'Commit Asset'}
             </button>
           </div>
         </form>
       </div>
       
+      {/* HARDWARE DIRECTORY */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
@@ -124,6 +159,11 @@ export default function AssetsTab({
                         <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
                           <td className="px-6 py-4">
                             <span className="font-bold text-gray-900 block">{asset.name}</span>
+                            {/* Visual badges to show who is assigned */}
+                            <div className="mt-1 flex gap-1">
+                              {asset.managerEmail && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Manager: ${asset.managerEmail}`}>MGR Assigned</span>}
+                              {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
+                            </div>
                           </td>
                           <td className="px-6 py-4 font-mono">
                             <span className="block text-gray-700">Mod: {asset.model}</span>

@@ -3,7 +3,9 @@ import { useState } from 'react';
 // Notice history and setHistory are now pulled in here!
 export default function useAssets(assets, setAssets, history, setHistory, triggerModal, closeModal, currentUser) {
   const [isAddingAsset, setIsAddingAsset] = useState(false);
-  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
+  
+  // Added managerEmail and operatorEmail to the default state
+  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", managerEmail: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
   
   // Asset Modal State
   const [showAssetModal, setShowAssetModal] = useState(false);
@@ -26,6 +28,8 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
         id: `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
         ...newAsset, 
         category: newAsset.category.trim() || "Uncategorized", 
+        managerEmail: newAsset.managerEmail || "",
+        operatorEmail: newAsset.operatorEmail || "",
         status: "Operational", 
         lastPmDate: new Date().toISOString(),
         pmFrequencies: newAsset.pmFrequencies,
@@ -64,7 +68,8 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
         }
         // -------------------------------------
 
-        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", pmFrequencies: [], parts: [], vendors: [] });
+        // Reset state with the new email fields included
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", managerEmail: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
         triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); 
       }
     } finally { setIsAddingAsset(false); }
