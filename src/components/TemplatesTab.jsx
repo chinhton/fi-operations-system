@@ -5,10 +5,20 @@ export default function TemplatesTab({
   uniqueCategories, activeAccounts, editingTemplateId, cancelEditTemplate, 
   isAddingTemplate, pmTemplates, 
   isSystemAdmin, deleteTemplateCategory, handleEditTemplateClick, deleteTemplate,
-  handleTemplateManualUpload // <--- Added to props here!
+  assets // <--- Added assets here to access the Document Library!
 }) {
-  // Moved from App.jsx!
   const [templateSearch, setTemplateSearch] = useState("");
+
+  // --- NEW LOGIC: Extract all manuals from the fleet ---
+  const availableManuals = [];
+  (assets || []).forEach(asset => {
+    if (asset.manuals && asset.manuals.length > 0) {
+      asset.manuals.forEach(doc => availableManuals.push({ ...doc, assetName: asset.name }));
+    } else if (asset.manual) {
+      availableManuals.push({ ...asset.manual, assetName: asset.name, id: asset.manual.id || `legacy-${asset.id}` });
+    }
+  });
+  // -----------------------------------------------------
 
   return (
     <div className="space-y-8 animate-entrance">
@@ -100,21 +110,43 @@ export default function TemplatesTab({
               </div>
             </div>
 
-            {/* --- NEW FILE UPLOAD BLOCK --- */}
-            <div className="md:col-span-2 p-4 bg-slate-50 border border-dashed border-gray-300 rounded-lg">
+            {/* --- NEW DROPDOWN UPLOAD BLOCK --- */}
+            <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                Attach SOP / Equipment Manual (Optional)
+                Attach Existing Equipment Manual (From Document Library)
               </label>
-              <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-                <input 
-                  type="file" 
-                  accept="application/pdf"
-                  onChange={handleTemplateManualUpload}
-                  className="text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-[#005596] file:text-white hover:file:bg-[#003058] cursor-pointer"
-                />
+              <div className="flex flex-col space-y-3">
+                <select 
+                  value={newTemplate.attachedManualName || ""} 
+                  onChange={(e) => {
+                    const selected = availableManuals.find(m => m.fileName === e.target.value);
+                    if (selected) {
+                      setNewTemplate({
+                        ...newTemplate,
+                        attachedManualName: selected.fileName,
+                        attachedManualData: selected.fileData
+                      });
+                    } else {
+                      setNewTemplate({
+                        ...newTemplate,
+                        attachedManualName: null,
+                        attachedManualData: null
+                      });
+                    }
+                  }} 
+                  className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer shadow-sm"
+                >
+                  <option value="">-- Do Not Attach A Manual --</option>
+                  {availableManuals.map((manual, idx) => (
+                    <option key={manual.id || idx} value={manual.fileName}>
+                      {manual.assetName} - {manual.fileName}
+                    </option>
+                  ))}
+                </select>
+
                 {newTemplate.attachedManualName && (
-                  <span className="text-xs text-green-600 font-bold flex items-center bg-green-50 px-3 py-1.5 rounded border border-green-200">
-                    ✅ {newTemplate.attachedManualName}
+                  <span className="text-xs text-[#005596] font-bold flex items-center bg-blue-50 px-3 py-2 rounded border border-blue-200 w-fit">
+                    ✅ Manual Linked: {newTemplate.attachedManualName}
                   </span>
                 )}
               </div>
@@ -192,7 +224,7 @@ export default function TemplatesTab({
 
                       {/* --- INDICATOR FOR ATTACHED MANUAL --- */}
                       {template.attachedManualName && (
-                        <div className="mt-3 text-[10px] text-green-700 font-bold bg-green-50 p-2.5 rounded border border-green-200 shadow-inner flex items-center">
+                        <div className="mt-3 text-[10px] text-[#005596] font-bold bg-blue-50 p-2.5 rounded border border-blue-200 shadow-inner flex items-center">
                            📎 Attached: {template.attachedManualName}
                         </div>
                       )}
