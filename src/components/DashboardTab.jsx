@@ -3,15 +3,28 @@ import React from 'react';
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   expandedActionQueue, openPmModal, currentUser, isSystemAdmin,
-  workOrders // <--- ADDED: Catching the master work order list
+  workOrders, pmTemplates // <--- ADDED: Catch pmTemplates here
 }) {
+  
+  // 1. Grab assigned Work Orders
+  const assignedWorkOrders = (workOrders || []).filter(wo => 
+    wo.operatorEmail === currentUser.email && 
+    wo.status !== "Completed"
+  );
+
+  // 2. Grab assigned SOP Templates (Standing Protocols)
+  const assignedTemplates = (pmTemplates || []).filter(t => 
+    t.operatorEmail === currentUser.email
+  );
+
+  // 3. Merge them together for the Operator's Inbox
+  const myAssignedTasks = [...assignedWorkOrders, ...assignedTemplates];
   
   // --- NEW: Filter tasks specifically assigned to this operator ---
   const myAssignedTasks = (workOrders || []).filter(wo => 
     wo.operatorEmail === currentUser.email && 
     wo.status !== "Completed"
   );
-  // --------------------------------------------------------------
 
   return (
     <div className="space-y-8 animate-entrance">

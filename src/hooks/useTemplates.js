@@ -1,18 +1,15 @@
 import { useState } from 'react';
 
 export default function useTemplates(triggerModal, closeModal, pmTemplates, setPmTemplates) {
-  // WE MOVED THE STATE INSIDE THE HOOK
   const [newTemplate, setNewTemplate] = useState({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
   const [editingTemplateId, setEditingTemplateId] = useState(null);
   const [isAddingTemplate, setIsAddingTemplate] = useState(false);
 
-  // --- THE FIX: MOVED INSIDE THE HOOK ---
   const handleTemplateManualUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        // Saves the Base64 PDF data directly into the newTemplate state
         setNewTemplate({ 
           ...newTemplate, 
           attachedManualName: file.name,
@@ -22,7 +19,6 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
       reader.readAsDataURL(file);
     }
   };
-  // --------------------------------------
 
   const handleAddTemplateSubmit = async (e) => {
     e.preventDefault();
@@ -44,7 +40,6 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
         managerEmail: newTemplate.managerEmail || "",
         operatorEmail: newTemplate.operatorEmail || "",
         checklist: newTemplate.checklistSteps,
-        // Also ensure the manual data gets sent to the database!
         attachedManualName: newTemplate.attachedManualName || null,
         attachedManualData: newTemplate.attachedManualData || null
       };
@@ -53,6 +48,7 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
       
       if (res.ok) {
         const savedTemplate = await res.json();
+        
         if (editingTemplateId) {
           setPmTemplates(pmTemplates.map(t => t.id === editingTemplateId ? savedTemplate : t));
           triggerModal("Standard Updated", "Preventative maintenance guideline profile updated.", "success");
@@ -60,6 +56,23 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
           setPmTemplates([...pmTemplates, savedTemplate]);
           triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
         }
+
+        // --- NEW: TRIGGER THE EMAIL NOTIFICATION ---
+        if (payload.managerEmail || payload.operatorEmail) {
+            fetch('/api/notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    managerEmail: payload.managerEmail,
+                    operatorEmail: payload.operatorEmail,
+                    taskName: payload.name,
+                    interval: payload.interval,
+                    department: payload.department
+                })
+            }).catch(err => console.error("Email API trigger failed:", err));
+        }
+        // -------------------------------------------
+
         setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
         setEditingTemplateId(null);
       }
@@ -98,12 +111,11 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
     });
   };
 
-  // --- THE FIX: ADDED TO THE RETURN BLOCK ---
   return { 
     pmTemplates, setPmTemplates,
     newTemplate, setNewTemplate, editingTemplateId, isAddingTemplate, 
     handleAddTemplateSubmit, handleEditTemplateClick, cancelEditTemplate, 
     deleteTemplate, deleteTemplateCategory,
-    handleTemplateManualUpload // <--- Exposed here!
+    handleTemplateManualUpload
   };
 }
