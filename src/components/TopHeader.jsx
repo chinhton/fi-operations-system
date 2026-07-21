@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
 import AccountSettingsModal from './AccountSettingsModal';
 
-export default function TopHeader({ currentTime, currentUser, isSystemAdmin, handleLogout, setCurrentUser, triggerModal }) {
+export default function TopHeader({ 
+  currentTime, 
+  currentUser, 
+  isSystemAdmin, 
+  handleLogout, 
+  setCurrentUser, 
+  triggerModal,
+  impersonatedRole,
+  setImpersonatedRole,
+  isRealAdmin
+}) {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
   return (
@@ -21,9 +31,28 @@ export default function TopHeader({ currentTime, currentUser, isSystemAdmin, han
                <span className="block text-xs font-bold text-gray-800">{currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                <span className="block text-[10px] text-gray-500 font-mono mt-0.5">{currentTime.toLocaleTimeString('en-US')}</span>
             </div>
+
+            {/* IMPERSONATION DROPDOWN (ONLY VISIBLE TO REAL ADMINS) */}
+            {isRealAdmin && (
+              <div className="hidden md:flex items-center space-x-2 bg-[#005596]/10 px-3 py-1.5 rounded-lg border border-[#005596]/20">
+                <span className="text-[10px] font-bold text-[#005596] uppercase tracking-wider">View As:</span>
+                <select 
+                  value={impersonatedRole} 
+                  onChange={(e) => setImpersonatedRole(e.target.value)}
+                  className="text-xs font-semibold bg-transparent text-[#1A2530] outline-none cursor-pointer"
+                >
+                  <option value="System Admin">System Admin</option>
+                  <option value="Department Manager">Department Manager</option>
+                  <option value="Operator">Operator</option>
+                </select>
+              </div>
+            )}
+
             <div className="text-right hidden sm:block">
               <span className="text-xs font-bold text-gray-900 block font-sans">{currentUser.name}</span>
-              <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>{currentUser.role}</span>
+              <span className={`text-[10px] font-bold font-mono block uppercase ${isSystemAdmin ? 'text-[#005596]' : 'text-gray-500'}`}>
+                {isRealAdmin ? impersonatedRole : currentUser.role}
+              </span>
             </div>
             <div className="flex items-center space-x-2">
               <button 

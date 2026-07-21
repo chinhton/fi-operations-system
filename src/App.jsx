@@ -44,6 +44,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
   const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // --- IMPERSONATION STATE ---
+  const [impersonatedRole, setImpersonatedRole] = useState("System Admin");
 
   // --- RAW Data State ---
   const [history, setHistory] = useState([]);
@@ -67,15 +70,39 @@ export default function App() {
 
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
-  // --- ROLE-BASED VISIBILITY FILTERING ---
-  const isGodMode = isSystemAdmin;
+  // --- ROLE-BASED VISIBILITY FILTERING (3-TIER HIERARCHY) ---
   const userEmail = currentUser?.email;
+  const realRole = currentUser?.role;
+  
+  // 1. Check if they are legally an admin in the database
+  const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
 
-  const visibleAssets = isGodMode ? assets : assets.filter(a => a.managerEmail === userEmail || a.operatorEmail === userEmail);
-  const visibleWorkOrders = isGodMode ? workOrders : workOrders.filter(w => w.managerEmail === userEmail || w.operatorEmail === userEmail);
-  const visibleTemplates = isGodMode ? pmTemplates : pmTemplates.filter(t => t.managerEmail === userEmail || t.operatorEmail === userEmail);
-  const visibleUsers = (isGodMode || currentUser?.role === 'Department Manager') ? users : users.filter(u => u.email === userEmail);
-  // ---------------------------------------
+  // 2. Determine their active role (If real admin, use the toggle. If not, use their real role)
+  const activeRole = isRealAdmin ? impersonatedRole : realRole;
+  
+  // 3. Identify their exact tier level based on the active role
+  const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
+  const isManager = activeRole === 'Department Manager';
+
+  // 4. Global Data Filter Logic
+  const filterHierarchy = (item) => {
+    if (isGodMode) return true; // Tier 1
+    if (isManager) return item.managerEmail === userEmail || item.operatorEmail === userEmail; // Tier 2
+    return item.operatorEmail === userEmail; // Tier 3
+  };
+
+  // 5. Apply the filters globally to all system data
+  const visibleAssets = assets.filter(filterHierarchy);
+  const visibleWorkOrders = workOrders.filter(filterHierarchy);
+  const visibleTemplates = pmTemplates.filter(filterHierarchy);
+  
+  // 6. User Directory Filtering (Dictates assignment dropdowns)
+  const visibleUsers = users.filter(u => {
+    if (isGodMode) return true; 
+    if (isManager) return u.email === userEmail || u.role === 'Operator'; 
+    return u.email === userEmail; 
+  });
+  // -----------------------------------------------------------
 
   // Hooks process ONLY the filtered "visible" data
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
@@ -181,6 +208,7 @@ export default function App() {
   // Master Props Object
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
+    impersonatedRole, setImpersonatedRole, isRealAdmin,
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
     history, setHistory, 
