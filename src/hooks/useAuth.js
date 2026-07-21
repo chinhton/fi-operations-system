@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 
 export default function useAuth(changeTab, triggerModal, history, setHistory) {
-  // 1. THIS IS THE LINE THAT WENT MISSING!
   const [users, setUsers] = useState([
     {
       id: "USER-ADMIN",
@@ -13,7 +12,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     }
   ]);
 
-  // 2. The Cosmos DB Sync
+  // The Cosmos DB Sync
   useEffect(() => {
     const fetchLiveUsers = async () => {
       try {
@@ -113,6 +112,29 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
         const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
 
+        // --- NEW HTML REGISTRATION NOTIFICATION FOR ADMINS ---
+        const adminEmailBody = `
+            <div style="font-family: Arial, sans-serif; color: #1A2530; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; border-top: 5px solid #f97316;">
+                <h2 style="color: #f97316; margin-top: 0;">Action Required: New Account Request</h2>
+                <p>A new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.</p>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Requested Name:</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Corporate Email:</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.email}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Requested Role:</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.role}</td>
+                    </tr>
+                </table>
+                <p style="margin-top: 20px; font-size: 12px; color: #718096;">Please log in to the operations dashboard to approve or decline this access request.</p>
+            </div>
+        `;
+
         try {
           await fetch('/api/sendEmail', {
             method: 'POST',
@@ -120,7 +142,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
             body: JSON.stringify({
               to: adminMailingList,
               subject: 'Action Required: New Account Request - FI Operations System',
-              body: `System Admin,\n\nA new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.\n\nName: ${newUser.name}\nEmail: ${newUser.email}\nRequested Role: ${newUser.role}\n\nPlease log in to the dashboard to approve or decline this request.`
+              body: adminEmailBody
             }),
           });
         } catch (err) {
@@ -172,6 +194,29 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
     const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
 
+    // --- NEW HTML APPROVAL EMAIL SENT TO THE USER ---
+    const approvalEmailBody = `
+        <div style="font-family: Arial, sans-serif; color: #1A2530; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; border-top: 5px solid #005596;">
+            <h2 style="color: #005596; margin-top: 0;">Account Access Granted</h2>
+            <p>Your account access request for the Fairchild Imaging Operations System has been formally approved by the System Administrator.</p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Account Name:</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.name}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Corporate Email:</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.email}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Assigned Role:</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.role || "Operator"}</td>
+                </tr>
+            </table>
+            <p style="margin-top: 20px; font-size: 12px; color: #718096;">You may now log in to the system using your corporate email and security password.</p>
+        </div>
+    `;
+
     try {
       await fetch('/api/sendEmail', {
         method: 'POST',
@@ -180,7 +225,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
           to: email,
           cc: adminMailingList,
           subject: 'Account Approved - FI Operations System',
-          body: `Hello ${targetUser.name},\n\nYour account access request for the Fairchild Imaging Operations System has been approved by the System Administrator. You can now log in using your corporate email and security password.\n\nAssigned Role: ${targetUser.role}\n\nThank you.`
+          body: approvalEmailBody
         }),
       });
     } catch (err) {
