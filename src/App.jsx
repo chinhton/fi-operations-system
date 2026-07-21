@@ -49,7 +49,7 @@ export default function App() {
   const [navOrder] = useState(['dashboard', 'workOrders', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- Data State (This is what got accidentally deleted!) ---
+  // --- Data State ---
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
@@ -71,7 +71,8 @@ export default function App() {
   useCosmosSync(auth.currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
 
   const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, auth.currentUser);
-  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates);  const manualHooks = useManuals(assets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
+  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
+  const manualHooks = useManuals(assets, setAssets, setHistory, auth.currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(assets, setAssets, history, setHistory, auth.currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(auth.currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(users, assets, workOrders, pmTemplates, history);
@@ -84,6 +85,75 @@ export default function App() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // --- GLOBAL AUDIT TRAIL INTERCEPTOR ---
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const originalFetch = window.fetch;
+
+    window.fetch = async (...args) => {
+      const [url, config] = args;
+      
+      const response = await originalFetch(url, config);
+
+      if (
+        response.ok && 
+        config && 
+        ['POST', 'PUT', 'DELETE'].includes(config.method) &&
+        typeof url === 'string' &&
+        !url.includes('/api/history') && 
+        !url.includes('/api/sendEmail')  
+      ) {
+        
+        let actionName = "System Event";
+        if (url.includes('/api/assets')) actionName = "Facility Asset";
+        if (url.includes('/api/workorders')) actionName = "Work Order/PM";
+        if (url.includes('/api/pmTemplates')) actionName = "PM Configuration";
+        if (url.includes('/api/users')) actionName = "User Directory";
+
+        let itemName = "";
+        if (config.body) {
+            try {
+                const parsedBody = JSON.parse(config.body);
+                itemName = parsedBody.name || parsedBody.title || parsedBody.id || "";
+            } catch (e) {}
+        }
+
+        const actionTaken = config.method === 'DELETE' ? 'Deleted' : 'Created/Updated';
+        
+        const auditLog = { 
+            id: `LOG-${Date.now().toString().slice(-4)}`, 
+            timestamp: new Date().toLocaleString(), 
+            assetId: "SYS-AUTO", 
+            assetName: actionName, 
+            templateName: `${actionTaken} Record`, 
+            interval: "Automated", 
+            technician: auth.currentUser.name, 
+            email: auth.currentUser.email, 
+            status: "Completed Pass", 
+            comments: `Automated Tracker: ${auth.currentUser.name} ${actionTaken.toLowerCase()} a ${actionName} ${itemName ? `(${itemName})` : ''}.` 
+        };
+
+        originalFetch('/api/history', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(auditLog) 
+        })
+        .then(res => res.json())
+        .then(savedLog => {
+            setHistory(prev => [savedLog, ...prev]);
+        }).catch(err => console.error("Auto-audit failed:", err));
+      }
+
+      return response;
+    };
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [auth.currentUser, setHistory]); 
+  // ----------------------------------------
 
   // 3. Render
   if (!auth.currentUser) {
