@@ -2,24 +2,21 @@ import React, { useState } from 'react';
 
 export default function AssetsTab({
   assets = [],
-  users = [], // <--- PULLING IN THE USERS DIRECTORY
+  users = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory,
   handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
   handleOpenAssetModal, openPmModal, deleteAsset
 }) {
   
-  // 1. Move the search bar state locally inside this component
   const [assetSearch, setAssetSearch] = useState("");
 
-  // 2. Filter the raw assets based on what the user types in the search bar
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.category?.toLowerCase().includes(assetSearch.toLowerCase())
   );
 
-  // 3. Group the filtered assets by category so the HTML can loop through them
   const groupedAssets = filteredAssets.reduce((acc, asset) => {
     const cat = asset.category || "Uncategorized";
     if (!acc[cat]) acc[cat] = [];
@@ -49,7 +46,7 @@ export default function AssetsTab({
               <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
             </div>
             
-            {/* ROW 2 */}
+            {/* ROW 2: Relational Linking */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
               <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
@@ -58,6 +55,21 @@ export default function AssetsTab({
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
               <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Link To Facility Asset (Sub-Equipment)</label>
+              <select 
+                value={newAsset.parentId || ""} 
+                onChange={(e) => setNewAsset({...newAsset, parentId: e.target.value})} 
+                className="w-full text-xs rounded border-purple-200 shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 p-2.5 border bg-purple-50/30 outline-none"
+              >
+                <option value="">-- Standalone Primary Asset --</option>
+                {assets.filter(a => !a.parentId).map(a => (
+                  <option key={`link-${a.id}`} value={a.id}>🔗 Link to: {a.name} ({a.serial})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ROW 3: Personnel Assignment */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#005596]">Assign Department Manager</label>
               <select 
@@ -71,8 +83,6 @@ export default function AssetsTab({
                 ))}
               </select>
             </div>
-
-            {/* ROW 3 */}
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#00A1E4]">Assign Operator</label>
               <select 
@@ -87,11 +97,11 @@ export default function AssetsTab({
               </select>
             </div>
             
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
-              <div className="flex flex-wrap gap-3 mt-2.5">
+              <div className="flex flex-wrap gap-2 mt-2.5">
                 {PM_CYCLE_OPTIONS.map(freq => (
-                  <label key={freq} className="flex items-center space-x-1.5 cursor-pointer text-xs text-gray-700 font-medium bg-gray-50 px-2 py-1.5 rounded border border-gray-200 hover:bg-gray-100 transition">
+                  <label key={freq} className="flex items-center space-x-1.5 cursor-pointer text-[10px] text-gray-700 font-medium bg-gray-50 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition">
                     <input
                       type="checkbox"
                       checked={newAsset.pmFrequencies?.includes(freq) || false}
@@ -102,7 +112,7 @@ export default function AssetsTab({
                           setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
                         }
                       }}
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
+                      className="w-3 h-3 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
                     />
                     <span>{freq}</span>
                   </label>
@@ -159,8 +169,15 @@ export default function AssetsTab({
                         <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
                           <td className="px-6 py-4">
                             <span className="font-bold text-gray-900 block">{asset.name}</span>
-                            {/* Visual badges to show who is assigned */}
-                            <div className="mt-1 flex gap-1">
+                            
+                            {/* Relational Link Badge */}
+                            {asset.parentId && (
+                               <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
+                                 🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
+                               </span>
+                            )}
+
+                            <div className="mt-1.5 flex gap-1">
                               {asset.managerEmail && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Manager: ${asset.managerEmail}`}>MGR Assigned</span>}
                               {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
                             </div>
