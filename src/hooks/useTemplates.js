@@ -48,7 +48,6 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
       
       if (res.ok) {
         const savedTemplate = await res.json();
-        
         if (editingTemplateId) {
           setPmTemplates(pmTemplates.map(t => t.id === editingTemplateId ? savedTemplate : t));
           triggerModal("Standard Updated", "Preventative maintenance guideline profile updated.", "success");
@@ -57,21 +56,43 @@ export default function useTemplates(triggerModal, closeModal, pmTemplates, setP
           triggerModal("Standard Created", "New preventative maintenance guideline profile cataloged.", "success");
         }
 
-        // --- NEW: TRIGGER THE EMAIL NOTIFICATION ---
+        // --- TRIGGER NOTIFICATION VIA EXISTING sendEmail.js ---
         if (payload.managerEmail || payload.operatorEmail) {
-            fetch('/api/notify', {
+            const recipients = [payload.managerEmail, payload.operatorEmail].filter(Boolean).join(',');
+
+            const emailBody = `
+                <div style="font-family: Arial, sans-serif; color: #1A2530; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h2 style="color: #005596; margin-top: 0;">New Preventive Maintenance Task Assigned</h2>
+                    <p>A new maintenance protocol has been generated and queued for facility execution.</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Task Name:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${payload.name}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Interval Frequency:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${payload.interval}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Responsible Department:</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${payload.department}</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 20px; font-size: 12px; color: #718096;">Please log into the Fairchild Operations Management System to complete your assignment.</p>
+                </div>
+            `;
+
+            fetch('/api/sendEmail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    managerEmail: payload.managerEmail,
-                    operatorEmail: payload.operatorEmail,
-                    taskName: payload.name,
-                    interval: payload.interval,
-                    department: payload.department
+                    to: recipients,
+                    subject: `[PM Assignment] New Protocol: ${payload.name}`,
+                    body: emailBody
                 })
             }).catch(err => console.error("Email API trigger failed:", err));
         }
-        // -------------------------------------------
+        // -------------------------------------------------------
 
         setNewTemplate({ name: "", interval: "Monthly", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [] });
         setEditingTemplateId(null);

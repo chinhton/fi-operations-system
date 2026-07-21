@@ -46,7 +46,7 @@ app.http('sendEmail', {
                 senderAddress: "DoNotReply@77bb0478-c5db-4ee5-8cf9-84265c1432a3.azurecomm.net",
                 content: {
                     subject: subject || "Notification from FI Operations System",
-                    plainText: body || "You have received an automated operational update.",
+                    html: body || "<p>You have received an automated operational update.</p>",
                 },
                 recipients: {
                     to: formatRecipients(to),
