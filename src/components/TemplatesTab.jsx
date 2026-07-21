@@ -193,3 +193,23 @@ export default function TemplatesTab({
     </div>
   );
 }
+
+{/* Add this into the form,  right under the Email dropdowns */}
+<div className="col-span-full mt-4 p-4 bg-slate-50 border border-dashed border-gray-300 rounded-lg">
+  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+    Attach SOP / Equipment Manual (Optional)
+  </label>
+  <div className="flex items-center space-x-4">
+    <input 
+      type="file" 
+      accept="application/pdf"
+      onChange={handleTemplateManualUpload}
+      className="text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-bold file:bg-[#005596] file:text-white hover:file:bg-[#003058] cursor-pointer"
+    />
+    {newTemplate.attachedManualName && (
+      <span className="text-xs text-green-600 font-bold flex items-center">
+        ✅ {newTemplate.attachedManualName} Attached
+      </span>
+    )}
+  </div>
+</div>

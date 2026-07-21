@@ -85,3 +85,19 @@ export default function useTemplates(triggerModal, closeModal) {
     deleteTemplate, deleteTemplateCategory 
   };
 }
+
+const handleTemplateManualUpload = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      // Saves the Base64 PDF data directly into the newTemplate state
+      setNewTemplate({ 
+        ...newTemplate, 
+        attachedManualName: file.name,
+        attachedManualData: reader.result 
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+};
