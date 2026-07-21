@@ -222,12 +222,19 @@ export default function App() {
     );
   }
 
+  // --- THE FIX: Create an effective user object to fool the downstream components ---
+  const effectiveUser = { ...currentUser, role: activeRole };
+  
   // Master Props Object
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     impersonatedRole, setImpersonatedRole, isRealAdmin,
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
+    // Override the auth props so the UI respects the impersonation toggle!
+    currentUser: effectiveUser,
+    isSystemAdmin: isGodMode, 
+
     history, setHistory, 
     assets: visibleAssets, setAssets, 
     pmTemplates: visibleTemplates, setPmTemplates, 
