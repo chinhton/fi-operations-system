@@ -36,7 +36,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     return savedSession ? JSON.parse(savedSession) : null;
   });
 
-  const isSystemAdmin = currentUser && (currentUser.role === 'System Admin' || currentUser.role.toLowerCase() === 'admin');
+  const isSystemAdmin = currentUser && (currentUser.email === 'admin@fcimg.com' || currentUser.role === 'System Admin' || currentUser.role.toLowerCase() === 'admin');
   
   const [authMode, setAuthMode] = useState("signin"); 
   const [authEmail, setAuthEmail] = useState("");
