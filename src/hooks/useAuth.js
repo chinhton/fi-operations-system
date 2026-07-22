@@ -12,7 +12,6 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
   const [registerName, setRegisterName] = useState("");
   const [registerRole, setRegisterRole] = useState("Operator");
   
-  // --- THE FIX: Added the Department State ---
   const [registerDepartment, setRegisterDepartment] = useState(""); 
 
   const [authError, setAuthError] = useState("");
@@ -69,7 +68,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         email: authEmail,
         password: authPassword,
         role: registerRole,
-        department: registerDepartment, // --- THE FIX: Wired into the database payload ---
+        department: registerDepartment,
         status: "Active"
       };
 
@@ -95,6 +94,13 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     }
   };
 
+  // --- THE FIX: Restored the Sign Out Function ---
+  const handleSignOut = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('fi_oms_session');
+    changeTab("dashboard");
+  };
+
   return {
     currentUser, setCurrentUser, isSystemAdmin,
     authMode, setAuthMode,
@@ -102,9 +108,10 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     authPassword, setAuthPassword,
     registerName, setRegisterName,
     registerRole, setRegisterRole,
-    registerDepartment, setRegisterDepartment, // --- THE FIX: Exported for the UI ---
+    registerDepartment, setRegisterDepartment,
     authError, authSuccess,
     isSigningIn, isRegistering,
-    handleSignIn, handleRegister
+    handleSignIn, handleRegister,
+    handleSignOut // --- THE FIX: Exported for the TopHeader ---
   };
 }

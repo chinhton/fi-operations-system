@@ -1,6 +1,7 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
+const { EmailClient } = require('@azure/communication-email');
 
 // 1. Response Formatter
 const createResponse = (status, data) => ({
@@ -34,10 +35,21 @@ const getBlobClient = () => {
     return blobServiceClient;
 };
 
+// Helper for Email Recipients
+const formatRecipients = (emailInput) => {
+    if (!emailInput) return [];
+    
+    const emailString = String(emailInput); 
+    return emailString
+        .split(',')
+        .map(email => ({ address: email.trim() }))
+        .filter(obj => obj.address !== ""); // Drop any accidental blank spaces
+};
+
 // 3. Standard Cosmos DB Router
 async function processRoute(request, containerId) {
     try {
-        const db = getDatabase(); // Connects to DB here
+        const db = getDatabase(); 
         const method = request.method;
         const container = db.container(containerId);
         
@@ -54,12 +66,9 @@ async function processRoute(request, containerId) {
             const id = request.query.get('id');
             if (!id) return createResponse(400, { error: "Missing ID for deletion." });
             
-            // 1. Ask Cosmos DB what the partition key path is for this specific container
             const { resource: containerDef } = await container.read();
-            // Removes the leading slash (e.g., "/category" becomes "category")
             const pkPath = containerDef.partitionKey.paths[0].substring(1); 
             
-            // 2. Perform a cross-partition query to find the item and grab its actual partition key value
             const querySpec = {
                 query: "SELECT * FROM c WHERE c.id = @id",
                 parameters: [{ name: "@id", value: id }]
@@ -73,13 +82,11 @@ async function processRoute(request, containerId) {
             const item = resources[0];
             const pkValue = item[pkPath]; 
             
-            // 3. Delete the item using the exact, correct Partition Key
             await container.item(id, pkValue !== undefined ? pkValue : id).delete();
             
             return createResponse(200, { message: "Item permanently deleted from database." });
         }
     } catch (error) {
-        // Will now properly return a JSON error instead of crashing the server
         return createResponse(500, { 
             error: `Cosmos DB error on ${containerId}`, 
             message: error.message,
@@ -101,7 +108,7 @@ app.http('upload', {
     authLevel: 'anonymous',
     handler: async (request, context) => {
         try {
-            const blobClient = getBlobClient(); // Connects to Blob here
+            const blobClient = getBlobClient(); 
 
             const payload = await request.json();
             const { fileName, fileData } = payload;
@@ -126,6 +133,75 @@ app.http('upload', {
 
         } catch (error) {
             return createResponse(500, { error: "Blob upload failure", details: error.message });
+        }
+    }
+});
+
+// --- EMAIL NOTIFICATION ENDPOINT ---
+app.http('sendEmail', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: async (request, context) => {
+        try {
+            const requestBody = await request.json();
+            if (!requestBody) {
+                return createResponse(400, { error: "Payload missing. Azure received an empty request." });
+            }
+
+            const { to, cc, subject, body } = requestBody;
+
+            const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
+            if (!connectionString) {
+                context.error("Missing Environment Variable: COMMUNICATION_SERVICES_CONNECTION_STRING");
+                return createResponse(500, { error: "CRITICAL: COMMUNICATION_SERVICES_CONNECTION_STRING is missing in Azure Environment Variables." });
+            }
+
+            const client = new EmailClient(connectionString);
+
+            // Convert plain text line breaks (\n) to HTML line breaks (<br>)
+            const htmlBody = body ? body.replace(/\n/g, '<br>') : "<p>You have received an automated operational update.</p>";
+
+            const emailMessage = {
+                senderAddress: "DoNotReply@77bb0478-c5db-4ee5-8cf9-84265c1432a3.azurecomm.net",
+                content: {
+                    subject: subject || "Notification from FI Operations System",
+                    plainText: body || "You have received an automated operational update.",
+                    html: htmlBody,
+                },
+                recipients: {
+                    to: formatRecipients(to),
+                },
+            };
+
+            if (cc) {
+                emailMessage.recipients.cc = formatRecipients(cc);
+            }
+
+            const poller = await client.beginSend(emailMessage);
+            const response = await poller.pollUntilDone();
+
+            if (response.status === "Succeeded") {
+                return createResponse(200, { 
+                    message: "Email sent successfully via Azure ACS!", 
+                    messageId: response.id,
+                    status: response.status 
+                });
+            } else {
+                return createResponse(400, { 
+                    error: "Azure accepted the payload, but the mail server rejected delivery.", 
+                    status: response.status,
+                    details: response.error || "No downstream error provided by ACS."
+                });
+            }
+            
+        } catch (error) {
+            context.error("Email Dispatch Crash:", error);
+            return createResponse(500, { 
+                error: "Backend execution crash.", 
+                name: error.name, 
+                details: error.message,
+                stack: error.stack
+            });
         }
     }
 });
