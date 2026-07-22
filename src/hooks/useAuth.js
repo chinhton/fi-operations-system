@@ -1,74 +1,50 @@
 import { useState, useEffect } from 'react';
 
 export default function useAuth(changeTab, triggerModal, history, setHistory) {
-  const [users, setUsers] = useState([
-    {
-      id: "USER-ADMIN",
-      name: "System Administrator",
-      email: "admin@fcimg.com",
-      password: "admin",
-      role: "System Admin",
-      approved: true
-    }
-  ]);
-
-  // The Cosmos DB Sync
-  useEffect(() => {
-    const fetchLiveUsers = async () => {
-      try {
-        const res = await fetch('/api/users');
-        if (res.ok) {
-          const liveData = await res.json();
-          if (liveData && liveData.length > 0) {
-            setUsers(liveData);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to sync users from Cosmos DB:", err);
-      }
-    };
-    
-    fetchLiveUsers();
-  }, []);
-
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedSession = localStorage.getItem('fi_oms_session');
-    return savedSession ? JSON.parse(savedSession) : null;
+    const saved = localStorage.getItem('fi_oms_session');
+    return saved ? JSON.parse(saved) : null;
   });
 
-  const isSystemAdmin = currentUser && (currentUser.email === 'admin@fcimg.com' || currentUser.role === 'System Admin' || currentUser.role.toLowerCase() === 'admin');
-  
-  const [authMode, setAuthMode] = useState("signin"); 
+  const [authMode, setAuthMode] = useState("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
-  const [registerRole, setRegisterRole] = useState("Operator"); 
+  const [registerRole, setRegisterRole] = useState("Operator");
+  
+  // --- THE FIX: Added the Department State ---
+  const [registerDepartment, setRegisterDepartment] = useState(""); 
+
   const [authError, setAuthError] = useState("");
   const [authSuccess, setAuthSuccess] = useState("");
-  
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  const isSystemAdmin = currentUser?.role === 'System Admin' || currentUser?.role === 'admin';
 
   const handleSignIn = async (e) => {
     e.preventDefault();
-    if (isSigningIn) return;
     setIsSigningIn(true);
-    setAuthError(""); setAuthSuccess("");
-    
+    setAuthError("");
+    setAuthSuccess("");
+
     try {
-      if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Username/Email and password fields are required."); return; }
+      const res = await fetch('/api/users');
+      const users = await res.json();
       
-      const matchedUser = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
+      const user = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase() && u.password === authPassword);
       
-      if (!matchedUser || matchedUser.password !== authPassword) { setAuthError("Invalid credentials."); return; }
-      if (!matchedUser.approved) { setAuthError("Your account registration is currently pending authorization from the System Admin."); return; }
-      
-      localStorage.setItem('fi_oms_session', JSON.stringify(matchedUser));
-      
-      setCurrentUser(matchedUser); 
-      setAuthEmail(""); 
-      setAuthPassword(""); 
-      changeTab("dashboard");
+      if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('fi_oms_session', JSON.stringify(user));
+        setAuthEmail("");
+        setAuthPassword("");
+        changeTab("dashboard");
+      } else {
+        setAuthError("Invalid credentials or account not found.");
+      }
+    } catch (err) {
+      setAuthError("Network error during sign in.");
     } finally {
       setIsSigningIn(false);
     }
@@ -76,228 +52,59 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (isRegistering) return;
     
-    setAuthError(""); setAuthSuccess("");
-    if (!registerName.trim() || !authEmail.trim() || !authPassword.trim()) { setAuthError("All registration fields are required."); return; }
-    if (!authEmail.toLowerCase().endsWith("@fcimg.com")) { setAuthError("Registration blocked: Only verified @fcimg.com emails are authorized."); return; }
-    
-    const alreadyExists = users.some(u => u.email.toLowerCase() === authEmail.toLowerCase().trim());
-    if (alreadyExists) { setAuthError("An account with this email address already exists."); return; }
+    if (!registerDepartment) {
+      setAuthError("Please select a Corporate Department.");
+      return;
+    }
 
     setIsRegistering(true);
-
-    const newUser = { 
-      id: `USER-${Date.now().toString().slice(-4)}`, 
-      name: registerName.trim(), 
-      email: authEmail.toLowerCase().trim(), 
-      password: authPassword, 
-      role: registerRole, 
-      approved: false 
-    };
+    setAuthError("");
+    setAuthSuccess("");
 
     try {
-      const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newUser) });
+      const newUser = {
+        id: `USR-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
+        name: registerName,
+        email: authEmail,
+        password: authPassword,
+        role: registerRole,
+        department: registerDepartment, // --- THE FIX: Wired into the database payload ---
+        status: "Active"
+      };
+
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
 
       if (res.ok) {
-        const savedUser = await res.json();
-        setUsers([...users, savedUser]); 
-        setRegisterName(""); 
-        setAuthEmail(""); 
-        setAuthPassword("");
-        setRegisterRole("Operator");
-        setAuthSuccess("Account request submitted. Please ask a System Admin to authorize your account."); 
+        setAuthSuccess("Access Request Submitted! You can now sign in.");
         setAuthMode("signin");
-
-        const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
-        const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
-
-        // --- NEW HTML REGISTRATION NOTIFICATION FOR ADMINS ---
-        const adminEmailBody = `
-            <div style="font-family: Arial, sans-serif; color: #1A2530; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; border-top: 5px solid #f97316;">
-                <h2 style="color: #f97316; margin-top: 0;">Action Required: New Account Request</h2>
-                <p>A new user has submitted a registration request for the Fairchild Imaging Operations System and is pending authorization.</p>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Requested Name:</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.name}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Corporate Email:</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.email}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Requested Role:</td>
-                        <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${newUser.role}</td>
-                    </tr>
-                </table>
-                <p style="margin-top: 20px; font-size: 12px; color: #718096;">Please log in to the operations dashboard to approve or decline this access request.</p>
-            </div>
-        `;
-
-        try {
-          await fetch('/api/sendEmail', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: adminMailingList,
-              subject: 'Action Required: New Account Request - FI Operations System',
-              body: adminEmailBody
-            }),
-          });
-        } catch (err) {
-          console.error('Failed to trigger admin notification email:', err);
-        }
-
+        setRegisterName("");
+        setRegisterDepartment("");
+        setAuthPassword("");
       } else {
-        setAuthError("Failed to communicate credential request block packet to Azure.");
+        setAuthError("Failed to register account.");
       }
     } catch (err) {
-      setAuthError("Network communication error. Please try again.");
-      console.error(err);
+      setAuthError("Network error during registration.");
     } finally {
       setIsRegistering(false);
     }
   };
 
-  const handleLogout = () => { 
-    localStorage.removeItem('fi_oms_session');
-    setCurrentUser(null); 
-    changeTab("dashboard"); 
-  };
-
-  const handleApproveUser = async (email) => {
-    const targetUser = users.find(u => u.email === email);
-    if (!targetUser) return;
-    
-    const updatedUser = { ...targetUser, approved: true };
-    setUsers(users.map(u => u.email === email ? updatedUser : u));
-
-    try {
-      await fetch('/api/users', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(updatedUser) 
-      });
-    } catch (err) {
-      console.error("Failed to approve user in database:", err);
-    }
-
-    const approvalLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-AUTH", assetName: "User Authentication Services", templateName: "User Access Provisioning", interval: "On-Demand", technician: currentUser.name, email: currentUser.email, status: "Completed Pass", comments: `Admin approved corporate access token for user account: ${email} with role: ${targetUser.role}` };
-    try {
-      const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(approvalLog) });
-      if (res.ok) {
-        const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]); 
-      }
-    } catch (err) { console.error(err); }
-
-    const adminEmails = users.filter(u => u.approved && (u.role === "System Admin" || u.role === "admin")).map(u => u.email);
-    const adminMailingList = Array.from(new Set([...adminEmails, 'cton@fcimg.com'])).join(',');
-
-    // --- NEW HTML APPROVAL EMAIL SENT TO THE USER ---
-    const approvalEmailBody = `
-        <div style="font-family: Arial, sans-serif; color: #1A2530; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px; border-top: 5px solid #005596;">
-            <h2 style="color: #005596; margin-top: 0;">Account Access Granted</h2>
-            <p>Your account access request for the Fairchild Imaging Operations System has been formally approved by the System Administrator.</p>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Account Name:</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.name}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Corporate Email:</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.email}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7; font-weight: bold;">Assigned Role:</td>
-                    <td style="padding: 8px; border-bottom: 1px solid #edf2f7;">${targetUser.role || "Operator"}</td>
-                </tr>
-            </table>
-            <p style="margin-top: 20px; font-size: 12px; color: #718096;">You may now log in to the system using your corporate email and security password.</p>
-        </div>
-    `;
-
-    try {
-      await fetch('/api/sendEmail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: email,
-          cc: adminMailingList,
-          subject: 'Account Approved - FI Operations System',
-          body: approvalEmailBody
-        }),
-      });
-    } catch (err) {
-      console.error('Failed to trigger approval email:', err);
-    }
-
-    triggerModal("Account Approved", `Access granted successfully for ${email}. An automated notification email has been dispatched to the user.`, "success");
-  };
-
-  const handleDenyUser = (email) => {
-    triggerModal("Confirm Action", `Decline and remove the access request for ${email}?`, "confirm", async () => {
-        const targetUser = users.find(u => u.email === email);
-        setUsers(prevUsers => prevUsers.filter(u => u.email !== email));
-
-        if (targetUser && targetUser.id) {
-            try {
-                await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
-            } catch (err) {
-                console.error("Failed to delete user from database:", err);
-            }
-        }
-    });
-  };
-
-  const handleRevokeUser = (email) => {
-    triggerModal("Revoke Corporate Access", `Are you sure you want to permanently terminate access credentials for ${email}?`, "confirm", async () => {
-      const targetUser = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (!targetUser) {
-        console.error(`Could not locate ${email} in local state to delete.`);
-        triggerModal("Error", "User data not synced properly. Please refresh the page and try again.", "error");
-        return;
-      }
-
-      if (targetUser.email === "admin@fcimg.com") {
-        triggerModal("Action Blocked", "System Admin account access restrictions cannot self-terminate.", "error");
-        return;
-      }
-
-      setUsers(prevUsers => prevUsers.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
-
-      if (targetUser && targetUser.id) {
-        try {
-          await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
-          
-          const revokeLog = { id: `LOG-${Date.now().toString().slice(-4)}`, timestamp: new Date().toLocaleString(), assetId: "SYS-REVOKE", assetName: "User Authentication Services", templateName: "User Access Termination", interval: "On-Demand", technician: currentUser?.name || "System", email: currentUser?.email || "system@fcimg.com", status: "Incomplete Log", comments: `Admin permanently revoked corporate access token for account: ${email}` };
-          const res = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(revokeLog) });
-          if (res.ok) {
-            const savedLog = await res.json(); setHistory(prev => [savedLog, ...prev]);
-          }
-          
-          triggerModal("Access Revoked", `Account credentials for ${email} have been purged from database configuration records.`, "success");
-        } catch (err) {
-          console.error("Failed to delete user from database:", err);
-        }
-      }
-    });
-  };
-
   return {
-    users, setUsers,
-    currentUser, setCurrentUser,
-    isSystemAdmin,
+    currentUser, setCurrentUser, isSystemAdmin,
     authMode, setAuthMode,
     authEmail, setAuthEmail,
     authPassword, setAuthPassword,
     registerName, setRegisterName,
     registerRole, setRegisterRole,
-    authError, setAuthError,
-    authSuccess, setAuthSuccess,
-    isRegistering, isSigningIn,
-    handleSignIn, handleRegister, handleLogout,
-    handleApproveUser, handleDenyUser, handleRevokeUser
+    registerDepartment, setRegisterDepartment, // --- THE FIX: Exported for the UI ---
+    authError, authSuccess,
+    isSigningIn, isRegistering,
+    handleSignIn, handleRegister
   };
 }
