@@ -104,7 +104,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- NEW: UNIVERSAL EMAIL TRIGGER FUNCTION ---
+  // --- UNIVERSAL EMAIL TRIGGER FUNCTION ---
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
       const emailPayload = {
@@ -126,6 +126,60 @@ export default function App() {
       console.error("❌ Email Blast Failed:", err);
       return false;
     }
+  };
+  // ----------------------------------------------
+
+  // --- ACCOUNT APPROVAL MANAGEMENT FUNCTIONS ---
+  const pendingApprovals = users.filter(u => u.status !== 'Active');
+  const activeAccounts = users.filter(u => u.status === 'Active');
+
+  const handleApproveUser = async (email) => {
+    const targetUser = users.find(u => u.email === email);
+    if (!targetUser) return;
+    
+    const updatedUser = { ...targetUser, status: "Active" };
+    try {
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUser)
+      });
+      setUsers(users.map(u => u.email === email ? updatedUser : u));
+    } catch (err) {
+      console.error("User approval failed:", err);
+    }
+  };
+
+  const handleDenyUser = async (email) => {
+    const targetUser = users.find(u => u.email === email);
+    if (!targetUser) return;
+
+    try {
+      await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
+      setUsers(users.filter(u => u.email !== email));
+    } catch (err) {
+      console.error("User denial failed:", err);
+    }
+  };
+
+  const handleRevokeUser = async (email) => {
+    const targetUser = users.find(u => u.email === email);
+    if (!targetUser) return;
+
+    modals.triggerModal(
+      "Confirm Revocation",
+      `Are you sure you want to permanently revoke system access for ${email}?`,
+      "confirm",
+      async () => {
+        try {
+          await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
+          setUsers(users.filter(u => u.email !== email));
+          modals.closeModal();
+        } catch (err) {
+          console.error("User revocation failed:", err);
+        }
+      }
+    );
   };
   // ----------------------------------------------
 
@@ -205,7 +259,6 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // Uses the new Global triggerEmailAlert for automated background notifications!
         if (actionName === "Facility Asset" || actionName === "PM Configuration") {
              triggerEmailAlert(
                  itemDetails.operatorEmail || "admin@fcimg.com", 
@@ -238,7 +291,15 @@ export default function App() {
     
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
-    triggerEmailAlert, // <-- Pass the email engine down to the rest of the app
+    triggerEmailAlert, 
+
+    // --- Added the missing Account Management Props ---
+    pendingApprovals,
+    activeAccounts,
+    handleApproveUser,
+    handleDenyUser,
+    handleRevokeUser,
+    // --------------------------------------------------
 
     history, setHistory, 
     assets: visibleAssets, setAssets, 
@@ -262,7 +323,7 @@ export default function App() {
       />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
-        <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? stats.pendingApprovals.length : 0} {...masterProps} />
+        <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? pendingApprovals.length : 0} {...masterProps} />
         <ContentRouter {...masterProps} />
       </div>
 
