@@ -75,8 +75,9 @@ export default function App() {
   const activeRole = isRealAdmin ? impersonatedRole : realRole;
   const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
 
+  // --- THE FIX: Department-based Filtering Logic ---
   const filterHierarchy = (item) => {
-    if (isGodMode || userDept === "Production Manufacturing") return true; 
+    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
     return item.department === userDept || item.operatorEmail === userEmail; 
   };
 
@@ -85,9 +86,10 @@ export default function App() {
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
   const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Production Manufacturing") return true; 
+    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
     return u.department === userDept || u.email === userEmail; 
   });
+  // ------------------------------------------------
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
@@ -104,7 +106,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- UNIVERSAL EMAIL TRIGGER FUNCTION ---
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
       const emailPayload = {
@@ -127,9 +128,7 @@ export default function App() {
       return false;
     }
   };
-  // ----------------------------------------------
 
-  // --- ACCOUNT APPROVAL MANAGEMENT FUNCTIONS ---
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
 
@@ -181,7 +180,6 @@ export default function App() {
       }
     );
   };
-  // ----------------------------------------------
 
   const userRef = useRef(currentUser);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
@@ -293,13 +291,11 @@ export default function App() {
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
 
-    // --- Added the missing Account Management Props ---
     pendingApprovals,
     activeAccounts,
     handleApproveUser,
     handleDenyUser,
     handleRevokeUser,
-    // --------------------------------------------------
 
     history, setHistory, 
     assets: visibleAssets, setAssets, 

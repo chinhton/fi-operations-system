@@ -41,9 +41,9 @@ export default function AuthScreen({
                   >
                     <option value="" disabled>-- Select Department --</option>
                     <option value="Facilities">Facilities</option>
-                    <option value="Production Vangie">Production Vangie</option>
-                    <option value="Production Chris">Production Chris</option>
-                    <option value="Production Manufacturing">Production Manufacturing</option>
+                    <option value="Production: Sensor Assembly">Production: Sensor Assembly</option>
+                    <option value="Production: Final Assembly and Test">Production: Final Assembly and Test</option>
+                    <option value="Production Engineering">Production Engineering</option>
                   </select>
                 </div>
               </>
