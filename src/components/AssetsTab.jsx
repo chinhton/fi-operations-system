@@ -202,7 +202,6 @@ export default function AssetsTab({
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right space-x-4">
-                            {/* --- THE FIX: Edit Button Added --- */}
                             {isSystemAdmin && (
                               <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
                             )}
@@ -333,8 +332,17 @@ export default function AssetsTab({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
-                  <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department</label>
+                  <select 
+                    value={newTemplate.department || ""} 
+                    onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
+                    className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                  >
+                    <option value="">-- Unassigned (Global View) --</option>
+                    {CORPORATE_DEPARTMENTS.map(dept => (
+                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
