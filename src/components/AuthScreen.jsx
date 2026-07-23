@@ -3,7 +3,7 @@ import React from 'react';
 export default function AuthScreen({
   authMode, setAuthMode, authEmail, setAuthEmail, authPassword, setAuthPassword,
   registerName, setRegisterName, registerRole, setRegisterRole, 
-  registerDepartment, setRegisterDepartment, // <-- Added Department Props
+  registerDepartment, setRegisterDepartment,
   authError, authSuccess, isSigningIn, isRegistering,
   handleSignIn, handleRegister
 }) {
@@ -31,7 +31,6 @@ export default function AuthScreen({
                   <input type="text" value={registerName} onChange={(e) => setRegisterName(e.target.value)} placeholder="Technician Name" required className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none" />
                 </div>
                 
-                {/* --- NEW CORPORATE DEPARTMENT DROPDOWN --- */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Corporate Department</label>
                   <select 
@@ -45,16 +44,6 @@ export default function AuthScreen({
                     <option value="Production Vangie">Production Vangie</option>
                     <option value="Production Chris">Production Chris</option>
                     <option value="Production Manufacturing">Production Manufacturing</option>
-                  </select>
-                </div>
-                {/* ----------------------------------------- */}
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Requested Access Level</label>
-                  <select value={registerRole} onChange={(e) => setRegisterRole(e.target.value)} className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none">
-                    <option value="Operator">Standard Operator</option>
-                    <option value="Department Manager">Department Manager</option>
-                    <option value="System Admin">System Administrator</option>
                   </select>
                 </div>
               </>
