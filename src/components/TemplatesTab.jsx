@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
-// Hardcoded departments to match your operations
-const CORPORATE_DEPARTMENTS = ["Facilities", "Production Vangie", "Production Chris", "Production Manufacturing"];
+// --- THE FIX: Aligned departments strictly with AuthScreen ---
+const CORPORATE_DEPARTMENTS = [
+  "Facilities", 
+  "Production: Sensor Assembly", 
+  "Production: Final Assembly and Test", 
+  "Production Engineering"
+];
 
 export default function TemplatesTab({
   handleAddTemplateSubmit, newTemplate, setNewTemplate, 
