@@ -3,7 +3,7 @@ import React from 'react';
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   openPmModal, currentUser, isSystemAdmin, triggerEmailAlert,
-  workOrders, assets, calculateDaysRemaining 
+  workOrders, assets, pmTemplates, calculateDaysRemaining 
 }) {
   
   const adminGlobalQueue = [];
@@ -17,13 +17,14 @@ export default function DashboardTab({
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
 
-      // If the asset is broken/down, it is immediately critical
       if (isCriticalStatus) {
           isDueOrCritical = true;
           dueMessage = "Immediate Action Required";
       } else {
-          // Check all active PM frequencies for this asset
-          const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+          // --- THE FIX: DYNAMICALLY EXTRACT FREQUENCIES FROM SOP LIBRARY ---
+          const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+          const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+          // -----------------------------------------------------------------
           
           let lowestDays = null;
           freqs.forEach(freq => {

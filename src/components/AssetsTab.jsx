@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 const CORPORATE_DEPARTMENTS = ["Facilities", "Production Vangie", "Production Chris", "Production Manufacturing"];
 
 export default function AssetsTab({
-  assets = [], users = [], manuals = [],
+  assets = [], users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
   calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, openPmModal, deleteAsset,
@@ -50,10 +50,10 @@ export default function AssetsTab({
   };
 
   // --- TEMPLATE MODAL HANDLERS ---
-  const handleQuickBuildTemplate = (asset, defaultFreq = "Monthly") => {
+  const handleQuickBuildTemplate = (asset) => {
     setNewTemplate({
-      name: `${asset.name} - ${defaultFreq} Maintenance`,
-      interval: defaultFreq,
+      name: `${asset.name} Maintenance Protocol`,
+      interval: "Monthly", // Default fallback, user can modify
       department: asset.department || "",
       targetCategory: asset.category || "Global",
       managerEmail: "",
@@ -122,7 +122,11 @@ export default function AssetsTab({
                   </thead>
                   <tbody className="divide-y divide-gray-100 text-xs">
                     {catAssets.map((asset) => {
-                      const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+                      
+                      // --- THE FIX: DYNAMICALLY EXTRACT FREQUENCIES FROM SOP LIBRARY ---
+                      const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+                      const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+                      // -----------------------------------------------------------------
                       
                       return (
                         <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
@@ -422,19 +426,19 @@ export default function AssetsTab({
 
                   {/* Add Row Controls */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
-                    <select id="builderTypeAssetModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
+                    <select id="builderTypeModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
                         <option value="text">Short Text (Serial, Note)</option>
                         <option value="number">Numeric (PSI, Temp)</option>
                         <option value="passfail">Pass/Fail Dropdown</option>
                     </select>
-                    <input type="text" id="builderLabelAssetModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepAssetModal').click(); }}} />
-                    <button type="button" id="btnAddStepAssetModal" onClick={() => {
-                        const type = document.getElementById('builderTypeAssetModal').value;
-                        const label = document.getElementById('builderLabelAssetModal').value.trim();
+                    <input type="text" id="builderLabelModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepModal').click(); }}} />
+                    <button type="button" id="btnAddStepModal" onClick={() => {
+                        const type = document.getElementById('builderTypeModal').value;
+                        const label = document.getElementById('builderLabelModal').value.trim();
                         if(!label) return;
                         setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
-                        document.getElementById('builderLabelAssetModal').value = '';
+                        document.getElementById('builderLabelModal').value = '';
                     }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row to Grid</button>
                   </div>
                 </div>
