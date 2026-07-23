@@ -65,7 +65,10 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  // --- THE FIX: Case-Insensitive Email Evaluation ---
+  // --- RESTORED: The Data Sync Hook ---
+  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
+  // ------------------------------------
+
   const userEmailRaw = currentUser?.email || "";
   const userEmail = userEmailRaw.toLowerCase();
   const realRole = currentUser?.role;
@@ -74,7 +77,6 @@ export default function App() {
   const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
   const activeRole = isRealAdmin ? impersonatedRole : realRole;
   const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
-  // ------------------------------------------------
 
   const filterHierarchy = (item) => {
     if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
