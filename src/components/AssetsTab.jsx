@@ -17,8 +17,6 @@ export default function AssetsTab({
   const [assetSearch, setAssetSearch] = useState("");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [targetAssetContext, setTargetAssetContext] = useState(null);
-  
-  // --- NEW: Asset Registration Modal State ---
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   const filteredAssets = assets.filter(a =>
@@ -34,13 +32,24 @@ export default function AssetsTab({
     return acc;
   }, {});
 
-  // --- LOCAL SUBMIT HANDLERS TO CLOSE MODALS ---
+  // --- ASSET MODAL HANDLERS ---
+  const openRegisterForNew = () => {
+    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: "", operatorEmail: "" });
+    setIsRegisterModalOpen(true);
+  };
+
+  const openRegisterForEdit = (asset) => {
+    setNewAsset(asset);
+    setIsRegisterModalOpen(true);
+  };
+
   const handleLocalAssetSubmit = async (e) => {
     e.preventDefault();
     await handleAddAssetSubmit(e);
     setIsRegisterModalOpen(false);
   };
 
+  // --- TEMPLATE MODAL HANDLERS ---
   const handleQuickBuildTemplate = (asset, defaultFreq = "Monthly") => {
     setNewTemplate({
       name: `${asset.name} - ${defaultFreq} Maintenance`,
@@ -70,7 +79,7 @@ export default function AssetsTab({
       {/* DIRECTORY HEADER & CONTROLS */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <button 
-          onClick={() => setIsRegisterModalOpen(true)}
+          onClick={openRegisterForNew}
           className="w-full md:w-auto bg-[#005596] hover:bg-[#00407a] text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
         >
           ➕ Register New Asset
@@ -169,7 +178,6 @@ export default function AssetsTab({
                                     <div key={freq} className="flex flex-col text-[10px]">
                                       <div className="flex justify-between items-center mb-0.5 group">
                                         
-                                        {/* --- INTERACTIVE FREQUENCY BUTTON --- */}
                                         <button 
                                           onClick={() => handleQuickBuildTemplate(asset, freq)}
                                           className="text-[#005596] font-bold uppercase tracking-wider flex items-center hover:text-[#00A1E4] transition-colors"
@@ -194,6 +202,10 @@ export default function AssetsTab({
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right space-x-4">
+                            {/* --- THE FIX: Edit Button Added --- */}
+                            {isSystemAdmin && (
+                              <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
+                            )}
                             <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
                             <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                             {isSystemAdmin && (
@@ -211,38 +223,39 @@ export default function AssetsTab({
         )}
       </div>
 
-      {/* --- ASSET REGISTRATION MODAL --- */}
+      {/* --- ASSET REGISTRATION / EDIT MODAL --- */}
       {isRegisterModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-entrance relative">
             <button onClick={() => setIsRegisterModalOpen(false)} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
             
             <div className="bg-[#005596] text-white px-6 py-4">
-              <h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">
+                {newAsset.id ? 'Edit System Information' : 'Register New Dynamic Lab/Cleanroom Asset'}
+              </h3>
             </div>
             
             <form onSubmit={handleLocalAssetSubmit} className="p-6">
-              {/* Form converted to a 2-column grid, PM Frequencies entirely removed */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
-                  <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newAsset.name || ""} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
-                  <input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newAsset.model || ""} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
-                  <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
-                  <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newAsset.category || ""} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
-                  <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newAsset.location || ""} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Link To Facility Asset (Sub-Equipment)</label>
@@ -252,7 +265,7 @@ export default function AssetsTab({
                     className="w-full text-xs rounded border-purple-200 shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 p-2.5 border bg-purple-50/30 outline-none"
                   >
                     <option value="">-- Standalone Primary Asset --</option>
-                    {assets.filter(a => !a.parentId).map(a => (
+                    {assets.filter(a => !a.parentId && a.id !== newAsset.id).map(a => (
                       <option key={`link-${a.id}`} value={a.id}>🔗 Link to: {a.name} ({a.serial})</option>
                     ))}
                   </select>
@@ -287,7 +300,7 @@ export default function AssetsTab({
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingAsset ? 'Committing...' : 'Commit Asset'}
+                  {isAddingAsset ? 'Processing...' : (newAsset.id ? 'Update Asset' : 'Commit Asset')}
                 </button>
               </div>
             </form>
