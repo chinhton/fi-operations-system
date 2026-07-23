@@ -96,43 +96,42 @@ export default function App() {
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   const calculateNextPmDate = (lastDateStr, freq) => {
-  if (!lastDateStr || !freq) return null;
-  const lastDate = new Date(lastDateStr);
-  let nextDate = new Date(lastDate);
+    if (!lastDateStr || !freq) return null;
+    const lastDate = new Date(lastDateStr);
+    let nextDate = new Date(lastDate);
 
-  switch (freq) {
-    case "Daily": nextDate.setDate(lastDate.getDate() + 1); break;
-    case "Weekly": nextDate.setDate(lastDate.getDate() + 7); break;
-    case "Monthly": nextDate.setMonth(lastDate.getMonth() + 1); break;
-    case "Quarterly": nextDate.setMonth(lastDate.getMonth() + 3); break;
-    case "Semi-Annually":
-    case "Calibration (Semi-Annual)": nextDate.setMonth(lastDate.getMonth() + 6); break;
-    case "Annually":
-    case "Calibration (Annual)": nextDate.setFullYear(lastDate.getFullYear() + 1); break;
-    case "2-Year": nextDate.setFullYear(lastDate.getFullYear() + 2); break;
-    case "3-Year": nextDate.setFullYear(lastDate.getFullYear() + 3); break;
-    case "4-Year": nextDate.setFullYear(lastDate.getFullYear() + 4); break;
-    case "5-Year": nextDate.setFullYear(lastDate.getFullYear() + 5); break;
-    default: return null;
-  }
-  return nextDate.toLocaleDateString(); 
-};
+    switch (freq) {
+      case "Daily": nextDate.setDate(lastDate.getDate() + 1); break;
+      case "Weekly": nextDate.setDate(lastDate.getDate() + 7); break;
+      case "Monthly": nextDate.setMonth(lastDate.getMonth() + 1); break;
+      case "Quarterly": nextDate.setMonth(lastDate.getMonth() + 3); break;
+      case "Semi-Annually":
+      case "Calibration (Semi-Annual)": nextDate.setMonth(lastDate.getMonth() + 6); break;
+      case "Annually":
+      case "Calibration (Annual)": nextDate.setFullYear(lastDate.getFullYear() + 1); break;
+      case "2-Year": nextDate.setFullYear(lastDate.getFullYear() + 2); break;
+      case "3-Year": nextDate.setFullYear(lastDate.getFullYear() + 3); break;
+      case "4-Year": nextDate.setFullYear(lastDate.getFullYear() + 4); break;
+      case "5-Year": nextDate.setFullYear(lastDate.getFullYear() + 5); break;
+      default: return null;
+    }
+    return nextDate.toLocaleDateString(); 
+  };
 
-const calculateDaysRemaining = (lastDateStr, freq) => {
-  if (!lastDateStr || !freq) return null;
-  const nextDateStr = calculateNextPmDate(lastDateStr, freq);
-  if (!nextDateStr) return null;
-  
-  const nextDate = new Date(nextDateStr);
-  const today = new Date();
-  
-  // Zero out times for an accurate day-to-day diff
-  nextDate.setHours(0,0,0,0);
-  today.setHours(0,0,0,0);
-  
-  const diffTime = nextDate - today;
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-};
+  const calculateDaysRemaining = (lastDateStr, freq) => {
+    if (!lastDateStr || !freq) return null;
+    const nextDateStr = calculateNextPmDate(lastDateStr, freq);
+    if (!nextDateStr) return null;
+    
+    const nextDate = new Date(nextDateStr);
+    const today = new Date();
+    
+    nextDate.setHours(0,0,0,0);
+    today.setHours(0,0,0,0);
+    
+    const diffTime = nextDate - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -223,6 +222,31 @@ const calculateDaysRemaining = (lastDateStr, freq) => {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
+      if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
+          let newUserDetails = {};
+          if (config.body) {
+              try { newUserDetails = JSON.parse(config.body); } catch (e) {}
+          }
+          
+          // Alert Admin
+          triggerEmailAlert(
+              "admin@fcimg.com", 
+              "FI-OMS Alert: New Account Pending Approval",
+              `System Notification:\n\nA new user has registered for the Operations Management System and is awaiting approval.\n\nName: ${newUserDetails.name || 'Unknown'}\nEmail: ${newUserDetails.email || 'Unknown'}\nDepartment: ${newUserDetails.department || 'Unknown'}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in and check the Account Approvals tab to grant access.`
+          );
+
+          // Alert New User
+          if (newUserDetails.email) {
+              triggerEmailAlert(
+                  newUserDetails.email,
+                  "FI-OMS: Account Registration Received",
+                  `Hello ${newUserDetails.name || 'there'},\n\nYour account registration for the Fairchild Imaging Operations Management System has been received successfully and is currently pending administrator approval.\n\nYou will receive another email once your access has been granted.\n\nThank you.`
+              );
+          }
+
+          return response;
+      }
+
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
         
         let actionName = "System Event";
@@ -294,6 +318,12 @@ const calculateDaysRemaining = (lastDateStr, freq) => {
                  `FI-OMS Alert: ${actionName} ${actionTaken}`,
                  `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
              );
+        } else if (actionName === "User Directory") {
+             triggerEmailAlert(
+                 itemDetails.email || "admin@fcimg.com", 
+                 `FI-OMS Alert: Account Status Updated`,
+                 `System Notification:\n\nYour account status in the FI-Operations Management System has been updated by ${activeUser.name}.\n\nAction Logged: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nIf you have been approved, you may now log in.`
+             );
         }
       }
       return response;
@@ -306,7 +336,7 @@ const calculateDaysRemaining = (lastDateStr, freq) => {
     return (
       <>
         <style>{customStyles}</style>
-        <AuthScreen {...auth} />
+        <AuthScreen {...auth} triggerEmailAlert={triggerEmailAlert} />
       </>
     );
   }
