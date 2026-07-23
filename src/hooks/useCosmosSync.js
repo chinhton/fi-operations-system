@@ -6,7 +6,8 @@ export default function useCosmosSync(
   setAssets, 
   setWorkOrders, 
   setPmTemplates, 
-  setHistory
+  setHistory,
+  setManuals // <-- Added independent manuals state setter
 ) {
   useEffect(() => {
     // Only fetch data if a user is securely logged in
@@ -20,13 +21,14 @@ export default function useCosmosSync(
           headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' } 
         };
 
-        // Fire all API requests in parallel for maximum speed
-        const [usersRes, assetsRes, woRes, templatesRes, historyRes] = await Promise.all([
+        // Fire all API requests in parallel for maximum speed, including manuals
+        const [usersRes, assetsRes, woRes, templatesRes, historyRes, manualsRes] = await Promise.all([
           fetch('/api/users', fetchOpts),
           fetch('/api/assets', fetchOpts),
           fetch('/api/workorders', fetchOpts),
           fetch('/api/templates', fetchOpts),
-          fetch('/api/history', fetchOpts)
+          fetch('/api/history', fetchOpts),
+          fetch('/api/manuals', fetchOpts) // <-- NEW: Fetching manuals independently
         ]);
 
         // Hydrate the state if responses are good, explicitly log errors if Azure rejects them
@@ -45,11 +47,14 @@ export default function useCosmosSync(
         if (historyRes.ok) setHistory(await historyRes.json());
         else console.error("❌ Azure History Sync Failed:", await historyRes.text());
         
+        if (manualsRes.ok) setManuals(await manualsRes.json());
+        else console.error("❌ Azure Manuals Sync Failed:", await manualsRes.text());
+        
       } catch (err) {
         console.error("Critical Network Failure connecting to Azure:", err);
       }
     };
 
     fetchCosmosData();
-  }, [currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory]); 
+  }, [currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals]); 
 }

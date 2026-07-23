@@ -1,12 +1,11 @@
 import { useState, useRef } from 'react';
 
-export default function useManuals(assets, setAssets, setHistory, currentUser, triggerModal, closeModal) {
+export default function useManuals(manuals, setManuals, assets, setHistory, currentUser, triggerModal, closeModal) {
   const [manualAssetIds, setManualAssetIds] = useState([]);
   const [manualFile, setManualFile] = useState(null);
   const [manualText, setManualText] = useState("");
   const [isAttachingManual, setIsAttachingManual] = useState(false);
-  const [viewingManualAsset, setViewingManualAsset] = useState(null);
-  const [activeManualIndex, setActiveManualIndex] = useState(0);
+  const [viewingManual, setViewingManual] = useState(null); // Replaced viewingManualAsset
   const manualFileInputRef = useRef(null);
 
   const handleManualFileChange = (e) => {
@@ -35,7 +34,6 @@ export default function useManuals(assets, setAssets, setHistory, currentUser, t
       if (manualFile) {
         triggerModal("Uploading", `Transferring manual to Azure Blob Storage...`, "info");
         try {
-          // --- AZURE BLOB STORAGE CONNECTION ---
           const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: manualFile.name, fileData: manualFile.data }) });
           if (uploadRes.ok) {
             const uploadData = await uploadRes.json(); finalFileUrl = uploadData.url; finalFileName = uploadData.fileName;
@@ -47,51 +45,47 @@ export default function useManuals(assets, setAssets, setHistory, currentUser, t
         finalFileUrl = `data:text/plain;base64,${btoa(unescape(encodeURIComponent(manualText)))}`;
       }
 
-      const attachmentPayload = { 
-        id: `DOC-${Date.now().toString().slice(-6)}`, fileName: finalFileName, 
+      const manualPayload = { 
+        id: `DOC-${Date.now().toString().slice(-6)}`, 
+        fileName: finalFileName, 
         fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, 
-        fileData: finalFileUrl, manualText: manualText || "Refer to attached file." 
+        fileData: finalFileUrl, 
+        manualText: manualText || "Refer to attached file.",
+        linkedAssetIds: manualAssetIds // Store associations on the manual itself
       };
 
-      const updatedAssetsMap = {};
+      // 1. Save the Manual Independently
+      await fetch('/api/manuals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(manualPayload) });
+      setManuals(prev => [...prev, manualPayload]);
+
+      // 2. Log History for Assets
       const newLogs = [];
-
       await Promise.all(targetAssets.map(async (targetAsset) => {
-        const existingManuals = targetAsset.manuals || (targetAsset.manual ? [targetAsset.manual] : []);
-        const updatedAsset = { ...targetAsset, manual: null, manuals: [...existingManuals, attachmentPayload] };
-        updatedAssetsMap[updatedAsset.id] = updatedAsset;
-
-        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser?.name || "System Admin", email: currentUser?.email || "admin@fcimg.com", status: "Completed Pass", comments: `Linked new manual documentation to device.` };
-        
+        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser?.name || "System Admin", email: currentUser?.email || "admin@fcimg.com", status: "Completed Pass", comments: `Linked new independent manual documentation to device.` };
         try {
-          await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
           const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
           if (logRes.ok) newLogs.push(await logRes.json());
         } catch (err) { console.error(err); }
       }));
 
       setHistory(prev => [...newLogs, ...prev]);
-      setAssets(prevAssets => prevAssets.map(ast => updatedAssetsMap[ast.id] || ast));
       
       closeModal(); setManualAssetIds([]); setManualFile(null); setManualText(""); 
       if (manualFileInputRef.current) manualFileInputRef.current.value = "";
-      triggerModal("Success", `Document mapped to ${targetAssets.length} asset(s).`, "success");
+      triggerModal("Success", `Document saved to global library and mapped to ${targetAssets.length} asset(s).`, "success");
     } finally { setIsAttachingManual(false); }
   };
 
-  const handleRemoveManual = (assetId, docId) => {
-    triggerModal("Remove Manual", "Permanently detach this document?", "confirm", async () => {
-      const targetAsset = assets.find(a => a.id === assetId);
-      const updatedManuals = (targetAsset.manuals || []).filter(m => m.id !== docId);
-      const updatedAsset = { ...targetAsset, manuals: updatedManuals };
-      
+  const handleRemoveManual = (docId) => {
+    triggerModal("Delete Manual", "Permanently remove this document from the global library?", "confirm", async () => {
       try {
-        await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
-        setAssets(assets.map(a => a.id === assetId ? updatedAsset : a));
-        closeModal(); triggerModal("Success", "Document removed.", "success");
+        await fetch(`/api/manuals?id=${docId}`, { method: 'DELETE' });
+        setManuals(manuals.filter(m => m.id !== docId));
+        if (viewingManual?.id === docId) setViewingManual(null);
+        closeModal(); triggerModal("Success", "Document permanently removed.", "success");
       } catch (err) { closeModal(); triggerModal("Error", "Failed to remove manual.", "error"); }
     });
   };
 
-  return { manualAssetIds, setManualAssetIds, manualFile, manualText, setManualText, isAttachingManual, viewingManualAsset, setViewingManualAsset, activeManualIndex, setActiveManualIndex, manualFileInputRef, handleManualFileChange, handleAttachManualSubmit, handleRemoveManual };
+  return { manualAssetIds, setManualAssetIds, manualFile, manualText, setManualText, isAttachingManual, viewingManual, setViewingManual, manualFileInputRef, handleManualFileChange, handleAttachManualSubmit, handleRemoveManual };
 }

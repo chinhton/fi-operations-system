@@ -50,6 +50,10 @@ export default function App() {
   const [pmTemplates, setPmTemplates] = useState([]);
   const [workOrders, setWorkOrders] = useState([]);
   const [users, setUsers] = useState([]);
+  
+  // --- NEW: Independent Manuals State ---
+  const [manuals, setManuals] = useState([]); 
+  // ------------------------------------
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -63,9 +67,9 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  // --- RESTORED: The Data Sync Hook ---
-  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
-  // ------------------------------------
+  // --- UPDATED: The Data Sync Hook now pulls manuals ---
+  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
+  // -----------------------------------------------------
 
   const userEmailRaw = currentUser?.email || "";
   const userEmail = userEmailRaw.toLowerCase();
@@ -90,7 +94,11 @@ export default function App() {
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
-  const manualHooks = useManuals(visibleAssets, setAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  
+  // --- UPDATED: useManuals decoupled from assets and wired to global manuals array ---
+  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  // ---------------------------------------------------------------------------------
+
   const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
@@ -189,7 +197,8 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
-      if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail')) {
+      // ADDED /api/manuals and /api/upload to the ignore list to prevent double-logging
+      if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
         
         let actionName = "System Event";
         let tabSource = "System Background";
@@ -298,6 +307,7 @@ export default function App() {
     pmTemplates: visibleTemplates, setPmTemplates, 
     workOrders: visibleWorkOrders, setWorkOrders, 
     users: visibleUsers, setUsers,
+    manuals, setManuals, // <-- ADDED: Passes global manuals to ContentRouter -> ManualsTab
     calculateDaysRemaining, calculateNextPmDate,
   };
 

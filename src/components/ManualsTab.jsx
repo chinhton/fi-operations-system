@@ -1,44 +1,42 @@
-import React, { useState } from 'react'; // <-- Added useState here!
+import React, { useState } from 'react';
 
 export default function ManualsTab({
-  assetsWithManuals, viewingManualAsset, setViewingManualAsset, 
-  activeManualIndex, setActiveManualIndex, handleAttachManualSubmit, 
-  assets, manualAssetIds, setManualAssetIds, manualFileInputRef, 
-  manualFile, handleManualFileChange, manualText, setManualText, 
-  isAttachingManual, isSystemAdmin, handleRemoveManual
+  manuals = [], viewingManual, setViewingManual, 
+  handleAttachManualSubmit, assets, manualAssetIds, setManualAssetIds, 
+  manualFileInputRef, manualFile, handleManualFileChange, manualText, 
+  setManualText, isAttachingManual, isSystemAdmin, handleRemoveManual
 }) {
 
-  // --- THE FIX: Full-Screen State ---
+  // --- Full-Screen State ---
   const [isMaximized, setIsMaximized] = useState(false);
-  // ----------------------------------
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
       <div className="lg:col-span-5 space-y-6">
         
+        {/* Document Library (Now independent of assets) */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
             <h3 className="font-bold text-xs uppercase tracking-wider">📚 Document Library</h3>
-            <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assetsWithManuals.length} systems</span>
+            <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{manuals.length} manuals</span>
           </div>
           <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-            {assetsWithManuals.length === 0 ? (
-              <div className="p-6 text-center text-gray-500 text-xs">No documentation manuals currently attached to any systems. Use the upload tool to attach a file.</div>
+            {manuals.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 text-xs">No documentation manuals currently in the global library. Use the upload tool to attach a file.</div>
             ) : (
-              assetsWithManuals.map(asset => (
+              manuals.map(doc => (
                 <div 
-                  key={asset.id} 
+                  key={doc.id} 
                   onClick={() => { 
-                    setViewingManualAsset(asset); 
-                    setActiveManualIndex(0); 
-                    setIsMaximized(false); // Reset maximize state when switching assets
+                    setViewingManual(doc); 
+                    setIsMaximized(false); 
                   }}
-                  className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManualAsset?.id === asset.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
+                  className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManual?.id === doc.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
                 >
                   <div>
-                    <span className="font-bold text-gray-900 text-xs block">{asset.name}</span>
+                    <span className="font-bold text-gray-900 text-xs block truncate max-w-[250px]">{doc.fileName}</span>
                     <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">
-                      {asset.manuals ? `${asset.manuals.length} documents` : (asset.manual ? "1 document" : "")}
+                      Mapped to {doc.linkedAssetIds?.length || 0} systems • {doc.fileSize}
                     </span>
                   </div>
                   <span className="text-[#005596] text-lg font-bold">➔</span>
@@ -48,8 +46,9 @@ export default function ManualsTab({
           </div>
         </div>
 
+        {/* Upload Form */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Attach Documentation Manual</h3></div>
+          <div className="bg-[#005596] text-white px-5 py-4"><h3 className="font-bold text-xs uppercase tracking-wider">Upload New Manual</h3></div>
           <form onSubmit={handleAttachManualSubmit} className="p-5 space-y-5">
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Fleet Assets (Select Multiple)</label>
@@ -63,11 +62,8 @@ export default function ManualsTab({
                         type="checkbox" 
                         checked={manualAssetIds.includes(a.id)}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setManualAssetIds([...manualAssetIds, a.id]);
-                          } else {
-                            setManualAssetIds(manualAssetIds.filter(id => id !== a.id));
-                          }
+                          if (e.target.checked) setManualAssetIds([...manualAssetIds, a.id]);
+                          else setManualAssetIds(manualAssetIds.filter(id => id !== a.id));
                         }}
                         className="w-4 h-4 rounded border-gray-300 text-[#005596] focus:ring-[#005596]" 
                       />
@@ -78,7 +74,7 @@ export default function ManualsTab({
               </div>
               {manualAssetIds.length > 0 && (
                 <div className="mt-1.5 text-[10px] text-[#005596] font-bold">
-                  {manualAssetIds.length} asset(s) selected for bulk upload mapping.
+                  {manualAssetIds.length} asset(s) selected for mapping.
                 </div>
               )}
             </div>
@@ -94,12 +90,13 @@ export default function ManualsTab({
               <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
             </div>
             <button type="submit" disabled={isAttachingManual} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              {isAttachingManual ? 'Uploading Data...' : 'Distribute Manual to Assets'}
+              {isAttachingManual ? 'Uploading Data...' : 'Save Manual to Library'}
             </button>
           </form>
         </div>
       </div>
 
+      {/* Manual Viewer */}
       <div className="lg:col-span-7 space-y-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[400px] flex flex-col justify-between h-full">
           <div>
@@ -107,83 +104,54 @@ export default function ManualsTab({
               <h3 className="font-bold text-xs uppercase tracking-wider">Embedded Manual / SOP Guidelines Reader</h3>
             </div>
             
-            {viewingManualAsset && ((viewingManualAsset.manuals && viewingManualAsset.manuals.length > 0) || viewingManualAsset.manual) ? (
+            {viewingManual ? (
               <div className="p-6 space-y-5 flex-grow flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="font-bold text-base text-[#005596]">{viewingManual.fileName}</h4>
+                    <span className="text-xs text-gray-500 block font-mono mt-1">ID: {viewingManual.id} • Associated Systems: {viewingManual.linkedAssetIds?.length || 0}</span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button onClick={() => setIsMaximized(true)} className="bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🖥️ Maximize</button>
+                    <a href={viewingManual.fileData} download={viewingManual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
+                    {isSystemAdmin && (
+                      <button onClick={() => handleRemoveManual(viewingManual.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Delete</button>
+                    )}
+                  </div>
+                </div>
                 
-                {(() => {
-                  const currentManuals = viewingManualAsset.manuals || (viewingManualAsset.manual ? [{...viewingManualAsset.manual, id: viewingManualAsset.manual.id || 'LEGACY-DOC'}] : []);
-                  const activeManual = currentManuals[activeManualIndex] || currentManuals[0];
+                <div className={isMaximized 
+                  ? "fixed inset-0 z-[9999] bg-black/90 p-4 md:p-8 flex flex-col" 
+                  : "w-full h-[500px] border border-gray-200 rounded-lg overflow-hidden shadow-inner flex-grow bg-gray-50"
+                }>
+                  {isMaximized && (
+                    <div className="flex justify-end mb-4">
+                      <button onClick={() => setIsMaximized(false)} className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">
+                        Close Fullscreen ✖
+                      </button>
+                    </div>
+                  )}
                   
-                  return (
-                    <>
-                      {currentManuals.length > 1 && (
-                        <div className="flex space-x-2 border-b border-gray-100 pb-3 mb-4 overflow-x-auto">
-                          {currentManuals.map((doc, idx) => (
-                            <button 
-                              key={doc.id || idx}
-                              onClick={() => setActiveManualIndex(idx)}
-                              className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition whitespace-nowrap ${activeManualIndex === idx ? 'bg-[#005596] text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                            >
-                              {doc.fileName.length > 20 ? doc.fileName.substring(0, 20) + '...' : doc.fileName}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="font-bold text-base text-[#005596]">{viewingManualAsset.name}</h4>
-                          <span className="text-xs text-gray-500 block font-mono mt-1">SN: {viewingManualAsset.serial} • Doc: {activeManual.fileName}</span>
-                        </div>
-                        <div className="flex space-x-2">
-                          {/* THE FIX: Added Maximize Button */}
-                          <button onClick={() => setIsMaximized(true)} className="bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🖥️ Maximize</button>
-                          
-                          <a href={activeManual.fileData} download={activeManual.fileName} target="_blank" rel="noopener noreferrer" className="bg-[#005596] hover:bg-[#005596]/95 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">📥 Download</a>
-                          {isSystemAdmin && (
-                            <button onClick={() => handleRemoveManual(viewingManualAsset.id, activeManual.id)} className="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🗑️ Remove</button>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* DYNAMIC VIEWER: Toggles between normal and full-screen overlay based on isMaximized */}
-                      <div className={isMaximized 
-                        ? "fixed inset-0 z-[9999] bg-black/90 p-4 md:p-8 flex flex-col" 
-                        : "w-full h-[500px] border border-gray-200 rounded-lg overflow-hidden shadow-inner flex-grow bg-gray-50"
-                      }>
-                        {isMaximized && (
-                          <div className="flex justify-end mb-4">
-                            <button onClick={() => setIsMaximized(false)} className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase py-2 px-4 rounded shadow transition">
-                              Close Fullscreen ✖
-                            </button>
-                          </div>
-                        )}
-                        
-                        {activeManual.fileData ? (
-                          <iframe 
-                            src={activeManual.fileData} 
-                            title={activeManual.fileName}
-                            className={`w-full ${isMaximized ? 'flex-grow rounded-lg bg-white' : 'h-full'}`}
-                            frameBorder="0"
-                          >
-                            <p className="p-4 text-gray-500 text-xs">
-                              Your browser does not support inline PDFs. <a href={activeManual.fileData} download={activeManual.fileName} className="text-[#005596] underline">Download the manual here</a>.
-                            </p>
-                          </iframe>
-                        ) : (
-                          <div className="p-4 text-xs font-mono whitespace-pre-wrap text-gray-700 h-full overflow-y-auto bg-white rounded-lg">
-                            {activeManual.manualText || "No manual text or file provided."}
-                          </div>
-                        )}
-                      </div>
-                      
-                    </>
-                  );
-                })()}
-
+                  {viewingManual.fileData && !viewingManual.fileData.startsWith("data:text/plain") ? (
+                    <iframe 
+                      src={viewingManual.fileData} 
+                      title={viewingManual.fileName}
+                      className={`w-full ${isMaximized ? 'flex-grow rounded-lg bg-white' : 'h-full'}`}
+                      frameBorder="0"
+                    >
+                      <p className="p-4 text-gray-500 text-xs">
+                        Your browser does not support inline PDFs. <a href={viewingManual.fileData} download={viewingManual.fileName} className="text-[#005596] underline">Download the manual here</a>.
+                      </p>
+                    </iframe>
+                  ) : (
+                    <div className="p-4 text-xs font-mono whitespace-pre-wrap text-gray-700 h-full overflow-y-auto bg-white rounded-lg">
+                      {viewingManual.manualText || "No manual text provided."}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="p-12 text-center text-gray-400 mt-20"><span className="text-4xl block mb-3">📖</span><p className="text-sm font-semibold">Select an asset from the Document Library<br/>to inspect its attached manuals.</p></div>
+              <div className="p-12 text-center text-gray-400 mt-20"><span className="text-4xl block mb-3">📖</span><p className="text-sm font-semibold">Select a document from the Library<br/>to inspect its contents.</p></div>
             )}
           </div>
         </div>

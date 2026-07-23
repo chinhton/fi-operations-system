@@ -23,7 +23,7 @@ const getDatabase = () => {
         database = client.database("OmsDatabase");
     }
     return database;
-};
+}
 
 // Helper to safely boot Blob Storage only when needed
 const getBlobClient = () => {
@@ -33,7 +33,7 @@ const getBlobClient = () => {
         blobServiceClient = BlobServiceClient.fromConnectionString(connString);
     }
     return blobServiceClient;
-};
+}
 
 // Helper for Email Recipients
 const formatRecipients = (emailInput) => {
@@ -101,6 +101,8 @@ app.http('templates', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymou
 app.http('history', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'history') });
 app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'users') });
 app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
+// --> NEW ENDPOINT ADDED HERE <--
+app.http('manuals', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'manuals') });
 
 // --- BLOB STORAGE UPLOAD ENDPOINT ---
 app.http('upload', {
