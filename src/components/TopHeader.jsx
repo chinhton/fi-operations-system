@@ -5,7 +5,7 @@ export default function TopHeader({
   currentTime, 
   currentUser, 
   isSystemAdmin, 
-  handleLogout, 
+  handleSignOut, // <-- Re-aligned to match the useAuth export
   setCurrentUser, 
   triggerModal,
   impersonatedRole,
@@ -61,7 +61,7 @@ export default function TopHeader({
               >
                 Settings
               </button>
-              <button onClick={handleLogout} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">
+              <button onClick={handleSignOut} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">
                 Sign Out
               </button>
             </div>
