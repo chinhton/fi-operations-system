@@ -5,7 +5,7 @@ export default function TopHeader({
   currentTime, 
   currentUser, 
   isSystemAdmin, 
-  handleSignOut, // <-- Re-aligned to match the useAuth export
+  handleSignOut, 
   setCurrentUser, 
   triggerModal,
   impersonatedRole,
@@ -57,11 +57,14 @@ export default function TopHeader({
             <div className="flex items-center space-x-2">
               <button 
                 onClick={() => setIsAccountModalOpen(true)} 
-                className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-xs font-bold rounded shadow-sm transition"
+                className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 text-xs font-bold rounded shadow-sm hover:shadow-md transform hover:-translate-y-0.5 transition-all duration-200"
               >
                 Settings
               </button>
-              <button onClick={handleSignOut} className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-black text-xs font-bold rounded shadow-sm transition">
+              <button 
+                onClick={() => triggerModal("Confirm Sign Out", "Are you sure you want to securely sign out of the system?", "confirm", handleSignOut)} 
+                className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-red-600 hover:shadow-md transform hover:-translate-y-0.5 text-xs font-bold rounded shadow-sm transition-all duration-200"
+              >
                 Sign Out
               </button>
             </div>
