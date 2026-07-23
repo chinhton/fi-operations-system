@@ -12,6 +12,8 @@ export default function DashboardTab({
 
   // --- 1. PROCESS ASSETS (Only surface if Due Soon or Critical) ---
   if (assets && calculateDaysRemaining) {
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
     assets.forEach(asset => {
       let isDueOrCritical = false;
       let dueMessage = "";
@@ -21,14 +23,18 @@ export default function DashboardTab({
           isDueOrCritical = true;
           dueMessage = "Immediate Action Required";
       } else {
-          // --- THE FIX: DYNAMICALLY EXTRACT FREQUENCIES FROM SOP LIBRARY ---
           const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
           const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-          // -----------------------------------------------------------------
           
           let lowestDays = null;
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+              
+              // Skip calculation if the PM was already executed today
+              if (targetDate === todayStr) {
+                  return; 
+              }
+
               const daysLeft = calculateDaysRemaining(targetDate, freq);
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                   lowestDays = daysLeft;
