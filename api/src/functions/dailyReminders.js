@@ -10,7 +10,7 @@ app.timer('dailyPmReminders', {
             const emailConn = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
 
             if (!cosmosConn || !emailConn) {
-                context.log("CRITICAL: Missing DB or Email connection strings.");
+                context.log("Bypassed: Missing DB or Email connection strings in Azure environment.");
                 return;
             }
 
@@ -34,13 +34,11 @@ app.timer('dailyPmReminders', {
             today.setHours(0, 0, 0, 0); 
             
             for (const wo of activeOrders) {
-                // Ensure this matches your database property for the due date
                 if (!wo.dueDate) continue; 
 
                 const taskDate = new Date(wo.dueDate);
                 taskDate.setHours(0, 0, 0, 0);
 
-                // Calculate the exact difference in days
                 const diffTime = taskDate.getTime() - today.getTime();
                 const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
@@ -51,25 +49,24 @@ app.timer('dailyPmReminders', {
                 // 1. Relentless Daily Spam for Overdue
                 if (diffDays < 0) {
                     statusText = `OVERDUE BY ${Math.abs(diffDays)} DAYS`;
-                    badgeColor = "#ef4444"; // Urgent Red
+                    badgeColor = "#ef4444"; 
                     shouldSend = true;
                 } 
                 // 2. Day-Of Reminder
                 else if (diffDays === 0) {
                     statusText = "DUE TODAY";
-                    badgeColor = "#f97316"; // Warning Orange
+                    badgeColor = "#f97316"; 
                     shouldSend = true;
                 } 
                 // 3. 7-Day Heads Up
                 else if (diffDays === 7) {
                     statusText = "DUE IN 7 DAYS";
-                    badgeColor = "#3b82f6"; // Standard Blue
+                    badgeColor = "#3b82f6"; 
                     shouldSend = true;
                 }
 
                 if (shouldSend) {
                     const targetEmail = wo.operatorEmail || wo.managerEmail; 
-
                     if (!targetEmail) continue;
 
                     const emailMessage = {
