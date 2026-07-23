@@ -124,12 +124,15 @@ export default function TemplatesTab({
                     
                     <div className="bg-gray-50 px-5 py-3 border-t border-gray-100 flex justify-between items-center text-[11px]">
                       <span className="text-gray-500 font-semibold">{template.checklist.length} total tasks</span>
-                      {isSystemAdmin && (
-                        <div className="flex space-x-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <button onClick={() => handleEditTemplateClick(template)} className="text-[#005596] hover:text-[#00407a] font-bold uppercase tracking-wider">Edit</button>
+                      <div className="flex space-x-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        {/* --- THE FIX: EDIT BUTTON NOW OPEN TO ALL OPERATORS --- */}
+                        <button onClick={() => handleEditTemplateClick(template)} className="text-[#005596] hover:text-[#00407a] font-bold uppercase tracking-wider">Edit</button>
+                        
+                        {/* --- DELETE BUTTON REMAINS ADMIN ONLY --- */}
+                        {isSystemAdmin && (
                           <button onClick={() => deleteTemplate(template.id)} className="text-red-600 hover:text-red-800 font-bold uppercase tracking-wider">Delete</button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

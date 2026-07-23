@@ -205,14 +205,17 @@ export default function AssetsTab({
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right space-x-3">
-                            {isSystemAdmin && (
-                              <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
-                            )}
+                            
+                            {/* --- THE FIX: EDIT BUTTON NOW OPEN TO ALL OPERATORS --- */}
+                            <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
+                            
                             <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
                             <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
                             <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                            
+                            {/* --- DELETE REMAINS ADMIN ONLY --- */}
                             {isSystemAdmin && (
-                            <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                              <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                             )}
                           </td>
                         </tr>
