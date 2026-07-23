@@ -34,6 +34,14 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
       const user = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase() && u.password === authPassword);
       
       if (user) {
+        // --- THE FIX: ENFORCE STRICT STATUS CHECK ---
+        if (user.status !== "Active") {
+            setAuthError("Access Denied: Your account is pending administrator approval.");
+            setIsSigningIn(false);
+            return;
+        }
+        // --------------------------------------------
+
         setCurrentUser(user);
         localStorage.setItem('fi_oms_session', JSON.stringify(user));
         setAuthEmail("");
@@ -69,7 +77,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         password: authPassword,
         role: registerRole,
         department: registerDepartment,
-        status: "Pending" // <-- Restored so they hit the Account Approvals queue
+        status: "Pending" // Locked out by default
       };
 
       const res = await fetch('/api/users', {
@@ -79,7 +87,8 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
       });
 
       if (res.ok) {
-        setAuthSuccess("Access Request Submitted! You can now sign in.");
+        // --- THE FIX: ACCURATE SUCCESS MESSAGING ---
+        setAuthSuccess("Access request submitted. Pending administrator approval.");
         setAuthMode("signin");
         setRegisterName("");
         setRegisterDepartment("");
