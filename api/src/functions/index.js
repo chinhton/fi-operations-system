@@ -1,7 +1,6 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { EmailClient } = require('@azure/communication-email');
 
 // 1. Response Formatter
 const createResponse = (status, data) => ({
@@ -32,15 +31,6 @@ const getBlobClient = () => {
     }
     return blobServiceClient;
 }
-
-const formatRecipients = (emailInput) => {
-    if (!emailInput) return [];
-    const emailString = String(emailInput); 
-    return emailString
-        .split(',')
-        .map(email => ({ address: email.trim() }))
-        .filter(obj => obj.address !== ""); 
-};
 
 // 3. Standard Cosmos DB Router
 async function processRoute(request, containerId) {
@@ -130,76 +120,6 @@ app.http('upload', {
 
         } catch (error) {
             return createResponse(500, { error: "Blob upload failure", details: error.message });
-        }
-    }
-});
-
-// --- EMAIL NOTIFICATION ENDPOINT ---
-app.http('sendEmail', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        try {
-            const requestBody = await request.json();
-            if (!requestBody) {
-                return createResponse(400, { error: "Payload missing. Azure received an empty request." });
-            }
-
-            const { to, cc, subject, body } = requestBody;
-
-            const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
-            if (!connectionString) {
-                if (context && context.warn) context.warn("Missing Environment Variable: COMMUNICATION_SERVICES_CONNECTION_STRING");
-                return createResponse(200, { 
-                    success: false, 
-                    error: "Email bypassed: ACS Connection String missing in Azure." 
-                });
-            }
-
-            const client = new EmailClient(connectionString);
-            const htmlBody = body ? body.replace(/\n/g, '<br>') : "<p>You have received an automated operational update.</p>";
-
-            const emailMessage = {
-                senderAddress: "DoNotReply@77bb0478-c5db-4ee5-8cf9-84265c1432a3.azurecomm.net",
-                content: {
-                    subject: subject || "Notification from FI Operations System",
-                    plainText: body || "You have received an automated operational update.",
-                    html: htmlBody,
-                },
-                recipients: {
-                    to: formatRecipients(to),
-                },
-            };
-
-            if (cc) emailMessage.recipients.cc = formatRecipients(cc);
-
-            const poller = await client.beginSend(emailMessage);
-            const response = await poller.pollUntilDone();
-
-            if (response.status === "Succeeded") {
-                return createResponse(200, { 
-                    success: true,
-                    message: "Email sent successfully via Azure ACS!", 
-                    messageId: response.id,
-                    status: response.status 
-                });
-            } else {
-                return createResponse(200, { 
-                    success: false,
-                    error: "Azure accepted the payload, but the mail server rejected delivery.", 
-                    status: response.status,
-                    details: response.error || "No downstream error provided by ACS."
-                });
-            }
-            
-        } catch (error) {
-            if (context && context.error) context.error("Email Dispatch Crash:", error);
-            return createResponse(200, { 
-                success: false,
-                error: "Backend email execution bypassed/failed.", 
-                name: error.name, 
-                details: error.message
-            });
         }
     }
 });
