@@ -65,20 +65,20 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory);
-
-  const userEmail = currentUser?.email;
+  // --- THE FIX: Case-Insensitive Email Evaluation ---
+  const userEmailRaw = currentUser?.email || "";
+  const userEmail = userEmailRaw.toLowerCase();
   const realRole = currentUser?.role;
   const userDept = currentUser?.department; 
   
   const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
   const activeRole = isRealAdmin ? impersonatedRole : realRole;
   const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
+  // ------------------------------------------------
 
-  // --- THE FIX: Department-based Filtering Logic ---
   const filterHierarchy = (item) => {
     if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return item.department === userDept || item.operatorEmail === userEmail; 
+    return item.department === userDept || item.operatorEmail === userEmailRaw; 
   };
 
   const visibleAssets = assets.filter(filterHierarchy);
@@ -87,9 +87,8 @@ export default function App() {
   
   const visibleUsers = users.filter(u => {
     if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return u.department === userDept || u.email === userEmail; 
+    return u.department === userDept || u.email === userEmailRaw; 
   });
-  // ------------------------------------------------
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 

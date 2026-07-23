@@ -69,7 +69,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         password: authPassword,
         role: registerRole,
         department: registerDepartment,
-        status: "Active"
+        status: "Pending" // <-- Restored so they hit the Account Approvals queue
       };
 
       const res = await fetch('/api/users', {
@@ -94,7 +94,6 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     }
   };
 
-  // --- THE FIX: Restored the Sign Out Function ---
   const handleSignOut = () => {
     setCurrentUser(null);
     localStorage.removeItem('fi_oms_session');
@@ -112,6 +111,6 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     authError, authSuccess,
     isSigningIn, isRegistering,
     handleSignIn, handleRegister,
-    handleSignOut // --- THE FIX: Exported for the TopHeader ---
+    handleSignOut
   };
 }
