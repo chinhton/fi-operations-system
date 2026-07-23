@@ -154,8 +154,12 @@ app.http('sendEmail', {
 
             const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
             if (!connectionString) {
-                context.error("Missing Environment Variable: COMMUNICATION_SERVICES_CONNECTION_STRING");
-                return createResponse(500, { error: "CRITICAL: COMMUNICATION_SERVICES_CONNECTION_STRING is missing in Azure Environment Variables." });
+                // Graceful fallback instead of 500 crash
+                if (context && context.warn) context.warn("Missing Environment Variable: COMMUNICATION_SERVICES_CONNECTION_STRING");
+                return createResponse(200, { 
+                    success: false, 
+                    error: "Email bypassed: ACS Connection String missing in Azure." 
+                });
             }
 
             const client = new EmailClient(connectionString);
@@ -184,12 +188,15 @@ app.http('sendEmail', {
 
             if (response.status === "Succeeded") {
                 return createResponse(200, { 
+                    success: true,
                     message: "Email sent successfully via Azure ACS!", 
                     messageId: response.id,
                     status: response.status 
                 });
             } else {
-                return createResponse(400, { 
+                // Graceful fallback for downstream rejection
+                return createResponse(200, { 
+                    success: false,
                     error: "Azure accepted the payload, but the mail server rejected delivery.", 
                     status: response.status,
                     details: response.error || "No downstream error provided by ACS."
@@ -197,12 +204,14 @@ app.http('sendEmail', {
             }
             
         } catch (error) {
-            context.error("Email Dispatch Crash:", error);
-            return createResponse(500, { 
-                error: "Backend execution crash.", 
+            if (context && context.error) context.error("Email Dispatch Crash:", error);
+            // Changed from 500 to 200 to prevent browser console red errors. 
+            // The app will function normally even if email dispatch fails.
+            return createResponse(200, { 
+                success: false,
+                error: "Backend email execution bypassed/failed.", 
                 name: error.name, 
-                details: error.message,
-                stack: error.stack
+                details: error.message
             });
         }
     }
