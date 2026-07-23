@@ -3,73 +3,102 @@ import React from 'react';
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   openPmModal, currentUser, isSystemAdmin, triggerEmailAlert,
-  workOrders, pmTemplates, assets 
+  workOrders, assets, calculateDaysRemaining 
 }) {
   
-  // --- 1. PROCESS USER ASSIGNED TASKS ---
-  const assignedWorkOrders = (workOrders || []).filter(wo => 
-    (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) && 
-    wo.status !== "Completed"
-  );
-
-  const assignedTemplates = (pmTemplates || []).filter(t => 
-    t.operatorEmail === currentUser.email || t.managerEmail === currentUser.email
-  );
-
-  const myAssignedTasks = [...assignedWorkOrders, ...assignedTemplates];
-
-  // TRIAGE: Split User Tasks into Critical vs. Upcoming
-  const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
-  
-  const overdueMyTasks = myAssignedTasks.filter(task => criticalStatuses.includes(task.status));
-  const upcomingMyTasks = myAssignedTasks.filter(task => !criticalStatuses.includes(task.status));
-
-
-  // --- 2. PROCESS GLOBAL ADMIN QUEUE ---
   const adminGlobalQueue = [];
-  
-  if (assets) {
+  const userAssignedTasks = [];
+  const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
+
+  // --- 1. PROCESS ASSETS (Only surface if Due Soon or Critical) ---
+  if (assets && calculateDaysRemaining) {
     assets.forEach(asset => {
-      if (asset.operatorEmail || asset.status !== "Operational") {
-        adminGlobalQueue.push({
+      let isDueOrCritical = false;
+      let dueMessage = "";
+      let isCriticalStatus = criticalStatuses.includes(asset.status);
+
+      // If the asset is broken/down, it is immediately critical
+      if (isCriticalStatus) {
+          isDueOrCritical = true;
+          dueMessage = "Immediate Action Required";
+      } else {
+          // Check all active PM frequencies for this asset
+          const freqs = asset.pmFrequencies && asset.pmFrequencies.length > 0 ? asset.pmFrequencies : (asset.pmFrequency && asset.pmFrequency !== "None" ? [asset.pmFrequency] : []);
+          
+          let lowestDays = null;
+          freqs.forEach(freq => {
+              const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+              const daysLeft = calculateDaysRemaining(targetDate, freq);
+              if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
+                  lowestDays = daysLeft;
+              }
+          });
+
+          // Show on dashboard if due within 7 days or overdue
+          if (lowestDays !== null && lowestDays <= 7) {
+              isDueOrCritical = true;
+              dueMessage = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
+              if (lowestDays < 0) isCriticalStatus = true; 
+          }
+      }
+
+      if (isDueOrCritical) {
+        const queueItem = {
           queueId: `ast-${asset.id}`,
           name: asset.name,
           serial: asset.serial || "N/A",
-          badgeColor: asset.status === "Operational" ? "bg-green-100 text-green-800" :
-                      asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                      asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                      "bg-orange-100 text-orange-800",
-          displayStatus: asset.status,
-          displayDate: asset.lastPmDate ? new Date(asset.lastPmDate).toLocaleDateString() : "N/A",
+          badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800",
+          displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : "Pending PM",
+          displayDate: dueMessage,
           assignedTo: asset.operatorEmail || "Unassigned",
           rawItem: asset,
-          type: 'asset'
-        });
+          type: 'asset',
+          isCritical: isCriticalStatus
+        };
+
+        adminGlobalQueue.push(queueItem);
+
+        // If assigned to the logged-in user, push to their personal queue
+        if (asset.operatorEmail === currentUser.email) {
+            userAssignedTasks.push(queueItem);
+        }
       }
     });
   }
 
-  if (pmTemplates) {
-    pmTemplates.forEach(pm => {
-      if (pm.operatorEmail) {
-        adminGlobalQueue.push({
-          queueId: `pm-${pm.id}`,
-          name: pm.title || pm.name || "PM Configuration Task",
-          serial: pm.targetAsset || "General Assignment",
-          badgeColor: "bg-blue-100 text-[#005596]",
-          displayStatus: pm.status || "Active Task",
-          displayDate: "Recurring Schedule",
-          assignedTo: pm.operatorEmail,
-          rawItem: pm,
-          type: 'pm'
-        });
+  // --- 2. PROCESS WORK ORDERS ---
+  if (workOrders) {
+    workOrders.forEach(wo => {
+      if (wo.status !== "Completed") {
+        const isCritical = criticalStatuses.includes(wo.status);
+        const queueItem = {
+          queueId: `wo-${wo.id}`,
+          name: wo.title || `Work Order ${wo.id}`,
+          serial: wo.targetAsset || "N/A",
+          badgeColor: isCritical ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800",
+          displayStatus: wo.status,
+          displayDate: wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "Pending",
+          assignedTo: wo.operatorEmail || "Unassigned",
+          rawItem: wo,
+          type: 'wo',
+          isCritical: isCritical
+        };
+
+        adminGlobalQueue.push(queueItem);
+
+        if (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) {
+            userAssignedTasks.push(queueItem);
+        }
       }
     });
   }
 
-  // TRIAGE: Split Admin Tasks into Critical vs. Upcoming
-  const overdueAdminQueue = adminGlobalQueue.filter(item => criticalStatuses.includes(item.displayStatus));
-  const upcomingAdminQueue = adminGlobalQueue.filter(item => !criticalStatuses.includes(item.displayStatus));
+  // --- 3. TRIAGE FOR RENDERING ---
+  const overdueAdminQueue = adminGlobalQueue.filter(item => item.isCritical);
+  const upcomingAdminQueue = adminGlobalQueue.filter(item => !item.isCritical);
+
+  const overdueMyTasks = userAssignedTasks.filter(item => item.isCritical);
+  const upcomingMyTasks = userAssignedTasks.filter(item => !item.isCritical);
 
   return (
     <div className="space-y-8 animate-entrance">
@@ -150,7 +179,7 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             {item.displayDate && (
                               <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">
-                                Due: {item.displayDate}
+                                {item.displayDate}
                               </div>
                             )}
                             <div className="flex items-center space-x-3 mt-1">
@@ -207,7 +236,7 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             {item.displayDate && (
                               <div className="mb-2 text-[10px] text-gray-500 font-mono">
-                                Due: {item.displayDate}
+                                {item.displayDate}
                               </div>
                             )}
                             <div className="flex items-center space-x-3 mt-1">
@@ -248,13 +277,13 @@ export default function DashboardTab({
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="bg-gradient-to-r from-[#005596] to-[#00407a] text-white px-6 py-4 flex items-center justify-between border-b border-[#003058]">
               <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">My Assigned Tasks</h3>
-              {myAssignedTasks.length > 0 && (
-                <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{myAssignedTasks.length} Total</span>
+              {userAssignedTasks.length > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{userAssignedTasks.length} Total</span>
               )}
             </div>
             
             <div className="max-h-[500px] overflow-y-auto bg-gray-50/30">
-              {myAssignedTasks.length === 0 ? (
+              {userAssignedTasks.length === 0 ? (
                 <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
                   You have no pending assignments in your queue.
                 </div>
@@ -269,24 +298,23 @@ export default function DashboardTab({
                   )}
                   <div className="divide-y divide-gray-100 bg-white">
                     {overdueMyTasks.map(task => (
-                      <div key={task.id} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4 border-red-500">
+                      <div key={task.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4 border-red-500">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
-                            <span className="font-bold text-gray-900 text-sm block">{task.title || task.name}</span>
+                            <span className="font-bold text-gray-900 text-sm block">{task.name}</span>
                             <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
-                              {task.status || "Overdue"}
+                              {task.displayStatus}
                             </span>
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
-                            <span><strong>ID:</strong> {task.id}</span>
-                            <span><strong>Target:</strong> {task.targetAsset || task.targetCategory || "General"}</span>
+                            <span><strong>Target:</strong> {task.serial}</span>
+                            <span><strong>Note:</strong> {task.displayDate}</span>
                           </div>
                         </div>
                         <div className="text-right ml-4">
                           <button 
                             onClick={() => {
-                              const associatedAsset = (assets || []).find(a => a.name === task.targetAsset || a.category === task.targetCategory) || task;
-                              openPmModal(associatedAsset);
+                              openPmModal(task.rawItem);
                             }}
                             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
@@ -306,24 +334,23 @@ export default function DashboardTab({
                   )}
                   <div className="divide-y divide-gray-100 bg-white">
                     {upcomingMyTasks.map(task => (
-                      <div key={task.id} className="p-5 hover:bg-blue-50/50 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
+                      <div key={task.queueId} className="p-5 hover:bg-blue-50/50 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
-                            <span className="font-bold text-gray-900 text-sm block">{task.title || task.name}</span>
+                            <span className="font-bold text-gray-900 text-sm block">{task.name}</span>
                             <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
-                              {task.status || "Pending"}
+                              {task.displayStatus}
                             </span>
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
-                            <span><strong>ID:</strong> {task.id}</span>
-                            <span><strong>Target:</strong> {task.targetAsset || task.targetCategory || "General"}</span>
+                            <span><strong>Target:</strong> {task.serial}</span>
+                            <span><strong>Note:</strong> {task.displayDate}</span>
                           </div>
                         </div>
                         <div className="text-right ml-4">
                           <button 
                             onClick={() => {
-                              const associatedAsset = (assets || []).find(a => a.name === task.targetAsset || a.category === task.targetCategory) || task;
-                              openPmModal(associatedAsset);
+                              openPmModal(task.rawItem);
                             }}
                             className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >

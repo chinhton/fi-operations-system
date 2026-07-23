@@ -95,8 +95,44 @@ export default function App() {
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
-  const calculateDaysRemaining = (lastDateStr, freq) => { return 30; };
-  const calculateNextPmDate = (lastDateStr, freq) => { return "TBD"; };
+  const calculateNextPmDate = (lastDateStr, freq) => {
+  if (!lastDateStr || !freq) return null;
+  const lastDate = new Date(lastDateStr);
+  let nextDate = new Date(lastDate);
+
+  switch (freq) {
+    case "Daily": nextDate.setDate(lastDate.getDate() + 1); break;
+    case "Weekly": nextDate.setDate(lastDate.getDate() + 7); break;
+    case "Monthly": nextDate.setMonth(lastDate.getMonth() + 1); break;
+    case "Quarterly": nextDate.setMonth(lastDate.getMonth() + 3); break;
+    case "Semi-Annually":
+    case "Calibration (Semi-Annual)": nextDate.setMonth(lastDate.getMonth() + 6); break;
+    case "Annually":
+    case "Calibration (Annual)": nextDate.setFullYear(lastDate.getFullYear() + 1); break;
+    case "2-Year": nextDate.setFullYear(lastDate.getFullYear() + 2); break;
+    case "3-Year": nextDate.setFullYear(lastDate.getFullYear() + 3); break;
+    case "4-Year": nextDate.setFullYear(lastDate.getFullYear() + 4); break;
+    case "5-Year": nextDate.setFullYear(lastDate.getFullYear() + 5); break;
+    default: return null;
+  }
+  return nextDate.toLocaleDateString(); 
+};
+
+const calculateDaysRemaining = (lastDateStr, freq) => {
+  if (!lastDateStr || !freq) return null;
+  const nextDateStr = calculateNextPmDate(lastDateStr, freq);
+  if (!nextDateStr) return null;
+  
+  const nextDate = new Date(nextDateStr);
+  const today = new Date();
+  
+  // Zero out times for an accurate day-to-day diff
+  nextDate.setHours(0,0,0,0);
+  today.setHours(0,0,0,0);
+  
+  const diffTime = nextDate - today;
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
