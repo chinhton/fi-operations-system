@@ -50,10 +50,10 @@ export default function AssetsTab({
   };
 
   // --- TEMPLATE MODAL HANDLERS ---
-  const handleQuickBuildTemplate = (asset, defaultFreq = "Monthly") => {
+  const handleQuickBuildTemplate = (asset) => {
     setNewTemplate({
-      name: `${asset.name} - ${defaultFreq} Maintenance`,
-      interval: defaultFreq,
+      name: `${asset.name} Maintenance Protocol`,
+      interval: "Monthly", // Default fallback, user can modify
       department: asset.department || "",
       targetCategory: asset.category || "Global",
       managerEmail: "",
@@ -165,9 +165,6 @@ export default function AssetsTab({
                               {freqs.length === 0 ? (
                                 <div>
                                   <span className="text-[9px] text-gray-400 uppercase font-bold block mb-1.5">No Active Cycles</span>
-                                  <button onClick={() => handleQuickBuildTemplate(asset, "Monthly")} className="text-[9px] bg-blue-50 text-[#005596] font-bold uppercase tracking-wider px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition shadow-sm">
-                                    ➕ Add PM Protocol
-                                  </button>
                                 </div>
                               ) : (
                                 freqs.map(freq => {
@@ -176,16 +173,8 @@ export default function AssetsTab({
                                   
                                   return (
                                     <div key={freq} className="flex flex-col text-[10px]">
-                                      <div className="flex justify-between items-center mb-0.5 group">
-                                        
-                                        <button 
-                                          onClick={() => handleQuickBuildTemplate(asset, freq)}
-                                          className="text-[#005596] font-bold uppercase tracking-wider flex items-center hover:text-[#00A1E4] transition-colors"
-                                          title={`Build ${freq} SOP Protocol`}
-                                        >
-                                          {freq} <span className="opacity-0 group-hover:opacity-100 ml-1.5 text-[9px] bg-blue-100 px-1 rounded transition-opacity">BUILD SOP ➔</span>
-                                        </button>
-                                        
+                                      <div className="flex justify-between items-center mb-0.5">
+                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
                                         {daysRemaining !== null ? (
                                           <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                             ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
@@ -201,11 +190,13 @@ export default function AssetsTab({
                               )}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-right space-x-4">
+                          <td className="px-6 py-4 text-right space-x-3">
+                            {/* Actions Column Updated */}
                             {isSystemAdmin && (
                               <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
                             )}
                             <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
+                            <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
                             <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                             {isSystemAdmin && (
                             <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
