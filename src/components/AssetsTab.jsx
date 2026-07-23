@@ -17,6 +17,9 @@ export default function AssetsTab({
   const [assetSearch, setAssetSearch] = useState("");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [targetAssetContext, setTargetAssetContext] = useState(null);
+  
+  // --- NEW: Asset Registration Modal State ---
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
@@ -31,11 +34,17 @@ export default function AssetsTab({
     return acc;
   }, {});
 
-  // --- QUICK BUILD INTERCEPTOR ---
-  const handleQuickBuildTemplate = (asset, freq) => {
+  // --- LOCAL SUBMIT HANDLERS TO CLOSE MODALS ---
+  const handleLocalAssetSubmit = async (e) => {
+    e.preventDefault();
+    await handleAddAssetSubmit(e);
+    setIsRegisterModalOpen(false);
+  };
+
+  const handleQuickBuildTemplate = (asset, defaultFreq = "Monthly") => {
     setNewTemplate({
-      name: `${asset.name} - ${freq} Maintenance`,
-      interval: freq,
+      name: `${asset.name} - ${defaultFreq} Maintenance`,
+      interval: defaultFreq,
       department: asset.department || "",
       targetCategory: asset.category || "Global",
       managerEmail: "",
@@ -48,7 +57,7 @@ export default function AssetsTab({
     setShowTemplateModal(true);
   };
 
-  const handleLocalSubmit = async (e) => {
+  const handleLocalTemplateSubmit = async (e) => {
     e.preventDefault();
     await handleAddTemplateSubmit(e);
     setShowTemplateModal(false);
@@ -58,117 +67,29 @@ export default function AssetsTab({
   return (
     <div className="space-y-8 animate-entrance">
       
-      {/* ASSET REGISTRATION FORM */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
-        <form onSubmit={handleAddAssetSubmit} className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* ROW 1 */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
-              <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
-              <input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
-              <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-            </div>
-            
-            {/* ROW 2: Relational Linking */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
-              <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
-              <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Link To Facility Asset (Sub-Equipment)</label>
-              <select 
-                value={newAsset.parentId || ""} 
-                onChange={(e) => setNewAsset({...newAsset, parentId: e.target.value})} 
-                className="w-full text-xs rounded border-purple-200 shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 p-2.5 border bg-purple-50/30 outline-none"
-              >
-                <option value="">-- Standalone Primary Asset --</option>
-                {assets.filter(a => !a.parentId).map(a => (
-                  <option key={`link-${a.id}`} value={a.id}>🔗 Link to: {a.name} ({a.serial})</option>
-                ))}
-              </select>
-            </div>
+      {/* DIRECTORY HEADER & CONTROLS */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        <button 
+          onClick={() => setIsRegisterModalOpen(true)}
+          className="w-full md:w-auto bg-[#005596] hover:bg-[#00407a] text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
+        >
+          ➕ Register New Asset
+        </button>
 
-            {/* ROW 3: Department & Personnel Assignment */}
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#005596]">Assign Department</label>
-              <select 
-                value={newAsset.department || ""} 
-                onChange={(e) => setNewAsset({...newAsset, department: e.target.value})} 
-                className="w-full text-xs rounded border-[#005596]/30 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-2.5 border bg-blue-50/30 outline-none"
-              >
-                <option value="">-- Unassigned (Global View) --</option>
-                {CORPORATE_DEPARTMENTS.map(dept => (
-                  <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 text-[#00A1E4]">Assign Operator (Optional)</label>
-              <select 
-                value={newAsset.operatorEmail || ""} 
-                onChange={(e) => setNewAsset({...newAsset, operatorEmail: e.target.value})} 
-                className="w-full text-xs rounded border-[#00A1E4]/30 shadow-sm focus:border-[#00A1E4] focus:ring-1 focus:ring-[#00A1E4] p-2.5 border bg-sky-50/30 outline-none"
-              >
-                <option value="">-- Leave Unassigned --</option>
-                {users.map(u => (
-                  <option key={`opr-${u.email}`} value={u.email}>{u.name} ({u.role})</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">PM Frequencies (Select Multiple)</label>
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                {PM_CYCLE_OPTIONS.map(freq => (
-                  <label key={freq} className="flex items-center space-x-1.5 cursor-pointer text-[10px] text-gray-700 font-medium bg-gray-50 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition">
-                    <input
-                      type="checkbox"
-                      checked={newAsset.pmFrequencies?.includes(freq) || false}
-                      onChange={(e) => {
-                        if (e.target.checked) setNewAsset({ ...newAsset, pmFrequencies: [...(newAsset.pmFrequencies || []), freq] });
-                        else setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
-                      }}
-                      className="w-3 h-3 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
-                    />
-                    <span>{freq}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-          </div>
-          <div className="mt-6 flex justify-end pt-4 border-t border-gray-100">
-            <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 shadow-md hover:shadow-lg text-white px-6 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all transform hover:-translate-y-0.5 ${isAddingAsset ? 'opacity-50 cursor-not-allowed transform-none shadow-none' : ''}`}>
-              {isAddingAsset ? 'Committing...' : 'Commit Asset'}
-            </button>
-          </div>
-        </form>
+        <input 
+          type="text" 
+          placeholder="Search by Name, S/N, or Category..." 
+          value={assetSearch}
+          onChange={(e) => setAssetSearch(e.target.value)}
+          className="w-full md:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
+        />
       </div>
       
       {/* HARDWARE DIRECTORY */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
-        <input  
-            type="text" 
-            placeholder="Search by Name, S/N, or Category..." 
-            value={assetSearch}
-            onChange={(e) => setAssetSearch(e.target.value)}
-            className="bg-white text-gray-900 text-xs rounded border-gray-300 px-3 py-1.5 w-64 focus:outline-none focus:ring-2 focus:ring-[#00A1E4] font-normal shadow-inner"
-          />
+          <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assets.length} Systems Monitored</span>
         </div>
         
         {Object.keys(groupedAssets || {}).length === 0 ? (
@@ -233,7 +154,12 @@ export default function AssetsTab({
                             
                             <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
                               {freqs.length === 0 ? (
-                                <span className="text-[9px] text-gray-400 uppercase font-bold">No Active Cycles</span>
+                                <div>
+                                  <span className="text-[9px] text-gray-400 uppercase font-bold block mb-1.5">No Active Cycles</span>
+                                  <button onClick={() => handleQuickBuildTemplate(asset, "Monthly")} className="text-[9px] bg-blue-50 text-[#005596] font-bold uppercase tracking-wider px-2 py-1 rounded border border-blue-200 hover:bg-blue-100 transition shadow-sm">
+                                    ➕ Add PM Protocol
+                                  </button>
+                                </div>
                               ) : (
                                 freqs.map(freq => {
                                   const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
@@ -285,6 +211,90 @@ export default function AssetsTab({
         )}
       </div>
 
+      {/* --- ASSET REGISTRATION MODAL --- */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-entrance relative">
+            <button onClick={() => setIsRegisterModalOpen(false)} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
+            
+            <div className="bg-[#005596] text-white px-6 py-4">
+              <h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3>
+            </div>
+            
+            <form onSubmit={handleLocalAssetSubmit} className="p-6">
+              {/* Form converted to a 2-column grid, PM Frequencies entirely removed */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
+                  <input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
+                  <input type="text" value={newAsset.model} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
+                  <input type="text" value={newAsset.serial} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
+                  <input type="text" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
+                  <input type="text" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Link To Facility Asset (Sub-Equipment)</label>
+                  <select 
+                    value={newAsset.parentId || ""} 
+                    onChange={(e) => setNewAsset({...newAsset, parentId: e.target.value})} 
+                    className="w-full text-xs rounded border-purple-200 shadow-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 p-2.5 border bg-purple-50/30 outline-none"
+                  >
+                    <option value="">-- Standalone Primary Asset --</option>
+                    {assets.filter(a => !a.parentId).map(a => (
+                      <option key={`link-${a.id}`} value={a.id}>🔗 Link to: {a.name} ({a.serial})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-2">Assign Department</label>
+                  <select 
+                    value={newAsset.department || ""} 
+                    onChange={(e) => setNewAsset({...newAsset, department: e.target.value})} 
+                    className="w-full text-xs rounded border-[#005596]/30 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-2.5 border bg-blue-50/30 outline-none"
+                  >
+                    <option value="">-- Unassigned (Global View) --</option>
+                    {CORPORATE_DEPARTMENTS.map(dept => (
+                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[#00A1E4] uppercase tracking-wider mb-2">Assign Operator (Optional)</label>
+                  <select 
+                    value={newAsset.operatorEmail || ""} 
+                    onChange={(e) => setNewAsset({...newAsset, operatorEmail: e.target.value})} 
+                    className="w-full text-xs rounded border-[#00A1E4]/30 shadow-sm focus:border-[#00A1E4] focus:ring-1 focus:ring-[#00A1E4] p-2.5 border bg-sky-50/30 outline-none"
+                  >
+                    <option value="">-- Leave Unassigned --</option>
+                    {users.map(u => (
+                      <option key={`opr-${u.email}`} value={u.email}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isAddingAsset ? 'Committing...' : 'Commit Asset'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* --- QUICK TEMPLATE BUILDER MODAL --- */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -297,7 +307,7 @@ export default function AssetsTab({
               {targetAssetContext && <p className="text-xs text-blue-200 mt-1">Pre-configured for {targetAssetContext.name} ({targetAssetContext.serial})</p>}
             </div>
             
-            <form onSubmit={handleLocalSubmit} className="p-6">
+            <form onSubmit={handleLocalTemplateSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
