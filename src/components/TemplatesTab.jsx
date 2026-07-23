@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
+// Hardcoded departments to match your operations
+const CORPORATE_DEPARTMENTS = ["Facilities", "Production Vangie", "Production Chris", "Production Manufacturing"];
+
 export default function TemplatesTab({
   handleAddTemplateSubmit, newTemplate, setNewTemplate, 
   uniqueCategories, activeAccounts, editingTemplateId, cancelEditTemplate, 
@@ -11,7 +14,7 @@ export default function TemplatesTab({
   const [templateSearch, setTemplateSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Automatically open the modal if the admin clicks "Edit" on a template card
+  // Automatically open the modal ONLY if the admin clicks "Edit" on an existing template card
   useEffect(() => {
     if (editingTemplateId) {
       setIsModalOpen(true);
@@ -33,20 +36,10 @@ export default function TemplatesTab({
     <div className="space-y-8 animate-entrance">
       
       {/* DIRECTORY HEADER & CONTROLS */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-        <button 
-          onClick={() => {
-            setNewTemplate({ name: "", interval: "Daily", department: "", targetCategory: "Global", managerEmail: "", operatorEmail: "", checklistSteps: [], attachedManualName: "", attachedManualData: null });
-            setIsModalOpen(true);
-          }}
-          className="w-full md:w-auto bg-[#005596] hover:bg-[#00407a] text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
-        >
-          ➕ Construct Custom Protocol
-        </button>
-
+      <div className="flex justify-end items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <input 
           type="text" 
-          placeholder="Search SOP Templates by Name, Category, or Dept..." 
+          placeholder="Search Established SOPs by Name, Category, or Dept..." 
           value={templateSearch}
           onChange={(e) => setTemplateSearch(e.target.value)}
           className="w-full md:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
@@ -69,7 +62,7 @@ export default function TemplatesTab({
         }, {});
 
         return Object.keys(groupedTemplates).length === 0 ? (
-          <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No SOP templates matching search.</div>
+          <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No Established SOPs matching search.</div>
         ) : (
           Object.entries(groupedTemplates).map(([category, catTemplates]) => (
             <div key={category} className="mb-8">
@@ -141,7 +134,7 @@ export default function TemplatesTab({
         );
       })()}
 
-      {/* --- TEMPLATE BUILDER MODAL OVERLAY --- */}
+      {/* --- TEMPLATE EDIT MODAL OVERLAY --- */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-entrance relative">
@@ -149,7 +142,7 @@ export default function TemplatesTab({
             <button onClick={closeAndCancel} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
             
             <div className="bg-[#005596] text-white px-6 py-4">
-              <h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Protocol</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">Edit Custom SOP Protocol</h3>
             </div>
             
             <form onSubmit={handleLocalSubmit} className="p-6">
@@ -173,8 +166,17 @@ export default function TemplatesTab({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
-                  <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department</label>
+                  <select 
+                    value={newTemplate.department || ""} 
+                    onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
+                    className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                  >
+                    <option value="">-- Unassigned (Global View) --</option>
+                    {CORPORATE_DEPARTMENTS.map(dept => (
+                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
@@ -268,14 +270,9 @@ export default function TemplatesTab({
 
               </div> 
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                {editingTemplateId && (
-                  <button type="button" onClick={closeAndCancel} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
-                )}
-                {!editingTemplateId && (
-                  <button type="button" onClick={closeAndCancel} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Close</button>
-                )}
+                <button type="button" onClick={closeAndCancel} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
                 <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingTemplate ? 'Processing...' : (editingTemplateId ? 'Update Protocol' : 'Generate Protocol')}
+                  {isAddingTemplate ? 'Processing...' : 'Update Protocol'}
                 </button>
               </div>
             </form>

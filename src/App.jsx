@@ -197,8 +197,8 @@ export default function App() {
             tabSource = "Facility Assets Tab"; 
         }
         if (url.includes('/api/pmTemplates')) { 
-            actionName = "PM Configuration"; 
-            tabSource = "PM Task Configurations Tab"; 
+            actionName = "Established SOP"; 
+            tabSource = "Established SOPs Tab"; 
         }
         if (url.includes('/api/users')) { 
             actionName = "User Directory"; 
@@ -207,7 +207,7 @@ export default function App() {
 
         if (actionName === "Facility Asset") {
             originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
-        } else if (actionName === "PM Configuration") {
+        } else if (actionName === "Established SOP") {
             originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error);
         } else if (actionName === "User Directory") {
             originalFetch('/api/users').then(r => r.json()).then(data => {
@@ -252,7 +252,7 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        if (actionName === "Facility Asset" || actionName === "PM Configuration") {
+        if (actionName === "Facility Asset" || actionName === "Established SOP") {
              triggerEmailAlert(
                  itemDetails.operatorEmail || "admin@fcimg.com", 
                  `FI-OMS Alert: ${actionName} ${actionTaken}`,
