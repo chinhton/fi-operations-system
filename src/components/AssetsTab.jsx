@@ -4,15 +4,19 @@ import React, { useState } from 'react';
 const CORPORATE_DEPARTMENTS = ["Facilities", "Production Vangie", "Production Chris", "Production Manufacturing"];
 
 export default function AssetsTab({
-  assets = [],
-  users = [],
+  assets = [], users = [], manuals = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
-  isSystemAdmin, deleteAssetCategory,
-  handleUpdateAssetStatus, calculateDaysRemaining, calculateNextPmDate,
-  handleOpenAssetModal, openPmModal, deleteAsset
+  isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
+  calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, openPmModal, deleteAsset,
+  
+  // --- TEMPLATE BUILDER PROPS ---
+  newTemplate, setNewTemplate, handleAddTemplateSubmit, uniqueCategories, 
+  activeAccounts, isAddingTemplate
 }) {
   
   const [assetSearch, setAssetSearch] = useState("");
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [targetAssetContext, setTargetAssetContext] = useState(null);
 
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
@@ -27,8 +31,33 @@ export default function AssetsTab({
     return acc;
   }, {});
 
+  // --- QUICK BUILD INTERCEPTOR ---
+  const handleQuickBuildTemplate = (asset, freq) => {
+    setNewTemplate({
+      name: `${asset.name} - ${freq} Maintenance`,
+      interval: freq,
+      department: asset.department || "",
+      targetCategory: asset.category || "Global",
+      managerEmail: "",
+      operatorEmail: asset.operatorEmail || "",
+      checklistSteps: [],
+      attachedManualName: "",
+      attachedManualData: null
+    });
+    setTargetAssetContext(asset);
+    setShowTemplateModal(true);
+  };
+
+  const handleLocalSubmit = async (e) => {
+    e.preventDefault();
+    await handleAddTemplateSubmit(e);
+    setShowTemplateModal(false);
+    setTargetAssetContext(null);
+  };
+
   return (
     <div className="space-y-8 animate-entrance">
+      
       {/* ASSET REGISTRATION FORM */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#005596] text-white px-6 py-4"><h3 className="font-bold text-sm tracking-wide uppercase">Register New Dynamic Lab/Cleanroom Asset</h3></div>
@@ -109,11 +138,8 @@ export default function AssetsTab({
                       type="checkbox"
                       checked={newAsset.pmFrequencies?.includes(freq) || false}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewAsset({ ...newAsset, pmFrequencies: [...(newAsset.pmFrequencies || []), freq] });
-                        } else {
-                          setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
-                        }
+                        if (e.target.checked) setNewAsset({ ...newAsset, pmFrequencies: [...(newAsset.pmFrequencies || []), freq] });
+                        else setNewAsset({ ...newAsset, pmFrequencies: (newAsset.pmFrequencies || []).filter(f => f !== freq) });
                       }}
                       className="w-3 h-3 rounded border-gray-300 text-[#005596] focus:ring-[#005596]"
                     />
@@ -173,14 +199,12 @@ export default function AssetsTab({
                           <td className="px-6 py-4">
                             <span className="font-bold text-gray-900 block">{asset.name}</span>
                             
-                            {/* Relational Link Badge */}
                             {asset.parentId && (
                                <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
                                  🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
                                </span>
                             )}
 
-                            {/* Department & Operator Badges */}
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${asset.department}`}>DEPT: {asset.department}</span>}
                               {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
@@ -217,8 +241,17 @@ export default function AssetsTab({
                                   
                                   return (
                                     <div key={freq} className="flex flex-col text-[10px]">
-                                      <div className="flex justify-between items-center mb-0.5">
-                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                      <div className="flex justify-between items-center mb-0.5 group">
+                                        
+                                        {/* --- INTERACTIVE FREQUENCY BUTTON --- */}
+                                        <button 
+                                          onClick={() => handleQuickBuildTemplate(asset, freq)}
+                                          className="text-[#005596] font-bold uppercase tracking-wider flex items-center hover:text-[#00A1E4] transition-colors"
+                                          title={`Build ${freq} SOP Protocol`}
+                                        >
+                                          {freq} <span className="opacity-0 group-hover:opacity-100 ml-1.5 text-[9px] bg-blue-100 px-1 rounded transition-opacity">BUILD SOP ➔</span>
+                                        </button>
+                                        
                                         {daysRemaining !== null ? (
                                           <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                             ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
@@ -251,6 +284,136 @@ export default function AssetsTab({
           ))
         )}
       </div>
+
+      {/* --- QUICK TEMPLATE BUILDER MODAL --- */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-entrance relative">
+            
+            <button onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
+            
+            <div className="bg-[#005596] text-white px-6 py-4">
+              <h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Protocol</h3>
+              {targetAssetContext && <p className="text-xs text-blue-200 mt-1">Pre-configured for {targetAssetContext.name} ({targetAssetContext.serial})</p>}
+            </div>
+            
+            <form onSubmit={handleLocalSubmit} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
+                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
+                  <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
+                    {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assigned Responsible Department</label>
+                  <input type="text" value={newTemplate.department} onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} placeholder="e.g. Cleanroom Operations" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
+                  <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
+                    <option value="Global">Global (All Assets)</option>
+                    {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                  </select>
+                </div>
+                <div> 
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manager Email (For Notifications)</label>
+                  <select value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
+                    <option value="">-- Select Manager Account --</option>
+                    {activeAccounts.map(u => <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Operator Email (Primary Notification)</label>
+                  <select value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
+                    <option value="">-- Select Operator Account --</option>
+                    {activeAccounts.map(u => <option key={`op-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
+                  </select>
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
+                  
+                  <div className="space-y-2 mb-4 max-h-48 overflow-y-auto pr-2">
+                    {newTemplate.checklistSteps?.map((step, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-gray-50 p-3 border border-gray-200 rounded shadow-sm">
+                          <span className="text-xs text-gray-800"><strong className="uppercase text-[#00A1E4] mr-2 bg-blue-50 px-2 py-1 rounded">[{step.type}]</strong> {step.label}</span>
+                          <button type="button" onClick={() => {
+                            const newSteps = [...newTemplate.checklistSteps];
+                            newSteps.splice(idx, 1);
+                            setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                          }} className="text-red-500 hover:text-red-700 font-bold text-lg leading-none transition-colors">&times;</button>
+                      </div>
+                    ))}
+                    {(!newTemplate.checklistSteps || newTemplate.checklistSteps.length === 0) && (
+                      <div className="text-xs text-gray-400 italic p-4 border border-dashed border-gray-300 rounded bg-white text-center">No action steps added yet. Use the builder below.</div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch">
+                    <select id="builderType" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
+                        <option value="checkbox">Checkbox (Done/Not Done)</option>
+                        <option value="text">Short Text (Serial, Note)</option>
+                        <option value="number">Numeric (PSI, Temp)</option>
+                        <option value="passfail">Pass/Fail Dropdown</option>
+                    </select>
+                    <input type="text" id="builderLabel" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStep').click(); }}} />
+                    <button type="button" id="btnAddStep" onClick={() => {
+                        const type = document.getElementById('builderType').value;
+                        const label = document.getElementById('builderLabel').value.trim();
+                        if(!label) return;
+                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
+                        document.getElementById('builderLabel').value = '';
+                    }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Step</button>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                    Attach Existing Equipment Manual (From Document Library)
+                  </label>
+                  <div className="flex flex-col space-y-3">
+                    <select 
+                      value={newTemplate.attachedManualName || ""} 
+                      onChange={(e) => {
+                        const selected = manuals.find(m => m.fileName === e.target.value);
+                        if (selected) {
+                          setNewTemplate({ ...newTemplate, attachedManualName: selected.fileName, attachedManualData: selected.fileData });
+                        } else {
+                          setNewTemplate({ ...newTemplate, attachedManualName: null, attachedManualData: null });
+                        }
+                      }} 
+                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                    >
+                      <option value="">-- Select a Manual (Optional) --</option>
+                      {manuals.map((manual, idx) => (
+                        <option key={manual.id || idx} value={manual.fileName}>{manual.fileName}</option>
+                      ))}
+                    </select>
+
+                    {newTemplate.attachedManualName && (
+                      <span className="text-xs text-[#005596] font-bold flex items-center bg-blue-50 px-3 py-2 rounded border border-blue-200 w-fit">
+                        ✅ Manual Linked: {newTemplate.attachedManualName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+              </div> 
+              <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+                <button type="button" onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isAddingTemplate ? 'Saving...' : 'Lock & Save Protocol'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
