@@ -44,8 +44,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
   const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
-  const [impersonatedRole, setImpersonatedRole] = useState("System Admin");
 
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -74,9 +72,7 @@ export default function App() {
   const realRole = currentUser?.role;
   const userDept = currentUser?.department; 
   
-  const isRealAdmin = isSystemAdmin || userEmail === 'admin@fcimg.com';
-  const activeRole = isRealAdmin ? impersonatedRole : realRole;
-  const isGodMode = activeRole === 'System Admin' || activeRole === 'admin';
+  const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com';
 
   const filterHierarchy = (item) => {
     if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
@@ -281,11 +277,10 @@ export default function App() {
     );
   }
 
-  const effectiveUser = { ...currentUser, role: activeRole };
+  const effectiveUser = { ...currentUser };
   
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
-    impersonatedRole, setImpersonatedRole, isRealAdmin,
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
     currentUser: effectiveUser,
