@@ -74,27 +74,7 @@ export default function App() {
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com';
 
-  const filterHierarchy = (item) => {
-    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return item.department === userDept || item.operatorEmail === userEmailRaw; 
-  };
-
-  const visibleAssets = assets.filter(filterHierarchy);
-  const visibleWorkOrders = workOrders.filter(filterHierarchy);
-  const visibleTemplates = pmTemplates.filter(filterHierarchy);
-  
-  const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return u.department === userDept || u.email === userEmailRaw; 
-  });
-
-  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
-  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
-  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
-  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
-
+  // --- 1. HOIST DATE MATH SO IT CAN BE USED FOR DYNAMIC STATUSES ---
   const calculateNextPmDate = (lastDateStr, freq) => {
     if (!lastDateStr || !freq) return null;
     const lastDate = new Date(lastDateStr);
@@ -132,6 +112,54 @@ export default function App() {
     const diffTime = nextDate - today;
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
+
+  // --- 2. FILTER DATA SOURCES ---
+  const filterHierarchy = (item) => {
+    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
+    return item.department === userDept || item.operatorEmail === userEmailRaw; 
+  };
+
+  const visibleWorkOrders = workOrders.filter(filterHierarchy);
+  const visibleTemplates = pmTemplates.filter(filterHierarchy);
+  
+  const visibleUsers = users.filter(u => {
+    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
+    return u.department === userDept || u.email === userEmailRaw; 
+  });
+
+  // --- 3. DYNAMIC STATUS OVERRIDE FIX ---
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  
+  const visibleAssets = assets.filter(filterHierarchy).map(asset => {
+    let isOverdue = false;
+    const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+    const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+
+    freqs.forEach(freq => {
+      const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+      if (targetDate === todayStr) return; // PM handled today
+      
+      const daysLeft = calculateDaysRemaining(targetDate, freq);
+      if (daysLeft !== null && daysLeft < 0) {
+        isOverdue = true;
+      }
+    });
+
+    // If an asset thinks it is "Operational" but a cycle has dropped below 0 days, overwrite it.
+    if (isOverdue && asset.status === "Operational") {
+      return { ...asset, status: "Maintenance Due" };
+    }
+    
+    return asset;
+  });
+
+  // --- 4. INITIALIZE HOOKS WITH DYNAMIC DATA ---
+  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
+  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
+  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
+  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
