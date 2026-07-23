@@ -24,6 +24,8 @@ export default function AssetsTab({
   const [targetAssetContext, setTargetAssetContext] = useState(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
@@ -177,12 +179,17 @@ export default function AssetsTab({
                                 freqs.map(freq => {
                                   const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
                                   const daysRemaining = calculateDaysRemaining(targetDate, freq);
+                                  const isCompletedToday = targetDate === todayStr;
                                   
                                   return (
                                     <div key={freq} className="flex flex-col text-[10px]">
                                       <div className="flex justify-between items-center mb-0.5 group">
                                         <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                        {daysRemaining !== null ? (
+                                        {isCompletedToday ? (
+                                            <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
+                                                ✅ Completed Today
+                                            </span>
+                                        ) : daysRemaining !== null ? (
                                           <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                             ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
                                           </span>
