@@ -3,8 +3,8 @@ import { useState } from 'react';
 export default function useAssets(assets, setAssets, history, setHistory, triggerModal, closeModal, currentUser) {
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   
-  // Swapped managerEmail for department
-  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
+  // Stripped out the legacy pmFrequencies, parts, and vendors arrays from the default empty state
+  const [newAsset, setNewAsset] = useState({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "" });
   
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [activeAssetDetails, setActiveAssetDetails] = useState(null);
@@ -15,42 +15,62 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
     e.preventDefault();
     if (isAddingAsset) return;
     
-    if (!newAsset.name || !newAsset.serial) { triggerModal("Error", "Asset name and Serial Number are strictly required.", "info"); return; }
+    if (!newAsset.name || !newAsset.serial) { 
+      triggerModal("Error", "Asset name and Serial Number are strictly required.", "info"); 
+      return; 
+    }
     
     setIsAddingAsset(true);
     try {
-      const initialPmDates = {};
-      newAsset.pmFrequencies.forEach(freq => { initialPmDates[freq] = new Date().toISOString(); });
+      const isEditing = !!newAsset.id;
+      const assetId = newAsset.id || `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`;
 
-      const created = { 
-        id: `FI-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`, 
-        ...newAsset, 
-        category: newAsset.category.trim() || "Uncategorized", 
+      // Build payload, keeping existing fields intact if we are in Edit Mode
+      const payload = { 
+        ...newAsset,
+        id: assetId, 
+        category: newAsset.category?.trim() || "Uncategorized", 
         parentId: newAsset.parentId || "",
         department: newAsset.department || "",
-        operatorEmail: newAsset.operatorEmail || "",
-        status: "Operational", 
-        lastPmDate: new Date().toISOString(),
-        pmFrequencies: newAsset.pmFrequencies,
-        pmDates: initialPmDates,
-        manuals: [], parts: [], vendors: []
+        operatorEmail: newAsset.operatorEmail || ""
       };
 
-      const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(created) });
+      // Only inject the blank underlying arrays if this is a brand new registration
+      if (!isEditing) {
+        payload.status = "Operational";
+        payload.lastPmDate = new Date().toISOString();
+        payload.pmFrequencies = []; // Handled exclusively by protocols now
+        payload.pmDates = {};
+        payload.manuals = []; 
+        payload.parts = []; 
+        payload.vendors = [];
+      }
+
+      // Upsert to Azure
+      const res = await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      
       if (res.ok) {
         const savedAsset = await res.json(); 
-        setAssets([...assets, savedAsset]); 
+        
+        // Update local React state dynamically based on New vs Edit
+        if (isEditing) {
+          setAssets(assets.map(a => a.id === savedAsset.id ? savedAsset : a));
+        } else {
+          setAssets([...assets, savedAsset]); 
+        }
         
         const auditLog = {
           id: `LOG-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
-          date: new Date().toLocaleString(),
+          timestamp: new Date().toLocaleString(),
           assetId: savedAsset.id,
           assetName: savedAsset.name,
-          templateName: "Asset Registration",
+          templateName: isEditing ? "Asset Profile Update" : "Asset Registration",
           interval: "On-Demand",
           technician: currentUser?.name || "System Administrator",
           status: "Completed Pass",
-          comments: `Registered new facility asset: ${savedAsset.name} (Model: ${savedAsset.model}, S/N: ${savedAsset.serial})`
+          comments: isEditing 
+            ? `Updated facility asset profile: ${savedAsset.name} (S/N: ${savedAsset.serial})`
+            : `Registered new facility asset: ${savedAsset.name} (Model: ${savedAsset.model}, S/N: ${savedAsset.serial})`
         };
 
         try {
@@ -63,10 +83,13 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
           console.error("Failed to write audit log:", logErr);
         }
 
-        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "", pmFrequencies: [], parts: [], vendors: [] });
-        triggerModal("Asset Added", "New equipment hardware standard profile integrated.", "success"); 
+        // Reset form and notify operator
+        setNewAsset({ name: "", model: "", serial: "", location: "", category: "", parentId: "", department: "", operatorEmail: "" });
+        triggerModal(isEditing ? "Asset Updated" : "Asset Added", isEditing ? "Hardware profile successfully updated." : "New equipment hardware standard profile integrated.", "success"); 
       }
-    } finally { setIsAddingAsset(false); }
+    } finally { 
+      setIsAddingAsset(false); 
+    }
   };
 
   const handleUpdateAssetStatus = async (assetId, newStatus) => {
