@@ -129,16 +129,19 @@ export default function App() {
 
   // --- 2. FILTER DATA SOURCES ---
   const filterHierarchy = (item) => {
-    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return item.department === userDept || item.operatorEmail === userEmailRaw; 
+    // Admins, Facilities, and Production: Engineering get global visibility
+    if (isGodMode || userDept === "Facilities" || userDept === "Production: Engineering") return true; 
+    
+    // STRICT SILO: Production: Final Assembly & Test AND Production: Sensor Assembly ONLY see their own groups
+    return item.department === userDept; 
   };
 
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
   const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Facilities" || userDept === "Production Engineering") return true; 
-    return u.department === userDept || u.email === userEmailRaw; 
+    if (isGodMode || userDept === "Facilities" || userDept === "Production: Engineering") return true; 
+    return u.department === userDept; 
   });
 
   // --- 3. DYNAMIC STATUS OVERRIDE FIX ---
