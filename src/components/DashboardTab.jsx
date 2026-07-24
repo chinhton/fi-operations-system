@@ -3,12 +3,25 @@ import React from 'react';
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   openPmModal, currentUser, isSystemAdmin, triggerEmailAlert,
-  workOrders, assets, pmTemplates, calculateDaysRemaining 
+  workOrders, assets, pmTemplates, calculateDaysRemaining,
+  users = [] // <-- Added users to props for the Manager lookup
 }) {
   
   const adminGlobalQueue = [];
   const userAssignedTasks = [];
   const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
+
+  // --- NEW: DYNAMIC MANAGER LOOKUP ---
+  const getManagerForDepartment = (dept) => {
+    if (!users || users.length === 0 || !dept || dept === "Unassigned") return "admin@fcimg.com";
+    
+    // Find the first user in this department who is registered as a Manager
+    const manager = users.find(u => u.department === dept && u.role === "Manager");
+    
+    // If a manager exists, route to them. Otherwise, fallback to the main admin/facilities route.
+    return manager ? manager.email : "admin@fcimg.com";
+  };
+  // ------------------------------------
 
   // --- 1. PROCESS ASSETS (Only surface if Due Soon or Critical) ---
   if (assets && calculateDaysRemaining) {
@@ -54,6 +67,7 @@ export default function DashboardTab({
           queueId: `ast-${asset.id}`,
           name: asset.name,
           serial: asset.serial || "N/A",
+          department: asset.department || "Unassigned", // NEW: Pulling in department
           badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800",
           displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : "Pending PM",
           displayDate: dueMessage,
@@ -82,6 +96,7 @@ export default function DashboardTab({
           queueId: `wo-${wo.id}`,
           name: wo.title || `Work Order ${wo.id}`,
           serial: wo.targetAsset || "N/A",
+          department: wo.department || "Unassigned", // NEW: Pulling in department
           badgeColor: isCritical ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800",
           displayStatus: wo.status,
           displayDate: wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "Pending",
@@ -178,6 +193,9 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">
+                                DEPT: {item.department}
+                              </span>
                               <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
                                 OP: {item.assignedTo}
                               </span>
@@ -192,17 +210,20 @@ export default function DashboardTab({
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "SENT ✓";
+                                  e.target.innerText = "ESCALATED ✓";
                                   e.target.classList.add("text-green-600");
+                                  
+                                  const managerEmail = getManagerForDepartment(item.department);
+
                                   triggerEmailAlert(
-                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
-                                    `URGENT REMINDER: Critical Action Required for ${item.name}`,
-                                    `Hello,\n\nThis is an administrative reminder that ${item.name} (S/N: ${item.serial}) is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate attention.\n\nPlease log into the FI-Operations Management System to execute the PM and clear this critical assignment from the global queue.`
+                                    managerEmail,
+                                    `MANAGER ESCALATION: Critical Action Required for ${item.name}`,
+                                    `Hello,\n\nThis is an administrative escalation. The system ${item.name} (S/N: ${item.serial}) in the ${item.department} department is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate oversight.\n\nAssigned Operator: ${item.assignedTo}\n\nPlease review this in the FI-Operations Management System to ensure compliance.`
                                   );
                                 }} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                🔔 Remind Operator
+                                🔔 Alert Manager
                               </button>
                               
                               {item.type === 'asset' && (
@@ -235,6 +256,9 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">
+                                DEPT: {item.department}
+                              </span>
                               <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
                                 OP: {item.assignedTo}
                               </span>
@@ -249,17 +273,20 @@ export default function DashboardTab({
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "SENT ✓";
+                                  e.target.innerText = "NOTIFIED ✓";
                                   e.target.classList.add("text-green-600");
+                                  
+                                  const managerEmail = getManagerForDepartment(item.department);
+
                                   triggerEmailAlert(
-                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
-                                    `REMINDER: Routine Task Pending for ${item.name}`,
-                                    `Hello,\n\nThis is an administrative reminder regarding ${item.name} (S/N: ${item.serial}).\n\nCurrent Status: ${item.displayStatus}\n\nPlease log into the FI-Operations Management System to clear this assignment from your queue.`
+                                    managerEmail,
+                                    `MANAGER NOTICE: Routine Task Pending for ${item.name}`,
+                                    `Hello,\n\nThis is a notification regarding ${item.name} (S/N: ${item.serial}) in the ${item.department} department.\n\nCurrent Status: ${item.displayStatus}\nAssigned Operator: ${item.assignedTo}\n\nPlease ensure your team completes this assignment on schedule.`
                                   );
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                ✉️ Send Reminder
+                                ✉️ Notify Manager
                               </button>
                               
                               {item.type === 'asset' && (

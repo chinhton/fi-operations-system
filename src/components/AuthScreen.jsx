@@ -46,6 +46,22 @@ export default function AuthScreen({
                     <option value="Production: Engineering">Production: Engineering</option>
                   </select>
                 </div>
+
+                {/* --- NEW MANAGER/OPERATOR SELECTOR --- */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1.5">Account Role / Level</label>
+                  <select 
+                    value={registerRole || "Operator"} 
+                    onChange={(e) => setRegisterRole(e.target.value)} 
+                    required 
+                    className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none"
+                  >
+                    <option value="Operator">Operator</option>
+                    <option value="Manager">Manager</option>
+                  </select>
+                </div>
+                {/* --------------------------------------- */}
+
               </>
             )}
             <div>
