@@ -35,12 +35,14 @@ export default function DashboardTab({
           const freqs = [...new Set(assetTemplates.map(t => t.interval))];
           
           let lowestDays = null;
-          const todayStr = new Date().toLocaleDateString('en-US');
+          
+          // THE FIX: Standardized formatting to perfectly match the database ("Jul 24, 2026")
+          const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
               
-              // ZERO-INBOX FIX: If the PM was completed today, clear it from the queue!
+              // If it was completed today, clear it from the queue immediately
               if (targetDate === todayStr) {
                   return; 
               }
