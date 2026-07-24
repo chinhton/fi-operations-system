@@ -20,7 +20,14 @@ export default function ApprovalsTab({
               pendingApprovals.map((u) => (
                 <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
+                      {u.department && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider bg-purple-100 text-purple-700">
+                          {u.department}
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
                   </div>
                   <div className="flex space-x-2">
@@ -45,11 +52,16 @@ export default function ApprovalsTab({
             {activeAccounts.map((u) => (
               <div key={u.email} className="p-4 bg-white hover:bg-gray-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition">
                 <div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider ${u.role === 'admin' || u.role === 'System Admin' ? 'bg-blue-100 text-[#005596]' : 'bg-slate-100 text-slate-700'}`}>
                       {u.role}
                     </span>
+                    {u.department && (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider bg-purple-100 text-purple-700">
+                        {u.department}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs text-gray-500 font-mono block mt-1">{u.email}</span>
                 </div>
