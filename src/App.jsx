@@ -291,8 +291,12 @@ export default function App() {
     );
   };
 
+  // State refs so our fetch interceptor can see live database items
   const userRef = useRef(currentUser);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
+
+  const assetsRef = useRef(assets);
+  useEffect(() => { assetsRef.current = assets; }, [assets]);
 
   useEffect(() => {
     const originalFetch = window.fetch;
@@ -370,10 +374,19 @@ export default function App() {
             } catch (e) {}
         }
 
-        // THE FIX: We split Created vs Updated to stop the PM-save spam
+        // --- THE FIX: Intelligent Create vs Update Detection using live database state ---
         let actionTaken = 'Updated';
-        if (config.method.toUpperCase() === 'POST') actionTaken = 'Created';
-        else if (config.method.toUpperCase() === 'DELETE') actionTaken = 'Deleted';
+        if (config.method.toUpperCase() === 'DELETE') {
+            actionTaken = 'Deleted';
+        } else {
+            if (actionName === "Facility Asset" && itemDetails && itemDetails.id) {
+                // Look into our live assetsRef. If the ID is already there, this is just an update/PM save.
+                const isExisting = assetsRef.current.some(a => String(a.id) === String(itemDetails.id));
+                actionTaken = isExisting ? 'Updated' : 'Created';
+            } else {
+                actionTaken = config.method.toUpperCase() === 'POST' ? 'Created' : 'Updated';
+            }
+        }
 
         const logComment = itemName 
             ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
@@ -396,7 +409,7 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // Alert Rules: Alert on ALL SOP changes, but ONLY on Asset Creation/Deletion (ignore Asset Updates)
+        // Alert Rules: Only alert on Asset Creation/Deletion (ignore Asset Updates to stop PM spam)
         const shouldAlertSOP = actionName === "Established SOP";
         const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted");
 
