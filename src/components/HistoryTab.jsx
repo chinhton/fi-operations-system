@@ -240,30 +240,32 @@ export default function HistoryTab({ history = [] }) {
               </div>
             </div>
 
-            {/* Dynamic Checklist (If responses exist) */}
+            {/* NEW SECTION: Dynamic SOP Checklist Box */}
             {(selectedLog.responses || selectedLog.checklist) && (
               <div className="mb-8">
-                <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Checklist Responses</h3>
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="bg-gray-100 text-[10px] uppercase tracking-wider text-gray-600">
-                      <th className="p-3 border border-gray-200">Task Description</th>
-                      <th className="p-3 border border-gray-200 w-32 text-center">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([task, result], i) => (
-                      <tr key={i} className="even:bg-gray-50/50">
-                        <td className="p-3 border border-gray-200 text-gray-800">{task}</td>
-                        <td className="p-3 border border-gray-200 text-center font-bold">
-                          {result === true ? <span className="text-green-600">PASS</span> : 
-                           result === false ? <span className="text-red-600">FAIL</span> : 
-                           <span className="text-gray-600">{result}</span>}
-                        </td>
+                <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-500">
+                        <th className="pb-3">Task Description</th>
+                        <th className="pb-3 w-32 text-center">Result</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([task, result], i) => (
+                        <tr key={i} className="border-b border-gray-200 last:border-0">
+                          <td className="py-3 text-gray-800 font-medium">{task}</td>
+                          <td className="py-3 text-center font-bold font-mono">
+                            {result === true || result === "true" || result === "PASS" ? <span className="text-green-600">PASS</span> : 
+                             result === false || result === "false" || result === "FAIL" ? <span className="text-red-600">FAIL</span> : 
+                             <span className="text-gray-600">{result}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

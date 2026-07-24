@@ -36,6 +36,16 @@ const customStyles = `
     background-size: 400% 400%;
     animation: movingGradient 15s ease infinite;
   }
+
+  /* --- HARDCODED PDF EXPORT FIX: Removes Browser Headers/Footers --- */
+  @media print {
+    @page { 
+      margin: 0; 
+    }
+    body { 
+      padding: 1.5cm; 
+    }
+  }
 `;
 
 const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
@@ -312,7 +322,6 @@ export default function App() {
           
           const commentText = logDetails.comments || logDetails.notes || "";
           
-          // THE FIX: Restoring the text filter to catch and ignore automatic background logs
           const isSystemLog = 
             logDetails.assetId === "SYS-AUTO" ||
             commentText.includes("Registered new facility asset") ||
@@ -361,7 +370,11 @@ export default function App() {
             } catch (e) {}
         }
 
-        const actionTaken = config.method.toUpperCase() === 'DELETE' ? 'Deleted' : 'Created/Updated';
+        // THE FIX: We split Created vs Updated to stop the PM-save spam
+        let actionTaken = 'Updated';
+        if (config.method.toUpperCase() === 'POST') actionTaken = 'Created';
+        else if (config.method.toUpperCase() === 'DELETE') actionTaken = 'Deleted';
+
         const logComment = itemName 
             ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
             : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
@@ -383,8 +396,11 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // Floodgates open: Triggers immediately for ANY SOP or Asset action (Create, Update, Delete)
-        if (actionName === "Established SOP" || actionName === "Facility Asset") {
+        // Alert Rules: Alert on ALL SOP changes, but ONLY on Asset Creation/Deletion (ignore Asset Updates)
+        const shouldAlertSOP = actionName === "Established SOP";
+        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted");
+
+        if (shouldAlertSOP || shouldAlertAsset) {
              triggerTeamsAlert(
                  "admin@fcimg.com",
                  `${actionName} ${actionTaken}`,
