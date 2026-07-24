@@ -1,209 +1,235 @@
 import React, { useState } from 'react';
 
-export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, currentUser, setCurrentUser }) {
-  const [historySearch, setHistorySearch] = useState("");
-  
-  // --- Initialize state from the Cloud Account first, fallback to LocalStorage ---
-  // Force non-admins to 'Equipment' regardless of saved preferences
-  const [activeFilter, setActiveFilter] = useState(() => {
-    if (!isSystemAdmin) return "Equipment";
-    return currentUser?.preferences?.historyFilter || localStorage.getItem("fi_oms_history_filter") || "Equipment";
+export default function HistoryTab({ history = [] }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  // Filter history based on search
+  const filteredHistory = history.filter(item => {
+    const term = searchTerm.toLowerCase();
+    return (
+      (item.assetName || '').toLowerCase().includes(term) ||
+      (item.technician || '').toLowerCase().includes(term) ||
+      (item.templateName || '').toLowerCase().includes(term) ||
+      (item.status || '').toLowerCase().includes(term)
+    );
   });
 
-  // --- NEW: Sorting State ---
-  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
-
-  // --- Cloud Sync the Toggle ---
-  const handleFilterChange = async (type) => {
-    // Prevent non-admins from changing the filter
-    if (!isSystemAdmin) return;
-
-    setActiveFilter(type);
-    localStorage.setItem("fi_oms_history_filter", type); // Still save locally for instant reloads
-    
-    if (currentUser && setCurrentUser) {
-      const updatedUser = {
-        ...currentUser,
-        preferences: {
-          ...(currentUser.preferences || {}),
-          historyFilter: type
-        }
-      };
-      
-      // Instantly update the UI state
-      setCurrentUser(updatedUser);
-      
-      try {
-        // The ?skip=/api/history hack perfectly bypasses the email interceptor in App.jsx
-        await fetch('/api/users?skip=/api/history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedUser)
-        });
-      } catch (err) {
-        console.error("Failed to sync history filter preference to cloud:", err);
-      }
-    }
+  // Safely format dates to prevent the "Invalid Date" error
+  const formatDate = (dateInput) => {
+    if (!dateInput) return "No Date Logged";
+    const parsed = new Date(dateInput);
+    return isNaN(parsed.getTime()) ? dateInput : parsed.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit', hour12: true
+    });
   };
 
-  // --- NEW: Sorting Handler ---
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+  const getStatusColor = (status) => {
+    if (!status) return "bg-gray-100 text-gray-800";
+    const s = status.toLowerCase();
+    if (s.includes('pass') || s.includes('operational')) return "bg-green-100 text-green-800";
+    if (s.includes('fail') || s.includes('incomplete') || s.includes('due')) return "bg-red-100 text-red-800";
+    return "bg-gray-100 text-gray-800 border border-gray-200";
   };
-
-  const getSortIcon = (key) => {
-    if (sortConfig.key !== key) return " ↕";
-    return sortConfig.direction === 'asc' ? " ▲" : " ▼";
-  };
-
-  // 1. Filter the History
-  const filteredHistory = (history || []).filter(log => {
-    // Determine if the log is an automated system action
-    const isSystemLog = log.assetId === "SYS-AUTO" || 
-                        log.assetName === "User Directory" || 
-                        log.assetName === "Established SOP" || 
-                        log.assetName === "Facility Asset";
-    
-    // HARD SECURITY LOCK: Non-admins can NEVER see system logs
-    if (!isSystemAdmin && isSystemLog) return false;
-
-    // Apply the toggle filter (for admins)
-    if (activeFilter === "Equipment" && isSystemLog) return false;
-    if (activeFilter === "System" && !isSystemLog) return false;
-
-    // Apply the text search filter
-    const matchesSearch = 
-      (log.assetName || "").toLowerCase().includes(historySearch.toLowerCase()) || 
-      (log.technician || "").toLowerCase().includes(historySearch.toLowerCase()) ||
-      (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase());
-      
-    return matchesSearch;
-  });
-
-  // 2. Sort the Filtered History
-  const sortedAndFilteredHistory = [...filteredHistory].sort((a, b) => {
-    let valA = a[sortConfig.key];
-    let valB = b[sortConfig.key];
-    
-    // Special handling for Dates
-    if (sortConfig.key === 'timestamp') {
-      valA = new Date(valA).getTime();
-      valB = new Date(valB).getTime();
-    } else {
-      // Standardize strings for accurate alphabetical sorting
-      valA = (valA || "").toString().toLowerCase();
-      valB = (valB || "").toString().toLowerCase();
-    }
-
-    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
 
   return (
     <div className="space-y-6 animate-entrance">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="flex flex-col lg:flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4 gap-4">
-          <h2 className="text-lg font-bold text-[#005596] whitespace-nowrap">Executed Audit Trail</h2>
-          
-          <div className="flex flex-col md:flex-row items-center w-full lg:w-auto gap-4">
-            
-            {/* Minimal Filter Toggles - ONLY SHOW EXTRA OPTIONS TO ADMINS */}
-            <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner w-full md:w-auto">
-              <button 
-                onClick={() => handleFilterChange('Equipment')} 
-                className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'Equipment' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'} ${!isSystemAdmin && 'cursor-default'}`}
-              >
-                Equipment PMs
-              </button>
-              
-              {isSystemAdmin && (
-                <>
-                  <button 
-                    onClick={() => handleFilterChange('System')} 
-                    className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'System' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                  >
-                    System Activity
-                  </button>
-                  <button 
-                    onClick={() => handleFilterChange('All')} 
-                    className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'All' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                  >
-                    All Logs
-                  </button>
-                </>
-              )}
-            </div>
+      
+      {/* 
+        This embedded style block ensures that when you click "Save as PDF", 
+        it hides the sidebar and top navigation, printing ONLY the report itself.
+      */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #pdf-print-area, #pdf-print-area * { visibility: visible; }
+          #pdf-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
 
-            <input 
-              type="text" 
-              placeholder="Search by Asset, Tech, or Template..." 
-              value={historySearch} 
-              onChange={e => setHistorySearch(e.target.value)} 
-              className="p-2.5 border border-gray-300 rounded-lg text-xs w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all bg-gray-50 focus:bg-white shadow-inner" 
-            />
+      {/* --- MAIN TABLE VIEW --- */}
+      {!selectedLog ? (
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+            <h2 className="text-lg font-black text-[#005596]">Executed Audit Trail</h2>
+            <div className="flex space-x-3">
+              <input 
+                type="text" 
+                placeholder="Search by Asset, Tech, or Status..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border border-gray-300 rounded-lg px-4 py-2 text-xs focus:ring-2 focus:ring-[#005596] outline-none shadow-sm w-72"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm whitespace-nowrap">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-500 font-bold">
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Asset</th>
+                  <th className="px-6 py-4">Protocol Executed</th>
+                  <th className="px-6 py-4">Technician</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredHistory.length === 0 ? (
+                  <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">No audit logs found.</td></tr>
+                ) : (
+                  filteredHistory.map((item, idx) => (
+                    <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-mono text-[11px] text-gray-600">
+                        {formatDate(item.timestamp || item.date)}
+                      </td>
+                      <td className="px-6 py-4 font-bold text-gray-900">{item.assetName || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{item.templateName || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-600">{item.technician || 'N/A'}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2.5 py-1 rounded-[4px] text-[10px] font-bold uppercase tracking-wider ${getStatusColor(item.status)}`}>
+                          {item.status || 'UNKNOWN'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <button 
+                          onClick={() => setSelectedLog(item)}
+                          className="text-[#005596] hover:text-[#00A1E4] text-[10px] font-bold uppercase tracking-wider transition-colors border border-[#005596] hover:border-[#00A1E4] px-3 py-1.5 rounded shadow-sm hover:shadow"
+                        >
+                          Review PDF
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
+      ) : (
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
-                <th onClick={() => handleSort('timestamp')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
-                  Date <span className="text-gray-400">{getSortIcon('timestamp')}</span>
-                </th>
-                <th onClick={() => handleSort('assetName')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
-                  Asset <span className="text-gray-400">{getSortIcon('assetName')}</span>
-                </th>
-                <th onClick={() => handleSort('templateName')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
-                  Protocol Executed <span className="text-gray-400">{getSortIcon('templateName')}</span>
-                </th>
-                <th onClick={() => handleSort('technician')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
-                  Technician <span className="text-gray-400">{getSortIcon('technician')}</span>
-                </th>
-                <th onClick={() => handleSort('status')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
-                  Status <span className="text-gray-400">{getSortIcon('status')}</span>
-                </th>
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 text-xs">
-              {sortedAndFilteredHistory.length === 0 ? (
-                <tr><td colSpan="6" className="p-8 text-center text-gray-400 text-xs italic">No audit history found matching your filters.</td></tr>
-              ) : (
-                sortedAndFilteredHistory.map(log => (
-                  <tr key={log.id} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="p-3 font-mono text-[11px] text-gray-500">{new Date(log.timestamp).toLocaleString()}</td>
-                    <td className="p-3 font-bold text-gray-800">{log.assetName}</td>
-                    <td className="p-3 text-gray-600">{log.templateName || "Ad-Hoc"}</td>
-                    <td className="p-3 font-medium text-gray-700">{log.technician}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-sm text-[9px] font-bold uppercase tracking-wider inline-block ${
-                        log.status.includes('Pass') ? 'bg-green-100 text-green-800' : 
-                        log.status.includes('Log') ? 'bg-gray-200 text-gray-700' : 
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {log.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      {isSystemAdmin && (
-                        <button onClick={() => deleteHistoryLog(log.id)} className="text-gray-300 hover:text-red-600 font-bold text-xs transition-colors opacity-0 group-hover:opacity-100">
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        /* --- PDF REVIEW OVERLAY --- */
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-entrance">
+          <div className="bg-gray-100 p-4 border-b border-gray-200 flex justify-between items-center no-print">
+            <button 
+              onClick={() => setSelectedLog(null)}
+              className="text-gray-600 hover:text-[#005596] text-xs font-bold uppercase tracking-wider flex items-center transition-colors"
+            >
+              &larr; Back to Audit Trail
+            </button>
+            <button 
+              onClick={() => window.print()}
+              className="bg-[#005596] hover:bg-[#003058] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-md flex items-center space-x-2"
+            >
+              <span>🖨️ Export to PDF</span>
+            </button>
+          </div>
+
+          {/* The actual printable document area */}
+          <div id="pdf-print-area" className="p-10 max-w-4xl mx-auto bg-white min-h-[800px]">
+            
+            {/* Report Header with Logo */}
+            <div className="flex justify-between items-end border-b-2 border-[#005596] pb-6 mb-8 mt-4">
+              <div>
+                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto object-contain mb-1" />
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Operations Management System</p>
+              </div>
+              <div className="text-right">
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Maintenance Audit Report</h2>
+                <p className="text-xs font-mono text-gray-500 mt-1">Log ID: {selectedLog.id || `LOG-SYSTEM`}</p>
+              </div>
+            </div>
+
+            {/* Meta Information Grid */}
+            <div className="grid grid-cols-2 gap-8 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target System</span>
+                  <span className="text-sm font-bold text-gray-900 block">{selectedLog.assetName || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Protocol Executed</span>
+                  <span className="text-sm text-gray-800 block">{selectedLog.templateName || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Service Interval</span>
+                  <span className="text-sm text-gray-800 block">{selectedLog.interval || 'N/A'}</span>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Execution Timestamp</span>
+                  <span className="font-mono text-sm text-[#005596] font-bold block">{formatDate(selectedLog.timestamp || selectedLog.date)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Authorized Technician</span>
+                  <span className="text-sm text-gray-800 block">{selectedLog.technician || 'N/A'}</span>
+                  {selectedLog.email && <span className="text-xs text-gray-500 font-mono block mt-0.5">{selectedLog.email}</span>}
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Final Status</span>
+                  <span className={`inline-block px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(selectedLog.status)}`}>
+                    {selectedLog.status || 'UNKNOWN'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Dynamic Checklist (If responses exist) */}
+            {(selectedLog.responses || selectedLog.checklist) && (
+              <div className="mb-8">
+                <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Checklist Responses</h3>
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-100 text-[10px] uppercase tracking-wider text-gray-600">
+                      <th className="p-3 border border-gray-200">Task Description</th>
+                      <th className="p-3 border border-gray-200 w-32 text-center">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([task, result], i) => (
+                      <tr key={i} className="even:bg-gray-50/50">
+                        <td className="p-3 border border-gray-200 text-gray-800">{task}</td>
+                        <td className="p-3 border border-gray-200 text-center font-bold">
+                          {result === true ? <span className="text-green-600">PASS</span> : 
+                           result === false ? <span className="text-red-600">FAIL</span> : 
+                           <span className="text-gray-600">{result}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Technician Notes / Comments */}
+            <div className="mb-12">
+              <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Technician Notes & Comments</h3>
+              <div className="p-5 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] text-sm text-gray-700 whitespace-pre-wrap font-mono">
+                {selectedLog.comments || selectedLog.notes || "No additional comments provided during execution."}
+              </div>
+            </div>
+
+            {/* Footer Sign-off */}
+            <div className="mt-16 pt-8 border-t border-gray-300 flex justify-between items-end pb-8">
+              <div className="w-72">
+                <div className="border-b-2 border-gray-800 pb-2 mb-2 text-center font-mono text-sm text-gray-800 italic">
+                  Electronically Signed: {selectedLog.technician || 'N/A'}
+                </div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">Technician Digital Signature</div>
+              </div>
+              <div className="text-[10px] text-gray-400 font-mono text-right">
+                Document Generated:<br/>
+                {new Date().toLocaleString()}
+              </div>
+            </div>
+
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
