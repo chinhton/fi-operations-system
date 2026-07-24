@@ -4,7 +4,9 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
   const [historySearch, setHistorySearch] = useState("");
   
   // --- Initialize state from the Cloud Account first, fallback to LocalStorage ---
+  // Force non-admins to 'Equipment' regardless of saved preferences
   const [activeFilter, setActiveFilter] = useState(() => {
+    if (!isSystemAdmin) return "Equipment";
     return currentUser?.preferences?.historyFilter || localStorage.getItem("fi_oms_history_filter") || "Equipment";
   });
 
@@ -13,6 +15,9 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
 
   // --- Cloud Sync the Toggle ---
   const handleFilterChange = async (type) => {
+    // Prevent non-admins from changing the filter
+    if (!isSystemAdmin) return;
+
     setActiveFilter(type);
     localStorage.setItem("fi_oms_history_filter", type); // Still save locally for instant reloads
     
@@ -63,7 +68,10 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
                         log.assetName === "Established SOP" || 
                         log.assetName === "Facility Asset";
     
-    // Apply the toggle filter
+    // HARD SECURITY LOCK: Non-admins can NEVER see system logs
+    if (!isSystemAdmin && isSystemLog) return false;
+
+    // Apply the toggle filter (for admins)
     if (activeFilter === "Equipment" && isSystemLog) return false;
     if (activeFilter === "System" && !isSystemLog) return false;
 
@@ -104,26 +112,31 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
           
           <div className="flex flex-col md:flex-row items-center w-full lg:w-auto gap-4">
             
-            {/* Minimal Filter Toggles */}
+            {/* Minimal Filter Toggles - ONLY SHOW EXTRA OPTIONS TO ADMINS */}
             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner w-full md:w-auto">
               <button 
                 onClick={() => handleFilterChange('Equipment')} 
-                className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'Equipment' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'Equipment' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'} ${!isSystemAdmin && 'cursor-default'}`}
               >
                 Equipment PMs
               </button>
-              <button 
-                onClick={() => handleFilterChange('System')} 
-                className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'System' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-              >
-                System Activity
-              </button>
-              <button 
-                onClick={() => handleFilterChange('All')} 
-                className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'All' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-              >
-                All Logs
-              </button>
+              
+              {isSystemAdmin && (
+                <>
+                  <button 
+                    onClick={() => handleFilterChange('System')} 
+                    className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'System' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    System Activity
+                  </button>
+                  <button 
+                    onClick={() => handleFilterChange('All')} 
+                    className={`flex-1 md:flex-none px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeFilter === 'All' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                  >
+                    All Logs
+                  </button>
+                </>
+              )}
             </div>
 
             <input 
