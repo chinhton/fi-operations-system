@@ -67,6 +67,20 @@ export default function App() {
   // Data Sync Hook
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
 
+  // --- THE SECURITY BOUNCER ---
+  // If the active user is deleted from the database or suspended, force them out instantly.
+  useEffect(() => {
+    if (currentUser && users.length > 0) {
+      const liveAccount = users.find(u => u.email === currentUser.email);
+      if (!liveAccount || liveAccount.status !== 'Active') {
+        console.warn("FI-OMS Security: Account revoked or pending. Forcing session termination.");
+        setCurrentUser(null);
+        localStorage.removeItem('fi_oms_session');
+      }
+    }
+  }, [users, currentUser, setCurrentUser]);
+  // ----------------------------
+
   const userEmailRaw = currentUser?.email || "";
   const userEmail = userEmailRaw.toLowerCase();
   const realRole = currentUser?.role;
