@@ -161,6 +161,12 @@ export default function App() {
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
+  // --- 5. THE COMPLIANCE FACTOR MATH FIX ---
+  // Calculates exactly how many visible assets are purely "Operational"
+  const dynamicComplianceRate = visibleAssets.length > 0 
+    ? Math.round((visibleAssets.filter(a => a.status === "Operational").length / visibleAssets.length) * 100) 
+    : 100;
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -375,6 +381,9 @@ export default function App() {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     
+    // Override the stats.complianceRate with our newly calculated dynamic rate
+    complianceRate: dynamicComplianceRate,
+
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
@@ -403,7 +412,7 @@ export default function App() {
         changeTab={changeTab} 
         workOrdersCount={(visibleWorkOrders || []).filter(w => w.status !== "Completed").length}
         assetsCount={(visibleAssets || []).length} 
-        complianceRate={stats.complianceRate || 100} 
+        complianceRate={dynamicComplianceRate} 
         historyCount={(history || []).length}
       />
 
