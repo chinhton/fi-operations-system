@@ -3,17 +3,10 @@ import React, { useState } from 'react';
 export default function HistoryTab({ history = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
-
-  // Filter history based on search
-  const filteredHistory = history.filter(item => {
-    const term = searchTerm.toLowerCase();
-    return (
-      (item.assetName || '').toLowerCase().includes(term) ||
-      (item.technician || '').toLowerCase().includes(term) ||
-      (item.templateName || '').toLowerCase().includes(term) ||
-      (item.status || '').toLowerCase().includes(term)
-    );
-  });
+  
+  // Sorting and Filtering State
+  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+  const [showOnlyPMs, setShowOnlyPMs] = useState(false);
 
   // Safely format dates to prevent the "Invalid Date" error
   const formatDate = (dateInput) => {
@@ -33,13 +26,60 @@ export default function HistoryTab({ history = [] }) {
     return "bg-gray-100 text-gray-800 border border-gray-200";
   };
 
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key) return <span className="ml-1 text-gray-300 font-normal">↕</span>;
+    return sortConfig.direction === 'asc' ? <span className="ml-1 text-[#005596]">▲</span> : <span className="ml-1 text-[#005596]">▼</span>;
+  };
+
+  // --- FILTERING & SORTING PIPELINE ---
+  let processedHistory = [...history];
+
+  // 1. Filter: Equipment PMs Only vs All
+  if (showOnlyPMs) {
+    processedHistory = processedHistory.filter(item => item.assetId !== "SYS-AUTO");
+  }
+
+  // 2. Filter: Search Term
+  if (searchTerm) {
+    const term = searchTerm.toLowerCase();
+    processedHistory = processedHistory.filter(item =>
+      (item.assetName || '').toLowerCase().includes(term) ||
+      (item.technician || '').toLowerCase().includes(term) ||
+      (item.templateName || '').toLowerCase().includes(term) ||
+      (item.status || '').toLowerCase().includes(term)
+    );
+  }
+
+  // 3. Sort Data (Fixed Logic)
+  processedHistory.sort((a, b) => {
+    // Special handling for dates to ensure chronological number sorting
+    if (sortConfig.key === 'timestamp') {
+      const timeA = new Date(a.timestamp || a.date).getTime() || 0;
+      const timeB = new Date(b.timestamp || b.date).getTime() || 0;
+      return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+    }
+
+    // Standard string sorting (forced lowercase for case-insensitivity)
+    const valA = String(a[sortConfig.key] || '').toLowerCase();
+    const valB = String(b[sortConfig.key] || '').toLowerCase();
+
+    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   return (
     <div className="space-y-6 animate-entrance">
       
-      {/* 
-        This embedded style block ensures that when you click "Save as PDF", 
-        it hides the sidebar and top navigation, printing ONLY the report itself.
-      */}
+      {/* Embedded print styles for clean PDF export */}
       <style>{`
         @media print {
           body * { visibility: hidden; }
@@ -54,7 +94,19 @@ export default function HistoryTab({ history = [] }) {
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
             <h2 className="text-lg font-black text-[#005596]">Executed Audit Trail</h2>
-            <div className="flex space-x-3">
+            <div className="flex items-center space-x-4">
+              
+              <button 
+                onClick={() => setShowOnlyPMs(!showOnlyPMs)}
+                className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-colors shadow-sm border ${
+                  showOnlyPMs 
+                    ? "bg-[#005596] text-white border-[#005596] hover:bg-[#003058]" 
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Equipment PMs
+              </button>
+
               <input 
                 type="text" 
                 placeholder="Search by Asset, Tech, or Status..." 
@@ -69,19 +121,29 @@ export default function HistoryTab({ history = [] }) {
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                  <th className="px-6 py-4">Date</th>
-                  <th className="px-6 py-4">Asset</th>
-                  <th className="px-6 py-4">Protocol Executed</th>
-                  <th className="px-6 py-4">Technician</th>
-                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('timestamp')}>
+                    Date {renderSortIcon('timestamp')}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('assetName')}>
+                    Asset {renderSortIcon('assetName')}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('templateName')}>
+                    Protocol Executed {renderSortIcon('templateName')}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('technician')}>
+                    Technician {renderSortIcon('technician')}
+                  </th>
+                  <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('status')}>
+                    Status {renderSortIcon('status')}
+                  </th>
                   <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredHistory.length === 0 ? (
+                {processedHistory.length === 0 ? (
                   <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">No audit logs found.</td></tr>
                 ) : (
-                  filteredHistory.map((item, idx) => (
+                  processedHistory.map((item, idx) => (
                     <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-mono text-[11px] text-gray-600">
                         {formatDate(item.timestamp || item.date)}
