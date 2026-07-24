@@ -30,10 +30,14 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
 
     try {
       const updatedAsset = { ...selectedPmAsset };
-      const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      
+      // Pure Date string for Dashboard Zero-Inbox math
+      const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      // Full timestamp for the Audit Log
+      const exactTimestamp = new Date().toLocaleString('en-US');
       
       if (!updatedAsset.pmDates) updatedAsset.pmDates = {};
-      updatedAsset.pmDates[selectedPmTemplate.interval] = today;
+      updatedAsset.pmDates[selectedPmTemplate.interval] = todayStr;
       updatedAsset.status = pmStatusState;
 
       // --- COSMOS DB CONNECTION ---
@@ -41,10 +45,19 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
 
       const historyPayload = {
         id: `AUDIT-${Date.now().toString().slice(-4)}`,
-        assetId: selectedPmAsset.id, assetName: selectedPmAsset.name, assetSerial: selectedPmAsset.serial,
-        templateName: selectedPmTemplate.name, interval: selectedPmTemplate.interval,
-        executedBy: currentUser?.name || "System Operator",
-        date: today, status: pmStatusState, comments: pmComments, answers: pmAnswers 
+        assetId: selectedPmAsset.id, 
+        assetName: selectedPmAsset.name, 
+        assetSerial: selectedPmAsset.serial,
+        templateName: selectedPmTemplate.name, 
+        interval: selectedPmTemplate.interval,
+        
+        // THE FIX: Renamed keys to exactly match what HistoryTab.jsx expects
+        technician: currentUser?.name || "System Operator",
+        email: currentUser?.email || "",
+        timestamp: exactTimestamp, 
+        status: pmStatusState, 
+        comments: pmComments, 
+        responses: pmAnswers // Mapped from 'answers' so the PDF Checklist renders!
       };
       
       await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyPayload) });

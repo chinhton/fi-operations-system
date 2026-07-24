@@ -21,14 +21,29 @@ export default function DashboardTab({
     return manager ? manager.email : "admin@fcimg.com";
   };
 
+  // --- THE NEW DATE ENGINE ---
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  // Bulletproof Zero-Inbox Check: Converts any format to raw time to guarantee a match
+  const isToday = (dateStr) => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return false; 
+      d.setHours(0,0,0,0);
+      return d.getTime() === today.getTime();
+  };
+
+  const todayStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
   if (assets && calculateDaysRemaining) {
     assets.forEach(asset => {
-      let isDueOrCritical = false;
+      let taskCategory = null; 
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
 
       if (isCriticalStatus) {
-          isDueOrCritical = true;
+          taskCategory = 'Critical';
           dueMessage = "Immediate Action Required";
       } else {
           const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
@@ -36,18 +51,13 @@ export default function DashboardTab({
           
           let lowestDays = null;
           
-          // THE FIX: Standardized formatting to perfectly match the database ("Jul 24, 2026")
-          const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          
           freqs.forEach(freq => {
-              const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+              const lastDoneDate = asset.pmDates?.[freq] || asset.lastPmDate;
               
-              // If it was completed today, clear it from the queue immediately
-              if (targetDate === todayStr) {
-                  return; 
-              }
+              // ZERO-INBOX SHIELD: If this specific PM was done today, completely ignore it!
+              if (isToday(lastDoneDate)) return;
 
-              const effectiveDate = targetDate ? targetDate : todayStr;
+              const effectiveDate = lastDoneDate ? lastDoneDate : todayStr;
               const daysLeft = calculateDaysRemaining(effectiveDate, freq);
               
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
@@ -55,26 +65,36 @@ export default function DashboardTab({
               }
           });
 
-          if (lowestDays !== null && lowestDays <= 7) {
-              isDueOrCritical = true;
-              dueMessage = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
-              if (lowestDays <= 0) isCriticalStatus = true; 
+          // 3-TIER ROUTING LOGIC
+          if (lowestDays !== null) {
+              if (lowestDays < 0) {
+                  taskCategory = 'Critical';
+                  dueMessage = `Overdue by ${Math.abs(lowestDays)} days`;
+                  isCriticalStatus = true;
+              } else if (lowestDays <= 5) {
+                  taskCategory = 'Upcoming';
+                  dueMessage = `Due in ${lowestDays} days`;
+              } else if (lowestDays <= 30) {
+                  taskCategory = 'Pending';
+                  dueMessage = `Due in ${lowestDays} days`;
+              }
           }
       }
 
-      if (isDueOrCritical) {
+      if (taskCategory) {
         const queueItem = {
           queueId: `ast-${asset.id}`,
           name: asset.name,
           serial: asset.serial || "N/A",
           department: asset.department || "Unassigned",
-          badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800",
-          displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : "Pending PM",
+          badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"),
+          displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : (taskCategory === 'Upcoming' ? "Upcoming PM" : "Pending PM"),
           displayDate: dueMessage,
           assignedTo: asset.operatorEmail || "Unassigned",
           rawItem: asset,
           type: 'asset',
-          isCritical: isCriticalStatus
+          isCritical: isCriticalStatus,
+          taskCategory: taskCategory
         };
 
         adminGlobalQueue.push(queueItem);
@@ -90,22 +110,46 @@ export default function DashboardTab({
     });
   }
 
+  // Injecting Work Orders into the new 3-Tier timing system
   if (workOrders) {
     workOrders.forEach(wo => {
       if (wo.status !== "Completed") {
         const isCritical = criticalStatuses.includes(wo.status);
+        let taskCategory = 'Upcoming';
+        let dueMsg = "Pending";
+        
+        if (wo.dueDate) {
+            const d = new Date(wo.dueDate);
+            d.setHours(0,0,0,0);
+            const daysLeft = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysLeft < 0 || isCritical) {
+                taskCategory = 'Critical';
+                dueMsg = `Overdue (${Math.abs(daysLeft)}d)`;
+            } else if (daysLeft <= 5) {
+                taskCategory = 'Upcoming';
+                dueMsg = `Due in ${daysLeft} days`;
+            } else if (daysLeft <= 30) {
+                taskCategory = 'Pending';
+                dueMsg = `Due in ${daysLeft} days`;
+            } else {
+                return; // Hide WOs completely if they are more than 30 days out
+            }
+        }
+
         const queueItem = {
           queueId: `wo-${wo.id}`,
           name: wo.title || `Work Order ${wo.id}`,
           serial: wo.targetAsset || "N/A",
           department: wo.department || "Unassigned",
-          badgeColor: isCritical ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800",
+          badgeColor: isCritical ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-600"),
           displayStatus: wo.status,
-          displayDate: wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "Pending",
+          displayDate: dueMsg,
           assignedTo: wo.operatorEmail || "Unassigned",
           rawItem: wo,
           type: 'wo',
-          isCritical: isCritical
+          isCritical: isCritical,
+          taskCategory: taskCategory
         };
 
         adminGlobalQueue.push(queueItem);
@@ -124,14 +168,18 @@ export default function DashboardTab({
     });
   }
 
-  const overdueAdminQueue = adminGlobalQueue.filter(item => item.isCritical);
-  const upcomingAdminQueue = adminGlobalQueue.filter(item => !item.isCritical);
+  // --- QUEUE SPLITTERS ---
+  const adminCritical = adminGlobalQueue.filter(item => item.taskCategory === 'Critical');
+  const adminUpcoming = adminGlobalQueue.filter(item => item.taskCategory === 'Upcoming');
+  const adminPending = adminGlobalQueue.filter(item => item.taskCategory === 'Pending');
 
-  const overdueManagerQueue = managerDepartmentQueue.filter(item => item.isCritical);
-  const upcomingManagerQueue = managerDepartmentQueue.filter(item => !item.isCritical);
+  const managerCritical = managerDepartmentQueue.filter(item => item.taskCategory === 'Critical');
+  const managerUpcoming = managerDepartmentQueue.filter(item => item.taskCategory === 'Upcoming');
+  const managerPending = managerDepartmentQueue.filter(item => item.taskCategory === 'Pending');
 
-  const overdueMyTasks = userAssignedTasks.filter(item => item.isCritical);
-  const upcomingMyTasks = userAssignedTasks.filter(item => !item.isCritical);
+  const myCritical = userAssignedTasks.filter(item => item.taskCategory === 'Critical');
+  const myUpcoming = userAssignedTasks.filter(item => item.taskCategory === 'Upcoming');
+  const myPending = userAssignedTasks.filter(item => item.taskCategory === 'Pending');
 
   return (
     <div className="space-y-8 animate-entrance">
@@ -182,14 +230,14 @@ export default function DashboardTab({
                   </div>
                 ) : (
                   <>
-                    {overdueAdminQueue.length > 0 && (
+                    {adminCritical.length > 0 && (
                       <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                         <span>🚨 Critical & Overdue Action Required</span>
-                        <span>{overdueAdminQueue.length} Items</span>
+                        <span>{adminCritical.length} Items</span>
                       </div>
                     )}
                     <div className="divide-y divide-gray-100 bg-white">
-                      {overdueAdminQueue.map(item => (
+                      {adminCritical.map(item => (
                         <div key={item.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : '#eab308' }}>
                           <div className="flex-1">
                             <div className="flex items-center space-x-3">
@@ -200,42 +248,24 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
-                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">
-                                DEPT: {item.department}
-                              </span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
-                                OP: {item.assignedTo}
-                              </span>
+                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {item.department}</span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
                             </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
-                            {item.displayDate && (
-                              <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">
-                                {item.displayDate}
-                              </div>
-                            )}
+                            <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "ESCALATED ✓";
-                                  e.target.classList.add("text-green-600");
-                                  const managerEmail = getManagerForDepartment(item.department);
-                                  
-                                  triggerTeamsAlert(
-                                    managerEmail,
-                                    `MANAGER ESCALATION: Critical Action Required for ${item.name}`,
-                                    `Hello,\n\nThis is an administrative escalation. The system ${item.name} (S/N: ${item.serial}) in the ${item.department} department is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate oversight.\n\nAssigned Operator(s): ${item.assignedTo}\n\nPlease review this in the FI-Operations Management System to ensure compliance.`
-                                  );
+                                  e.target.innerText = "ESCALATED ✓"; e.target.classList.add("text-green-600");
+                                  triggerTeamsAlert(getManagerForDepartment(item.department), `MANAGER ESCALATION: Critical Action Required for ${item.name}`, `Hello,\n\nThe system ${item.name} (S/N: ${item.serial}) is ${item.displayStatus.toUpperCase()}.\nAssigned: ${item.assignedTo}`);
                                 }} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
                                 🔔 Alert Manager
                               </button>
-                              
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                                  Execute PM &rarr;
-                                </button>
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -243,14 +273,14 @@ export default function DashboardTab({
                       ))}
                     </div>
 
-                    {upcomingAdminQueue.length > 0 && (
+                    {adminUpcoming.length > 0 && (
                       <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
-                        <span>📅 Upcoming & Pending Tasks</span>
-                        <span>{upcomingAdminQueue.length} Items</span>
+                        <span>📅 Upcoming Tasks (0 - 5 Days)</span>
+                        <span>{adminUpcoming.length} Items</span>
                       </div>
                     )}
                     <div className="divide-y divide-gray-100 bg-white">
-                      {upcomingAdminQueue.map(item => (
+                      {adminUpcoming.map(item => (
                         <div key={item.queueId} className="p-5 hover:bg-blue-50/30 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3">
@@ -261,44 +291,57 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
-                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">
-                                DEPT: {item.department}
-                              </span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
-                                OP: {item.assignedTo}
-                              </span>
+                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {item.department}</span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
                             </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
-                            {item.displayDate && (
-                              <div className="mb-2 text-[10px] text-gray-500 font-mono">
-                                {item.displayDate}
-                              </div>
-                            )}
+                            <div className="mb-2 text-[10px] text-[#005596] font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "NOTIFIED ✓";
-                                  e.target.classList.add("text-green-600");
-                                  const managerEmail = getManagerForDepartment(item.department);
-
-                                  triggerTeamsAlert(
-                                    managerEmail,
-                                    `MANAGER NOTICE: Routine Task Pending for ${item.name}`,
-                                    `Hello,\n\nThis is a notification regarding ${item.name} (S/N: ${item.serial}) in the ${item.department} department.\n\nCurrent Status: ${item.displayStatus}\nAssigned Operator(s): ${item.assignedTo}\n\nPlease ensure your team completes this assignment on schedule.`
-                                  );
+                                  e.target.innerText = "NOTIFIED ✓"; e.target.classList.add("text-green-600");
+                                  triggerTeamsAlert(getManagerForDepartment(item.department), `MANAGER NOTICE: Routine Task Pending for ${item.name}`, `Hello,\n\nStatus: ${item.displayStatus}\nAssigned: ${item.assignedTo}`);
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
                                 ✉️ Notify Manager
                               </button>
-                              
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                                  Execute PM &rarr;
-                                </button>
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {adminPending.length > 0 && (
+                      <div className="bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-slate-300 shadow-sm flex justify-between">
+                        <span>🗓️ Pending Tasks (6 - 30 Days)</span>
+                        <span>{adminPending.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white opacity-80 hover:opacity-100 transition-opacity">
+                      {adminPending.map(item => (
+                        <div key={item.queueId} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4 border-slate-300">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-700 text-sm block">{item.name}</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {item.department}</span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
+                            {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -326,14 +369,14 @@ export default function DashboardTab({
                   </div>
                 ) : (
                   <>
-                    {overdueManagerQueue.length > 0 && (
+                    {managerCritical.length > 0 && (
                       <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                         <span>🚨 Critical & Overdue Action Required</span>
-                        <span>{overdueManagerQueue.length} Items</span>
+                        <span>{managerCritical.length} Items</span>
                       </div>
                     )}
                     <div className="divide-y divide-gray-100 bg-white">
-                      {overdueManagerQueue.map(item => (
+                      {managerCritical.map(item => (
                         <div key={item.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : '#eab308' }}>
                           <div className="flex-1">
                             <div className="flex items-center space-x-3">
@@ -344,40 +387,23 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
-                                OP: {item.assignedTo}
-                              </span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
                             </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
-                            {item.displayDate && (
-                              <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">
-                                {item.displayDate}
-                              </div>
-                            )}
+                            <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "SENT ✓";
-                                  e.target.classList.add("text-green-600");
-                                  
-                                  const primaryOperator = item.assignedTo !== "Unassigned" ? item.assignedTo.split(',')[0].trim() : "admin@fcimg.com";
-                                  
-                                  triggerTeamsAlert(
-                                    primaryOperator,
-                                    `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`,
-                                    `Hello,\n\nThis is a priority reminder from your department manager. The system ${item.name} (S/N: ${item.serial}) is currently flagged as ${item.displayStatus.toUpperCase()}.\n\nPlease log into the FI-Operations Management System and execute this task immediately to maintain compliance.`
-                                  );
+                                  e.target.innerText = "SENT ✓"; e.target.classList.add("text-green-600");
+                                  triggerTeamsAlert(item.assignedTo.split(',')[0].trim(), `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`, `Please log in and execute this task immediately.`);
                                 }} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
                                 🔔 Remind Operator
                               </button>
-                              
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                                  Execute PM &rarr;
-                                </button>
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -385,14 +411,14 @@ export default function DashboardTab({
                       ))}
                     </div>
 
-                    {upcomingManagerQueue.length > 0 && (
+                    {managerUpcoming.length > 0 && (
                       <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
-                        <span>📅 Upcoming & Pending Tasks</span>
-                        <span>{upcomingManagerQueue.length} Items</span>
+                        <span>📅 Upcoming Tasks (0 - 5 Days)</span>
+                        <span>{managerUpcoming.length} Items</span>
                       </div>
                     )}
                     <div className="divide-y divide-gray-100 bg-white">
-                      {upcomingManagerQueue.map(item => (
+                      {managerUpcoming.map(item => (
                         <div key={item.queueId} className="p-5 hover:bg-blue-50/30 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
                           <div className="flex-1">
                             <div className="flex items-center space-x-3">
@@ -403,42 +429,55 @@ export default function DashboardTab({
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
-                                OP: {item.assignedTo}
-                              </span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
                             </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
-                            {item.displayDate && (
-                              <div className="mb-2 text-[10px] text-gray-500 font-mono">
-                                {item.displayDate}
-                              </div>
-                            )}
+                            <div className="mb-2 text-[10px] text-[#005596] font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
                               <button 
                                 onClick={(e) => {
-                                  e.target.innerText = "NOTIFIED ✓";
-                                  e.target.classList.add("text-green-600");
-                                  
-                                  const primaryOperator = item.assignedTo !== "Unassigned" ? item.assignedTo.split(',')[0].trim() : "admin@fcimg.com";
-                                  
-                                  triggerTeamsAlert(
-                                    primaryOperator,
-                                    `MANAGER REMINDER: Routine Task Pending for ${item.name}`,
-                                    `Hello,\n\nThis is a standard reminder from your department manager regarding ${item.name} (S/N: ${item.serial}).\n\nCurrent Status: ${item.displayStatus}\n\nPlease ensure this assignment is completed on schedule.`
-                                  );
+                                  e.target.innerText = "NOTIFIED ✓"; e.target.classList.add("text-green-600");
+                                  triggerTeamsAlert(item.assignedTo.split(',')[0].trim(), `MANAGER REMINDER: Routine Task Pending for ${item.name}`, `Current Status: ${item.displayStatus}\nPlease ensure completion.`);
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
                                 ✉️ Remind Operator
                               </button>
-                              
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
-                                  Execute PM &rarr;
-                                </button>
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {managerPending.length > 0 && (
+                      <div className="bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-slate-300 shadow-sm flex justify-between">
+                        <span>🗓️ Pending Tasks (6 - 30 Days)</span>
+                        <span>{managerPending.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white opacity-80 hover:opacity-100 transition-opacity">
+                      {managerPending.map(item => (
+                        <div key={item.queueId} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4 border-slate-300">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-700 text-sm block">{item.name}</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
+                            {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -466,14 +505,14 @@ export default function DashboardTab({
                 </div>
               ) : (
                 <>
-                  {overdueMyTasks.length > 0 && (
+                  {myCritical.length > 0 && (
                     <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                       <span>🚨 Critical & Overdue Action Required</span>
-                      <span>{overdueMyTasks.length} Items</span>
+                      <span>{myCritical.length} Items</span>
                     </div>
                   )}
                   <div className="divide-y divide-gray-100 bg-white">
-                    {overdueMyTasks.map(task => (
+                    {myCritical.map(task => (
                       <div key={task.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4 border-red-500">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
@@ -484,7 +523,7 @@ export default function DashboardTab({
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
                             <span><strong>Target:</strong> {task.serial}</span>
-                            <span><strong>Note:</strong> {task.displayDate}</span>
+                            <span className="text-red-600 font-bold"><strong>Note:</strong> {task.displayDate}</span>
                           </div>
                         </div>
                         <div className="text-right ml-4">
@@ -499,14 +538,14 @@ export default function DashboardTab({
                     ))}
                   </div>
 
-                  {upcomingMyTasks.length > 0 && (
+                  {myUpcoming.length > 0 && (
                     <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
-                      <span>📅 Upcoming & Pending Tasks</span>
-                      <span>{upcomingMyTasks.length} Items</span>
+                      <span>📅 Upcoming Tasks (0 - 5 Days)</span>
+                      <span>{myUpcoming.length} Items</span>
                     </div>
                   )}
                   <div className="divide-y divide-gray-100 bg-white">
-                    {upcomingMyTasks.map(task => (
+                    {myUpcoming.map(task => (
                       <div key={task.queueId} className="p-5 hover:bg-blue-50/50 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
@@ -517,7 +556,7 @@ export default function DashboardTab({
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
                             <span><strong>Target:</strong> {task.serial}</span>
-                            <span><strong>Note:</strong> {task.displayDate}</span>
+                            <span className="text-[#005596] font-bold"><strong>Note:</strong> {task.displayDate}</span>
                           </div>
                         </div>
                         <div className="text-right ml-4">
@@ -526,6 +565,39 @@ export default function DashboardTab({
                             className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             Open Assignment
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {myPending.length > 0 && (
+                    <div className="bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-slate-300 shadow-sm flex justify-between">
+                      <span>🗓️ Pending Tasks (6 - 30 Days)</span>
+                      <span>{myPending.length} Items</span>
+                    </div>
+                  )}
+                  <div className="divide-y divide-gray-100 bg-white opacity-80 hover:opacity-100 transition-opacity">
+                    {myPending.map(task => (
+                      <div key={task.queueId} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4 border-slate-300">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3">
+                            <span className="font-bold text-gray-700 text-sm block">{task.name}</span>
+                            <span className="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                              {task.displayStatus}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
+                            <span><strong>Target:</strong> {task.serial}</span>
+                            <span className="text-slate-500 font-bold"><strong>Note:</strong> {task.displayDate}</span>
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <button 
+                            onClick={() => { openPmModal(task.rawItem); }}
+                            className="text-slate-600 hover:text-slate-900 border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
+                          >
+                            View Details
                           </button>
                         </div>
                       </div>
