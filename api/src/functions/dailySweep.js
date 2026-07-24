@@ -6,7 +6,7 @@ const { CosmosClient } = require("@azure/cosmos");
 // Note: You must add an Application Setting in your Azure Portal called "WEBSITE_TIME_ZONE" 
 // and set its value to "Pacific Standard Time" for this to fire exactly at 8am PST.
 app.timer('dailyMaintenanceSweep', {
-    schedule: '0 0 8 * * *', 
+    schedule: '0 0 15 * * *', // 15:00 UTC exactly matches 8:00 AM Pacific Time
     handler: async (myTimer, context) => {
         context.log('Starting automated daily PM sweep...');
 
