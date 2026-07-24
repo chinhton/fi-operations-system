@@ -172,6 +172,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // --- NOTIFICATION SYSTEM 1: AZURE EMAIL ---
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
       const emailPayload = {
@@ -189,6 +190,53 @@ export default function App() {
       return true;
     } catch (err) {
       console.error("❌ Email Blast Failed:", err);
+      return false;
+    }
+  };
+
+  // --- NOTIFICATION SYSTEM 2: MS TEAMS WEBHOOK ---
+  const triggerTeamsAlert = async (subjectLine, bodyText) => {
+    const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
+
+    try {
+      const payload = {
+        type: "message",
+        attachments: [
+          {
+            contentType: "application/vnd.microsoft.card.adaptive",
+            content: {
+              type: "AdaptiveCard",
+              $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+              version: "1.4",
+              body: [
+                {
+                  type: "TextBlock",
+                  text: `🚨 ${subjectLine}`,
+                  weight: "Bolder",
+                  size: "Medium",
+                  color: "Accent"
+                },
+                {
+                  type: "TextBlock",
+                  text: bodyText,
+                  wrap: true,
+                  spacing: "Medium"
+                }
+              ]
+            }
+          }
+        ]
+      };
+
+      await fetch(TEAMS_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      return true;
+    } catch (err) {
+      console.error("❌ FI-OMS Teams Blast Failed:", err);
       return false;
     }
   };
@@ -262,11 +310,16 @@ export default function App() {
               try { newUserDetails = JSON.parse(config.body); } catch (e) {}
           }
           
-          // Alert Admin
+          // --- DUAL NOTIFICATION: Alert Admin via Email AND Teams ---
           triggerEmailAlert(
               "admin@fcimg.com", 
               "FI-OMS Alert: New Account Pending Approval",
               `System Notification:\n\nA new user has registered for the Operations Management System and is awaiting approval.\n\nName: ${newUserDetails.name || 'Unknown'}\nEmail: ${newUserDetails.email || 'Unknown'}\nDepartment: ${newUserDetails.department || 'Unknown'}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in and check the Account Approvals tab to grant access.`
+          );
+
+          triggerTeamsAlert(
+              "New Account Pending Approval",
+              `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`
           );
 
           // Alert New User
@@ -346,17 +399,27 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
+        // --- DUAL NOTIFICATION: Alerts for Assets and SOPs ---
         if (actionName === "Facility Asset" || actionName === "Established SOP") {
              triggerEmailAlert(
                  itemDetails.operatorEmail || "admin@fcimg.com", 
                  `FI-OMS Alert: ${actionName} ${actionTaken}`,
                  `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
              );
+             triggerTeamsAlert(
+                 `${actionName} ${actionTaken}`,
+                 `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
+             );
         } else if (actionName === "User Directory") {
+             // --- DUAL NOTIFICATION: Alerts for Account Approvals ---
              triggerEmailAlert(
                  itemDetails.email || "admin@fcimg.com", 
                  `FI-OMS Alert: Account Status Updated`,
                  `System Notification:\n\nYour account status in the FI-Operations Management System has been updated by ${activeUser.name}.\n\nAction Logged: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nIf you have been approved, you may now log in.`
+             );
+             triggerTeamsAlert(
+                 `Account Status Updated`,
+                 `**${activeUser.name}** has updated a user account status.\n\n**Action Logged:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
              );
         }
       }
@@ -387,6 +450,7 @@ export default function App() {
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
+    triggerTeamsAlert, // <--- Added the new trigger to your master props
 
     pendingApprovals,
     activeAccounts,
