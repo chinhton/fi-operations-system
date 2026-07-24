@@ -64,11 +64,8 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  // Data Sync Hook
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
 
-  // --- THE SECURITY BOUNCER ---
-  // If the active user is deleted from the database or suspended, force them out instantly.
   useEffect(() => {
     if (currentUser && users.length > 0) {
       const liveAccount = users.find(u => u.email === currentUser.email);
@@ -79,7 +76,6 @@ export default function App() {
       }
     }
   }, [users, currentUser, setCurrentUser]);
-  // ----------------------------
 
   const userEmailRaw = currentUser?.email || "";
   const userEmail = userEmailRaw.toLowerCase();
@@ -88,7 +84,6 @@ export default function App() {
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com';
 
-  // --- 1. HOIST DATE MATH SO IT CAN BE USED FOR DYNAMIC STATUSES ---
   const calculateNextPmDate = (lastDateStr, freq) => {
     if (!lastDateStr || !freq) return null;
     const lastDate = new Date(lastDateStr);
@@ -127,12 +122,8 @@ export default function App() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // --- 2. FILTER DATA SOURCES ---
   const filterHierarchy = (item) => {
-    // Admins, Facilities, and ANY Engineering department variant get global visibility
     if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
-    
-    // STRICT SILO: Other departments ONLY see their own groups
     return item.department === userDept; 
   };
 
@@ -144,7 +135,6 @@ export default function App() {
     return u.department === userDept; 
   });
 
-  // --- 3. DYNAMIC STATUS OVERRIDE FIX ---
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   
   const visibleAssets = assets.filter(filterHierarchy).map(asset => {
@@ -154,7 +144,7 @@ export default function App() {
 
     freqs.forEach(freq => {
       const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-      if (targetDate === todayStr) return; // PM handled today
+      if (targetDate === todayStr) return; 
       
       const daysLeft = calculateDaysRemaining(targetDate, freq);
       if (daysLeft !== null && daysLeft < 0) {
@@ -162,15 +152,12 @@ export default function App() {
       }
     });
 
-    // If an asset thinks it is "Operational" but a cycle has dropped below 0 days, overwrite it.
     if (isOverdue && asset.status === "Operational") {
       return { ...asset, status: "Maintenance Due" };
     }
-    
     return asset;
   });
 
-  // --- 4. INITIALIZE HOOKS WITH DYNAMIC DATA ---
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
   const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
@@ -178,8 +165,6 @@ export default function App() {
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
-  // --- 5. THE COMPLIANCE FACTOR MATH FIX ---
-  // Calculates exactly how many visible assets are purely "Operational"
   const dynamicComplianceRate = visibleAssets.length > 0 
     ? Math.round((visibleAssets.filter(a => a.status === "Operational").length / visibleAssets.length) * 100) 
     : 100;
@@ -192,18 +177,8 @@ export default function App() {
   // --- NOTIFICATION SYSTEM 1: AZURE EMAIL ---
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
-      const emailPayload = {
-        to: toAddress || "admin@fcimg.com",
-        subject: subjectLine,
-        body: bodyText
-      };
-      
-      await fetch('/api/sendEmail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(emailPayload)
-      });
-      
+      const emailPayload = { to: toAddress || "admin@fcimg.com", subject: subjectLine, body: bodyText };
+      await fetch('/api/sendEmail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailPayload) });
       return true;
     } catch (err) {
       console.error("❌ Email Blast Failed:", err);
@@ -211,11 +186,16 @@ export default function App() {
     }
   };
 
-  // --- NOTIFICATION SYSTEM 2: MS TEAMS WEBHOOK ---
-  const triggerTeamsAlert = async (subjectLine, bodyText) => {
+  // --- NOTIFICATION SYSTEM 2: MS TEAMS WEBHOOK (ADAPTIVE CARD + MENTIONS) ---
+  const triggerTeamsAlert = async (toAddress, subjectLine, bodyText) => {
     const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
 
     try {
+      // Determine if we need to ping a specific person
+      const isTargeted = toAddress && toAddress !== "admin@fcimg.com";
+      const mentionTag = isTargeted ? `<at>${toAddress}</at>` : "";
+      const formattedBody = isTargeted ? `**Attention:** ${mentionTag}\n\n${bodyText}` : bodyText;
+
       const payload = {
         type: "message",
         attachments: [
@@ -235,11 +215,24 @@ export default function App() {
                 },
                 {
                   type: "TextBlock",
-                  text: bodyText,
+                  text: formattedBody,
                   wrap: true,
                   spacing: "Medium"
                 }
-              ]
+              ],
+              // This is the secret sauce that tells MS Teams to actually trigger an Activity Ping
+              msteams: isTargeted ? {
+                entities: [
+                  {
+                    type: "mention",
+                    text: mentionTag,
+                    mentioned: {
+                      id: toAddress,
+                      name: toAddress // Teams resolves the display name automatically based on the email ID
+                    }
+                  }
+                ]
+              } : undefined
             }
           }
         ]
@@ -267,45 +260,29 @@ export default function App() {
     
     const updatedUser = { ...targetUser, status: "Active" };
     try {
-      await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedUser)
-      });
+      await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedUser) });
       setUsers(users.map(u => u.email === email ? updatedUser : u));
-    } catch (err) {
-      console.error("User approval failed:", err);
-    }
+    } catch (err) { console.error("User approval failed:", err); }
   };
 
   const handleDenyUser = async (email) => {
     const targetUser = users.find(u => u.email === email);
     if (!targetUser) return;
-
     try {
       await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
       setUsers(users.filter(u => u.email !== email));
-    } catch (err) {
-      console.error("User denial failed:", err);
-    }
+    } catch (err) { console.error("User denial failed:", err); }
   };
 
   const handleRevokeUser = async (email) => {
     const targetUser = users.find(u => u.email === email);
     if (!targetUser) return;
-
-    modals.triggerModal(
-      "Confirm Revocation",
-      `Are you sure you want to permanently revoke system access for ${email}?`,
-      "confirm",
-      async () => {
+    modals.triggerModal("Confirm Revocation", `Are you sure you want to permanently revoke system access for ${email}?`, "confirm", async () => {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           setUsers(users.filter(u => u.email !== email));
           modals.closeModal();
-        } catch (err) {
-          console.error("User revocation failed:", err);
-        }
+        } catch (err) { console.error("User revocation failed:", err); }
       }
     );
   };
@@ -324,58 +301,44 @@ export default function App() {
       // --- CONDITION 1: NEW USER REGISTRATION ---
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
-          if (config.body) {
-              try { newUserDetails = JSON.parse(config.body); } catch (e) {}
-          }
+          if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
           
-          // KEEP: Email Admin for access request (You can change "admin@fcimg.com" to your personal email if preferred)
-          triggerEmailAlert(
-              "admin@fcimg.com", 
-              "FI-OMS Alert: New Account Pending Approval",
-              `System Notification:\n\nA new user has registered for the Operations Management System and is awaiting approval.\n\nName: ${newUserDetails.name || 'Unknown'}\nEmail: ${newUserDetails.email || 'Unknown'}\nDepartment: ${newUserDetails.department || 'Unknown'}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in and check the Account Approvals tab to grant access.`
-          );
-
           triggerTeamsAlert(
+              "admin@fcimg.com",
               "New Account Pending Approval",
               `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`
           );
-
-          // KEEP: Courtesy email to the new user
-          if (newUserDetails.email) {
-              triggerEmailAlert(
-                  newUserDetails.email,
-                  "FI-OMS: Account Registration Received",
-                  `Hello ${newUserDetails.name || 'there'},\n\nYour account registration for the Fairchild Imaging Operations Management System has been received successfully and is currently pending administrator approval.\n\nYou will receive another email once your access has been granted.\n\nThank you.`
-              );
-          }
-
           return response;
       }
 
-      // --- CONDITION 2: SYSTEM ACTIONS (ASSETS, SOPS, USER DIRECTORY) ---
+      // --- CONDITION 2: MANUAL PM EXECUTIONS ---
+      if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
+          let logDetails = {};
+          if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
+          
+          // Only alert for actual manual PMs, not background system logs
+          if (logDetails.assetId !== "SYS-AUTO") {
+              triggerTeamsAlert(
+                  "admin@fcimg.com", // Sent to admin by default, but can be updated later
+                  `✅ PM Executed: ${logDetails.assetName}`,
+                  `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${logDetails.comments || "None"}\n**Time:** ${logDetails.timestamp}`
+              );
+          }
+      }
+
+      // --- CONDITION 3: SYSTEM ACTIONS (ASSETS, SOPS, USER DIRECTORY) ---
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
         
         let actionName = "System Event";
         let tabSource = "System Background";
 
-        if (url.includes('/api/assets')) { 
-            actionName = "Facility Asset"; 
-            tabSource = "Facility Assets Tab"; 
-        }
-        if (url.includes('/api/pmTemplates')) { 
-            actionName = "Established SOP"; 
-            tabSource = "Established SOPs Tab"; 
-        }
-        if (url.includes('/api/users')) { 
-            actionName = "User Directory"; 
-            tabSource = "Account Approvals Tab"; 
-        }
+        if (url.includes('/api/assets')) { actionName = "Facility Asset"; tabSource = "Facility Assets Tab"; }
+        if (url.includes('/api/pmTemplates')) { actionName = "Established SOP"; tabSource = "Established SOPs Tab"; }
+        if (url.includes('/api/users')) { actionName = "User Directory"; tabSource = "Account Approvals Tab"; }
 
-        if (actionName === "Facility Asset") {
-            originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
-        } else if (actionName === "Established SOP") {
-            originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error);
-        } else if (actionName === "User Directory") {
+        if (actionName === "Facility Asset") { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); } 
+        else if (actionName === "Established SOP") { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); } 
+        else if (actionName === "User Directory") {
             originalFetch('/api/users').then(r => r.json()).then(data => {
                 setUsers(data);
                 const updatedMe = data.find(u => u.email === activeUser.email);
@@ -418,15 +381,15 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // --- TEAMS ONLY: Alerts for Assets and SOPs (Emails Removed) ---
         if (actionName === "Facility Asset" || actionName === "Established SOP") {
              triggerTeamsAlert(
+                 "admin@fcimg.com",
                  `${actionName} ${actionTaken}`,
                  `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
              );
         } else if (actionName === "User Directory") {
-             // --- TEAMS ONLY: Alerts for Account Approvals (Emails Removed) ---
              triggerTeamsAlert(
+                 "admin@fcimg.com",
                  `Account Status Updated`,
                  `**${activeUser.name}** has updated a user account status.\n\n**Action Logged:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
              );
@@ -452,21 +415,16 @@ export default function App() {
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
     ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
-    
-    // Override the stats.complianceRate with our newly calculated dynamic rate
     complianceRate: dynamicComplianceRate,
-
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
-    triggerTeamsAlert,
-
+    triggerTeamsAlert, // This is now properly configured!
     pendingApprovals,
     activeAccounts,
     handleApproveUser,
     handleDenyUser,
     handleRevokeUser,
-
     history, setHistory, 
     assets: visibleAssets, setAssets, 
     pmTemplates: visibleTemplates, setPmTemplates, 

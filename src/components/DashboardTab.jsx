@@ -2,28 +2,25 @@ import React from 'react';
 
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
-  openPmModal, currentUser, isSystemAdmin, triggerEmailAlert,
+  openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert, // <-- Imported the Teams Alert!
   workOrders, assets, pmTemplates, calculateDaysRemaining,
   users = []
 }) {
   
   const adminGlobalQueue = [];
   const userAssignedTasks = [];
-  const managerDepartmentQueue = []; // NEW: Array for the Manager's Department View
+  const managerDepartmentQueue = [];
   
   const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
 
-  // Determine if the current user is a Manager
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
 
-  // --- DYNAMIC MANAGER LOOKUP ---
   const getManagerForDepartment = (dept) => {
     if (!users || users.length === 0 || !dept || dept === "Unassigned") return "admin@fcimg.com";
     const manager = users.find(u => u.department === dept && u.role === "Manager");
     return manager ? manager.email : "admin@fcimg.com";
   };
 
-  // --- 1. PROCESS ASSETS (Only surface if Due Soon or Critical) ---
   if (assets && calculateDaysRemaining) {
     const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -42,10 +39,7 @@ export default function DashboardTab({
           let lowestDays = null;
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-              
-              if (targetDate === todayStr) {
-                  return; 
-              }
+              if (targetDate === todayStr) return; 
 
               const daysLeft = calculateDaysRemaining(targetDate, freq);
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
@@ -75,23 +69,13 @@ export default function DashboardTab({
           isCritical: isCriticalStatus
         };
 
-        // 1. Push to Admin God View
         adminGlobalQueue.push(queueItem);
-
-        // 2. Push to Personal Queue if assigned to the logged-in user
-        if (asset.operatorEmail === currentUser.email) {
-            userAssignedTasks.push(queueItem);
-        }
-        
-        // 3. Push to Manager Queue if the item belongs to their department
-        if (isManager && asset.department === currentUser.department) {
-            managerDepartmentQueue.push(queueItem);
-        }
+        if (asset.operatorEmail === currentUser.email) { userAssignedTasks.push(queueItem); }
+        if (isManager && asset.department === currentUser.department) { managerDepartmentQueue.push(queueItem); }
       }
     });
   }
 
-  // --- 2. PROCESS WORK ORDERS ---
   if (workOrders) {
     workOrders.forEach(wo => {
       if (wo.status !== "Completed") {
@@ -111,19 +95,12 @@ export default function DashboardTab({
         };
 
         adminGlobalQueue.push(queueItem);
-
-        if (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) {
-            userAssignedTasks.push(queueItem);
-        }
-
-        if (isManager && wo.department === currentUser.department) {
-            managerDepartmentQueue.push(queueItem);
-        }
+        if (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) { userAssignedTasks.push(queueItem); }
+        if (isManager && wo.department === currentUser.department) { managerDepartmentQueue.push(queueItem); }
       }
     });
   }
 
-  // --- 3. TRIAGE FOR RENDERING ---
   const overdueAdminQueue = adminGlobalQueue.filter(item => item.isCritical);
   const upcomingAdminQueue = adminGlobalQueue.filter(item => !item.isCritical);
 
@@ -135,7 +112,6 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-8 animate-entrance">
-      {/* KPI Banners */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
           <div>
@@ -164,8 +140,6 @@ export default function DashboardTab({
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
-        
-        {/* Left Column: Queues */}
         <div className="lg:col-span-8 space-y-6">
           
           {/* --- GOD VIEW: ONLY RENDERS FOR ADMINS --- */}
@@ -185,7 +159,6 @@ export default function DashboardTab({
                   </div>
                 ) : (
                   <>
-                    {/* ADMIN TRIAGE: OVERDUE SECTION */}
                     {overdueAdminQueue.length > 0 && (
                       <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                         <span>🚨 Critical & Overdue Action Required</span>
@@ -223,10 +196,10 @@ export default function DashboardTab({
                                 onClick={(e) => {
                                   e.target.innerText = "ESCALATED ✓";
                                   e.target.classList.add("text-green-600");
-                                  
                                   const managerEmail = getManagerForDepartment(item.department);
-
-                                  triggerEmailAlert(
+                                  
+                                  // --- UPDATED TO USE TEAMS ALERT ---
+                                  triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER ESCALATION: Critical Action Required for ${item.name}`,
                                     `Hello,\n\nThis is an administrative escalation. The system ${item.name} (S/N: ${item.serial}) in the ${item.department} department is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate oversight.\n\nAssigned Operator: ${item.assignedTo}\n\nPlease review this in the FI-Operations Management System to ensure compliance.`
@@ -248,7 +221,6 @@ export default function DashboardTab({
                       ))}
                     </div>
 
-                    {/* ADMIN TRIAGE: UPCOMING SECTION */}
                     {upcomingAdminQueue.length > 0 && (
                       <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
                         <span>📅 Upcoming & Pending Tasks</span>
@@ -286,10 +258,10 @@ export default function DashboardTab({
                                 onClick={(e) => {
                                   e.target.innerText = "NOTIFIED ✓";
                                   e.target.classList.add("text-green-600");
-                                  
                                   const managerEmail = getManagerForDepartment(item.department);
 
-                                  triggerEmailAlert(
+                                  // --- UPDATED TO USE TEAMS ALERT ---
+                                  triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER NOTICE: Routine Task Pending for ${item.name}`,
                                     `Hello,\n\nThis is a notification regarding ${item.name} (S/N: ${item.serial}) in the ${item.department} department.\n\nCurrent Status: ${item.displayStatus}\nAssigned Operator: ${item.assignedTo}\n\nPlease ensure your team completes this assignment on schedule.`
@@ -333,7 +305,6 @@ export default function DashboardTab({
                   </div>
                 ) : (
                   <>
-                    {/* MANAGER TRIAGE: OVERDUE SECTION */}
                     {overdueManagerQueue.length > 0 && (
                       <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                         <span>🚨 Critical & Overdue Action Required</span>
@@ -368,7 +339,9 @@ export default function DashboardTab({
                                 onClick={(e) => {
                                   e.target.innerText = "SENT ✓";
                                   e.target.classList.add("text-green-600");
-                                  triggerEmailAlert(
+                                  
+                                  // --- UPDATED TO USE TEAMS ALERT ---
+                                  triggerTeamsAlert(
                                     item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
                                     `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`,
                                     `Hello,\n\nThis is a priority reminder from your department manager. The system ${item.name} (S/N: ${item.serial}) is currently flagged as ${item.displayStatus.toUpperCase()}.\n\nPlease log into the FI-Operations Management System and execute this task immediately to maintain compliance.`
@@ -390,7 +363,6 @@ export default function DashboardTab({
                       ))}
                     </div>
 
-                    {/* MANAGER TRIAGE: UPCOMING SECTION */}
                     {upcomingManagerQueue.length > 0 && (
                       <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
                         <span>📅 Upcoming & Pending Tasks</span>
@@ -425,7 +397,9 @@ export default function DashboardTab({
                                 onClick={(e) => {
                                   e.target.innerText = "NOTIFIED ✓";
                                   e.target.classList.add("text-green-600");
-                                  triggerEmailAlert(
+                                  
+                                  // --- UPDATED TO USE TEAMS ALERT ---
+                                  triggerTeamsAlert(
                                     item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
                                     `MANAGER REMINDER: Routine Task Pending for ${item.name}`,
                                     `Hello,\n\nThis is a standard reminder from your department manager regarding ${item.name} (S/N: ${item.serial}).\n\nCurrent Status: ${item.displayStatus}\n\nPlease ensure this assignment is completed on schedule.`
@@ -469,7 +443,6 @@ export default function DashboardTab({
                 </div>
               ) : (
                 <>
-                  {/* USER TRIAGE: OVERDUE SECTION */}
                   {overdueMyTasks.length > 0 && (
                     <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
                       <span>🚨 Critical & Overdue Action Required</span>
@@ -493,9 +466,7 @@ export default function DashboardTab({
                         </div>
                         <div className="text-right ml-4">
                           <button 
-                            onClick={() => {
-                              openPmModal(task.rawItem);
-                            }}
+                            onClick={() => { openPmModal(task.rawItem); }}
                             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             Execute Critical PM
@@ -505,7 +476,6 @@ export default function DashboardTab({
                     ))}
                   </div>
 
-                  {/* USER TRIAGE: UPCOMING SECTION */}
                   {upcomingMyTasks.length > 0 && (
                     <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
                       <span>📅 Upcoming & Pending Tasks</span>
@@ -529,9 +499,7 @@ export default function DashboardTab({
                         </div>
                         <div className="text-right ml-4">
                           <button 
-                            onClick={() => {
-                              openPmModal(task.rawItem);
-                            }}
+                            onClick={() => { openPmModal(task.rawItem); }}
                             className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             Open Assignment
