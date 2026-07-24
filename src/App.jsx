@@ -388,7 +388,9 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        if (actionName === "Facility Asset" || actionName === "Established SOP") {
+        // FIX: We mute generic "Facility Asset Created/Updated" alerts in Teams to prevent the double-ping.
+        // It STILL logs the action silently in the History table for compliance, it just won't spam the chat.
+        if (actionName === "Established SOP" || (actionName === "Facility Asset" && actionTaken === 'Deleted')) {
              triggerTeamsAlert(
                  "admin@fcimg.com",
                  `${actionName} ${actionTaken}`,
