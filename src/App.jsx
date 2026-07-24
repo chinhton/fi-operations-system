@@ -184,7 +184,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // --- NOTIFICATION SYSTEM 1: AZURE EMAIL ---
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
       const emailPayload = { to: toAddress || "admin@fcimg.com", subject: subjectLine, body: bodyText };
@@ -196,7 +195,6 @@ export default function App() {
     }
   };
 
-  // --- NOTIFICATION SYSTEM 2: MS TEAMS WEBHOOK (ADAPTIVE CARD + MENTIONS) ---
   const triggerTeamsAlert = async (toAddress, subjectLine, bodyText) => {
     const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
 
@@ -291,7 +289,6 @@ export default function App() {
     );
   };
 
-  // State refs so our fetch interceptor can see live database items
   const userRef = useRef(currentUser);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
 
@@ -306,7 +303,6 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
-      // --- CONDITION 1: NEW USER REGISTRATION ---
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
@@ -319,7 +315,6 @@ export default function App() {
           return response;
       }
 
-      // --- CONDITION 2: MANUAL PM EXECUTIONS ---
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
@@ -338,10 +333,12 @@ export default function App() {
                   `✅ PM Executed: ${logDetails.assetName}`,
                   `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${commentText || "None"}\n**Time:** ${logDetails.timestamp || new Date().toLocaleString()}`
               );
+              
+              // THE FIX: Forcing an immediate background sync so the new PM shows up on the audit trail without refreshing
+              originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
           }
       }
 
-      // --- CONDITION 3: SYSTEM ACTIONS (ASSETS, SOPS, USER DIRECTORY) ---
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
         
         let actionName = "System Event";
@@ -374,13 +371,11 @@ export default function App() {
             } catch (e) {}
         }
 
-        // --- THE FIX: Intelligent Create vs Update Detection using live database state ---
         let actionTaken = 'Updated';
         if (config.method.toUpperCase() === 'DELETE') {
             actionTaken = 'Deleted';
         } else {
             if (actionName === "Facility Asset" && itemDetails && itemDetails.id) {
-                // Look into our live assetsRef. If the ID is already there, this is just an update/PM save.
                 const isExisting = assetsRef.current.some(a => String(a.id) === String(itemDetails.id));
                 actionTaken = isExisting ? 'Updated' : 'Created';
             } else {
@@ -409,7 +404,6 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // Alert Rules: Only alert on Asset Creation/Deletion (ignore Asset Updates to stop PM spam)
         const shouldAlertSOP = actionName === "Established SOP";
         const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted");
 
