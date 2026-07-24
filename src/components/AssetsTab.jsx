@@ -23,6 +23,9 @@ export default function AssetsTab({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [targetAssetContext, setTargetAssetContext] = useState(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  
+  // --- THE NEW FIX: State to hold the active Category folder being viewed ---
+  const [activeCategoryModal, setActiveCategoryModal] = useState(null);
 
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -101,7 +104,7 @@ export default function AssetsTab({
         />
       </div>
       
-      {/* HARDWARE DIRECTORY */}
+      {/* MINIMIZED FOLDER DIRECTORY */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
@@ -109,125 +112,156 @@ export default function AssetsTab({
         </div>
         
         {Object.keys(groupedAssets || {}).length === 0 ? (
-          <div className="p-8 text-center text-xs text-gray-500">No assets registered in the database.</div>
+          <div className="p-12 text-center text-xs text-gray-500">No assets registered in the database.</div>
         ) : (
-          Object.entries(groupedAssets || {}).map(([category, catAssets]) => (
-            <div key={category} className="mb-4">
-              <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
-                <div>📁 Category: {category} <span className="ml-2 font-normal text-gray-400">({catAssets.length} Assets)</span></div>
-                {isSystemAdmin && <button onClick={() => deleteAssetCategory(category)} className="text-[10px] text-red-500 hover:text-red-700">Delete Category &times;</button>}
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 bg-gray-50/50">
+            {Object.entries(groupedAssets || {}).map(([category, catAssets]) => (
+              <div 
+                key={category} 
+                onClick={() => setActiveCategoryModal(category)}
+                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
+              >
+                {/* Admin Delete Category Button */}
+                {isSystemAdmin && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); deleteAssetCategory(category); }} 
+                    className="absolute top-2 right-2 text-[9px] text-red-500 hover:text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded transition opacity-0 group-hover:opacity-100"
+                  >
+                    Delete
+                  </button>
+                )}
+                
+                <div className="text-3xl mb-2 text-[#005596] group-hover:scale-110 transition-transform">🗄️</div>
+                <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-1 line-clamp-1">{category}</h4>
+                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{catAssets.length} System{catAssets.length !== 1 ? 's' : ''}</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 text-left">
-                  <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                    <tr>
-                      <th className="px-6 py-3.5">Asset Name</th>
-                      <th className="px-6 py-3.5">Model / Serial No</th>
-                      <th className="px-6 py-3.5">Status & PM Cycle Tracker</th>
-                      <th className="px-6 py-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {catAssets.map((asset) => {
-                      
-                      const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-                      const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-                      
-                      return (
-                        <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
-                          <td className="px-6 py-4">
-                            <span className="font-bold text-gray-900 block">{asset.name}</span>
-                            
-                            {asset.parentId && (
-                               <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
-                                 🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
-                               </span>
-                            )}
-
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${asset.department}`}>DEPT: {asset.department}</span>}
-                              {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 font-mono">
-                            <span className="block text-gray-700">Mod: {asset.model}</span>
-                            <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <select
-                              value={asset.status}
-                              onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                                asset.status === "Operational" ? "bg-green-100 text-green-800" :
-                                asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                                asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                                "bg-orange-100 text-orange-800"
-                              }`}
-                            >
-                              <option value="Operational">Operational</option>
-                              <option value="Maintenance Due">Maintenance Due</option>
-                              <option value="Out of Calibration">Out of Calibration</option>
-                              <option value="Corrective Maintenance">Corrective Action</option>
-                            </select>
-                            
-                            <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
-                              {freqs.length === 0 ? (
-                                <div>
-                                  <span className="text-[9px] text-gray-400 uppercase font-bold block mb-1.5">No Active Cycles</span>
-                                </div>
-                              ) : (
-                                freqs.map(freq => {
-                                  const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-                                  const daysRemaining = calculateDaysRemaining(targetDate, freq);
-                                  const isCompletedToday = targetDate === todayStr;
-                                  
-                                  return (
-                                    <div key={freq} className="flex flex-col text-[10px]">
-                                      <div className="flex justify-between items-center mb-0.5 group">
-                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                        {isCompletedToday ? (
-                                            <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
-                                                ✅ Completed Today
-                                            </span>
-                                        ) : daysRemaining !== null ? (
-                                          <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                            ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
-                                          </span>
-                                        ) : (
-                                          <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
-                                        )}
-                                      </div>
-                                      {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right space-x-3">
-                            
-                            {/* --- THE FIX: EDIT BUTTON NOW OPEN TO ALL OPERATORS --- */}
-                            <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
-                            
-                            <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
-                            <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
-                            <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
-                            
-                            {/* --- DELETE REMAINS ADMIN ONLY --- */}
-                            {isSystemAdmin && (
-                              <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
+
+      {/* --- CATEGORY FOLDER POPUP (TABLE VIEW) --- */}
+      {activeCategoryModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
+            <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-sm tracking-wide uppercase">🗄️ Category: {activeCategoryModal}</h3>
+              <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
+            </div>
+            
+            <div className="overflow-auto flex-1 bg-white">
+              <table className="min-w-full divide-y divide-gray-200 text-left">
+                <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-6 py-3.5">Asset Name</th>
+                    <th className="px-6 py-3.5">Model / Serial No</th>
+                    <th className="px-6 py-3.5">Status & PM Cycle Tracker</th>
+                    <th className="px-6 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {(groupedAssets[activeCategoryModal] || []).map((asset) => {
+                    const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+                    const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+                    
+                    return (
+                      <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
+                        <td className="px-6 py-4">
+                          <span className="font-bold text-gray-900 block">{asset.name}</span>
+                          
+                          {asset.parentId && (
+                             <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
+                               🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
+                             </span>
+                          )}
+
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${asset.department}`}>DEPT: {asset.department}</span>}
+                            {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-mono">
+                          <span className="block text-gray-700">Mod: {asset.model}</span>
+                          <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={asset.status}
+                            onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
+                              asset.status === "Operational" ? "bg-green-100 text-green-800" :
+                              asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
+                              asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
+                              "bg-orange-100 text-orange-800"
+                            }`}
+                          >
+                            <option value="Operational">Operational</option>
+                            <option value="Maintenance Due">Maintenance Due</option>
+                            <option value="Out of Calibration">Out of Calibration</option>
+                            <option value="Corrective Maintenance">Corrective Action</option>
+                          </select>
+                          
+                          <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
+                            {freqs.length === 0 ? (
+                              <div>
+                                <span className="text-[9px] text-gray-400 uppercase font-bold block mb-1.5">No Active Cycles</span>
+                              </div>
+                            ) : (
+                              freqs.map(freq => {
+                                const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+                                const daysRemaining = calculateDaysRemaining(targetDate, freq);
+                                const isCompletedToday = targetDate === todayStr;
+                                
+                                return (
+                                  <div key={freq} className="flex flex-col text-[10px]">
+                                    <div className="flex justify-between items-center mb-0.5 group">
+                                      <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                      {isCompletedToday ? (
+                                          <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
+                                              ✅ Completed Today
+                                          </span>
+                                      ) : daysRemaining !== null ? (
+                                        <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                          ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
+                                        </span>
+                                      ) : (
+                                        <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
+                                      )}
+                                    </div>
+                                    {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right space-x-3">
+                          <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
+                          <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
+                          <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
+                          <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                          {isSystemAdmin && (
+                            <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {(!groupedAssets[activeCategoryModal] || groupedAssets[activeCategoryModal].length === 0) && (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 text-xs">No assets remaining in this category.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="bg-gray-100 px-6 py-4 flex justify-end shrink-0 border-t border-gray-200">
+              <button onClick={() => setActiveCategoryModal(null)} className="px-6 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-white transition shadow-sm">Close Folder</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- ASSET REGISTRATION / EDIT MODAL --- */}
       {isRegisterModalOpen && (
