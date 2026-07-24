@@ -224,10 +224,7 @@ export default function App() {
                   {
                     type: "mention",
                     text: mentionTag,
-                    mentioned: {
-                      id: toAddress,
-                      name: toAddress 
-                    }
+                    mentioned: { id: toAddress, name: toAddress }
                   }
                 ]
               } : undefined
@@ -241,13 +238,79 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
       return true;
     } catch (err) {
       console.error("❌ FI-OMS Teams Blast Failed:", err);
       return false;
     }
   };
+
+  // --- AUTOMATED DAILY MAINTENANCE SWEEP ("First Cup of Coffee" Script) ---
+  useEffect(() => {
+    if (!currentUser || !isGodMode || visibleAssets.length === 0 || visibleTemplates.length === 0) return;
+
+    const todayStamp = new Date().toLocaleDateString('en-US');
+    const lastSweep = localStorage.getItem('fi_daily_sweep');
+
+    if (lastSweep !== todayStamp) {
+      const dueAssetsList = [];
+      const fiveDayWarningList = []; // NEW: 5-Day specific tracker
+      
+      visibleAssets.forEach(asset => {
+        let isDue = false;
+        let dueText = "";
+        let lowestDays = null;
+        
+        if (["Maintenance Due", "Out of Calibration", "Corrective Action", "Overdue"].includes(asset.status)) {
+          isDue = true;
+          dueText = "Immediate Action Required";
+        } else {
+          const assetTemplates = visibleTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+          const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+          
+          freqs.forEach(freq => {
+            const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+            if (targetDate === todayStr) return; // PM was already done today
+            const daysLeft = calculateDaysRemaining(targetDate, freq);
+            if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
+                lowestDays = daysLeft;
+            }
+          });
+
+          // Grab anything due within the next 7 days for the general brief
+          if (lowestDays !== null && lowestDays <= 7) {
+            isDue = true;
+            dueText = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
+          }
+        }
+
+        if (isDue) {
+          dueAssetsList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - ${dueText}`);
+        }
+
+        // NEW: Specifically isolate assets that hit exactly 5 days out
+        if (lowestDays === 5) {
+          fiveDayWarningList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - Assigned to: ${asset.operatorEmail || 'Unassigned'}`);
+        }
+      });
+
+      // 1. Send the standard 7-Day Brief
+      if (dueAssetsList.length > 0) {
+        const messageBody = `Good morning. Here is the automated facility maintenance brief for the upcoming 7 days:\n\n${dueAssetsList.join('\n\n')}\n\nPlease log into the FI-Operations Management System to review and assign these tasks.`;
+        triggerTeamsAlert("admin@fcimg.com", `📅 Daily Maintenance Brief: ${dueAssetsList.length} Action(s) Required`, messageBody);
+      }
+
+      // 2. Send the specific 5-Day Warning (if any exist)
+      if (fiveDayWarningList.length > 0) {
+        const warningBody = `⚠️ **5-DAY ADVANCED WARNING** ⚠️\n\nThe following systems have maintenance due in exactly 5 days. Please ensure any required parts are ordered and vendors are scheduled:\n\n${fiveDayWarningList.join('\n\n')}`;
+        triggerTeamsAlert("admin@fcimg.com", `⏳ 5-Day PM Warning: Action Approaching`, warningBody);
+      }
+
+      // Stamp the local storage so neither sweep fires again today
+      localStorage.setItem('fi_daily_sweep', todayStamp);
+    }
+  }, [currentUser, isGodMode, visibleAssets, visibleTemplates]); 
+  // --------------------------------------------------------------------------
 
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
@@ -316,17 +379,15 @@ export default function App() {
           
           const commentText = logDetails.comments || logDetails.notes || "";
           
-          // Check if this is a system-generated history log rather than an actual manual PM
           const isSystemLog = 
             logDetails.assetId === "SYS-AUTO" || 
             commentText.includes("Registered new facility asset") ||
             commentText.includes("Updated facility asset") ||
             commentText.includes("Automated Tracker");
 
-          // Only alert for actual manual PMs!
           if (!isSystemLog) {
               triggerTeamsAlert(
-                  "admin@fcimg.com", // Keep as admin, or change to a dynamic manager email later
+                  "admin@fcimg.com", 
                   `✅ PM Executed: ${logDetails.assetName}`,
                   `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${commentText || "None"}\n**Time:** ${logDetails.timestamp || new Date().toLocaleString()}`
               );
@@ -388,8 +449,6 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // FIX: We mute generic "Facility Asset Created/Updated" alerts in Teams to prevent the double-ping.
-        // It STILL logs the action silently in the History table for compliance, it just won't spam the chat.
         if (actionName === "Established SOP" || (actionName === "Facility Asset" && actionTaken === 'Deleted')) {
              triggerTeamsAlert(
                  "admin@fcimg.com",

@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
-  openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert, // <-- Imported the Teams Alert!
+  openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
   workOrders, assets, pmTemplates, calculateDaysRemaining,
   users = []
 }) {
@@ -22,8 +22,6 @@ export default function DashboardTab({
   };
 
   if (assets && calculateDaysRemaining) {
-    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
     assets.forEach(asset => {
       let isDueOrCritical = false;
       let dueMessage = "";
@@ -37,11 +35,12 @@ export default function DashboardTab({
           const freqs = [...new Set(assetTemplates.map(t => t.interval))];
           
           let lowestDays = null;
+          
+          // FIX: Removed the blocker. The system will now calculate and display ANY task due in the next 7 days, including brand new assets.
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-              if (targetDate === todayStr) return; 
-
               const daysLeft = calculateDaysRemaining(targetDate, freq);
+              
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                   lowestDays = daysLeft;
               }
@@ -198,7 +197,6 @@ export default function DashboardTab({
                                   e.target.classList.add("text-green-600");
                                   const managerEmail = getManagerForDepartment(item.department);
                                   
-                                  // --- UPDATED TO USE TEAMS ALERT ---
                                   triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER ESCALATION: Critical Action Required for ${item.name}`,
@@ -260,7 +258,6 @@ export default function DashboardTab({
                                   e.target.classList.add("text-green-600");
                                   const managerEmail = getManagerForDepartment(item.department);
 
-                                  // --- UPDATED TO USE TEAMS ALERT ---
                                   triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER NOTICE: Routine Task Pending for ${item.name}`,
@@ -340,7 +337,6 @@ export default function DashboardTab({
                                   e.target.innerText = "SENT ✓";
                                   e.target.classList.add("text-green-600");
                                   
-                                  // --- UPDATED TO USE TEAMS ALERT ---
                                   triggerTeamsAlert(
                                     item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
                                     `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`,
@@ -398,7 +394,6 @@ export default function DashboardTab({
                                   e.target.innerText = "NOTIFIED ✓";
                                   e.target.classList.add("text-green-600");
                                   
-                                  // --- UPDATED TO USE TEAMS ALERT ---
                                   triggerTeamsAlert(
                                     item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
                                     `MANAGER REMINDER: Routine Task Pending for ${item.name}`,
