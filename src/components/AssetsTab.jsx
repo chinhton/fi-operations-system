@@ -8,6 +8,23 @@ const CORPORATE_DEPARTMENTS = [
   "Production Engineering"
 ];
 
+// --- THE NEW FIX: Dynamic Icon Mapper based on Category Name ---
+const getCategoryIcon = (category) => {
+  const cat = (category || "").toLowerCase();
+  if (cat.includes('vacuum') || cat.includes('pump')) return '🌪️';
+  if (cat.includes('flowhood') || cat.includes('fume') || cat.includes('vent')) return '🌬️';
+  if (cat.includes('ups') || cat.includes('power') || cat.includes('circuit') || cat.includes('generator')) return '⚡';
+  if (cat.includes('water') || cat.includes('plumbing') || cat.includes('rodi') || cat.includes('di water')) return '💧';
+  if (cat.includes('chiller') || cat.includes('hvac') || cat.includes('cooling') || cat.includes('ac ')) return '❄️';
+  if (cat.includes('chamber') || cat.includes('oven') || cat.includes('furnace')) return '🌡️';
+  if (cat.includes('compressor') || cat.includes('air')) return '🗜️';
+  if (cat.includes('radiation') || cat.includes('x-ray') || cat.includes('xrp') || cat.includes('laser')) return '☢️';
+  if (cat.includes('cleanroom') || cat.includes('lab') || cat.includes('scmos')) return '🔬';
+  if (cat.includes('safety') || cat.includes('iipp') || cat.includes('hazard')) return '🦺';
+  
+  return '🗄️'; // Default fallback for Assets
+};
+
 export default function AssetsTab({
   assets = [], users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
@@ -24,7 +41,6 @@ export default function AssetsTab({
   const [targetAssetContext, setTargetAssetContext] = useState(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   
-  // --- THE NEW FIX: State to hold the active Category folder being viewed ---
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
 
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -42,7 +58,6 @@ export default function AssetsTab({
     return acc;
   }, {});
 
-  // --- ASSET MODAL HANDLERS ---
   const openRegisterForNew = () => {
     setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: "", operatorEmail: "" });
     setIsRegisterModalOpen(true);
@@ -59,11 +74,10 @@ export default function AssetsTab({
     setIsRegisterModalOpen(false);
   };
 
-  // --- TEMPLATE MODAL HANDLERS ---
   const handleQuickBuildTemplate = (asset) => {
     setNewTemplate({
       name: `${asset.name} Maintenance Protocol`,
-      interval: "Monthly", // Default fallback, user can modify
+      interval: "Monthly",
       department: asset.department || "",
       targetCategory: asset.category || "Global",
       managerEmail: "",
@@ -121,7 +135,6 @@ export default function AssetsTab({
                 onClick={() => setActiveCategoryModal(category)}
                 className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
               >
-                {/* Admin Delete Category Button */}
                 {isSystemAdmin && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); deleteAssetCategory(category); }} 
@@ -131,7 +144,9 @@ export default function AssetsTab({
                   </button>
                 )}
                 
-                <div className="text-3xl mb-2 text-[#005596] group-hover:scale-110 transition-transform">🗄️</div>
+                {/* Dynamic Icon Rendering */}
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform opacity-90">{getCategoryIcon(category)}</div>
+                
                 <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-1 line-clamp-1">{category}</h4>
                 <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{catAssets.length} System{catAssets.length !== 1 ? 's' : ''}</span>
               </div>
@@ -145,7 +160,7 @@ export default function AssetsTab({
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
             <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-sm tracking-wide uppercase">🗄️ Category: {activeCategoryModal}</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">{getCategoryIcon(activeCategoryModal)} Category: {activeCategoryModal}</h3>
               <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
             </div>
             
