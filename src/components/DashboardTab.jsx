@@ -37,7 +37,6 @@ export default function DashboardTab({
           let lowestDays = null;
           
           freqs.forEach(freq => {
-              // THE FIX: If lastPmDate is null (brand new asset), fallback to today's date so the math works
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
               const effectiveDate = targetDate ? targetDate : new Date().toLocaleDateString('en-US');
               const daysLeft = calculateDaysRemaining(effectiveDate, freq);
@@ -71,8 +70,8 @@ export default function DashboardTab({
 
         adminGlobalQueue.push(queueItem);
         
-        // Ensure the assigned email exactly matches the logged-in user
-        if (asset.operatorEmail && asset.operatorEmail.toLowerCase() === currentUser.email.toLowerCase()) { 
+        // MULTI-OPERATOR FIX: Checks if the current user's email is ANYWHERE inside the assignment string
+        if (asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase())) { 
             userAssignedTasks.push(queueItem); 
         }
         
@@ -102,8 +101,18 @@ export default function DashboardTab({
         };
 
         adminGlobalQueue.push(queueItem);
-        if (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) { userAssignedTasks.push(queueItem); }
-        if (isManager && wo.department === currentUser.department) { managerDepartmentQueue.push(queueItem); }
+        
+        // MULTI-OPERATOR FIX FOR WORK ORDERS
+        const isAssignedOp = wo.operatorEmail && wo.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
+        const isAssignedMgr = wo.managerEmail && wo.managerEmail.toLowerCase().includes(currentUser.email.toLowerCase());
+        
+        if (isAssignedOp || isAssignedMgr) { 
+            userAssignedTasks.push(queueItem); 
+        }
+        
+        if (isManager && wo.department === currentUser.department) { 
+            managerDepartmentQueue.push(queueItem); 
+        }
       }
     });
   }
@@ -208,7 +217,7 @@ export default function DashboardTab({
                                   triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER ESCALATION: Critical Action Required for ${item.name}`,
-                                    `Hello,\n\nThis is an administrative escalation. The system ${item.name} (S/N: ${item.serial}) in the ${item.department} department is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate oversight.\n\nAssigned Operator: ${item.assignedTo}\n\nPlease review this in the FI-Operations Management System to ensure compliance.`
+                                    `Hello,\n\nThis is an administrative escalation. The system ${item.name} (S/N: ${item.serial}) in the ${item.department} department is currently flagged as ${item.displayStatus.toUpperCase()} and requires your immediate oversight.\n\nAssigned Operator(s): ${item.assignedTo}\n\nPlease review this in the FI-Operations Management System to ensure compliance.`
                                   );
                                 }} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
@@ -269,7 +278,7 @@ export default function DashboardTab({
                                   triggerTeamsAlert(
                                     managerEmail,
                                     `MANAGER NOTICE: Routine Task Pending for ${item.name}`,
-                                    `Hello,\n\nThis is a notification regarding ${item.name} (S/N: ${item.serial}) in the ${item.department} department.\n\nCurrent Status: ${item.displayStatus}\nAssigned Operator: ${item.assignedTo}\n\nPlease ensure your team completes this assignment on schedule.`
+                                    `Hello,\n\nThis is a notification regarding ${item.name} (S/N: ${item.serial}) in the ${item.department} department.\n\nCurrent Status: ${item.displayStatus}\nAssigned Operator(s): ${item.assignedTo}\n\nPlease ensure your team completes this assignment on schedule.`
                                   );
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
@@ -345,8 +354,11 @@ export default function DashboardTab({
                                   e.target.innerText = "SENT ✓";
                                   e.target.classList.add("text-green-600");
                                   
+                                  // Simplified alert routing: just grabs the first email in the string if multiple are assigned
+                                  const primaryOperator = item.assignedTo !== "Unassigned" ? item.assignedTo.split(',')[0].trim() : "admin@fcimg.com";
+                                  
                                   triggerTeamsAlert(
-                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
+                                    primaryOperator,
                                     `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`,
                                     `Hello,\n\nThis is a priority reminder from your department manager. The system ${item.name} (S/N: ${item.serial}) is currently flagged as ${item.displayStatus.toUpperCase()}.\n\nPlease log into the FI-Operations Management System and execute this task immediately to maintain compliance.`
                                   );
@@ -402,8 +414,10 @@ export default function DashboardTab({
                                   e.target.innerText = "NOTIFIED ✓";
                                   e.target.classList.add("text-green-600");
                                   
+                                  const primaryOperator = item.assignedTo !== "Unassigned" ? item.assignedTo.split(',')[0].trim() : "admin@fcimg.com";
+                                  
                                   triggerTeamsAlert(
-                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
+                                    primaryOperator,
                                     `MANAGER REMINDER: Routine Task Pending for ${item.name}`,
                                     `Hello,\n\nThis is a standard reminder from your department manager regarding ${item.name} (S/N: ${item.serial}).\n\nCurrent Status: ${item.displayStatus}\n\nPlease ensure this assignment is completed on schedule.`
                                   );
