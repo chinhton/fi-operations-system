@@ -35,10 +35,17 @@ export default function DashboardTab({
           const freqs = [...new Set(assetTemplates.map(t => t.interval))];
           
           let lowestDays = null;
+          const todayStr = new Date().toLocaleDateString('en-US');
           
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-              const effectiveDate = targetDate ? targetDate : new Date().toLocaleDateString('en-US');
+              
+              // ZERO-INBOX FIX: If the PM was completed today, clear it from the queue!
+              if (targetDate === todayStr) {
+                  return; 
+              }
+
+              const effectiveDate = targetDate ? targetDate : todayStr;
               const daysLeft = calculateDaysRemaining(effectiveDate, freq);
               
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
@@ -49,7 +56,7 @@ export default function DashboardTab({
           if (lowestDays !== null && lowestDays <= 7) {
               isDueOrCritical = true;
               dueMessage = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
-              if (lowestDays < 0) isCriticalStatus = true; 
+              if (lowestDays <= 0) isCriticalStatus = true; 
           }
       }
 
@@ -70,7 +77,6 @@ export default function DashboardTab({
 
         adminGlobalQueue.push(queueItem);
         
-        // MULTI-OPERATOR FIX: Checks if the current user's email is ANYWHERE inside the assignment string
         if (asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase())) { 
             userAssignedTasks.push(queueItem); 
         }
@@ -102,7 +108,6 @@ export default function DashboardTab({
 
         adminGlobalQueue.push(queueItem);
         
-        // MULTI-OPERATOR FIX FOR WORK ORDERS
         const isAssignedOp = wo.operatorEmail && wo.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
         const isAssignedMgr = wo.managerEmail && wo.managerEmail.toLowerCase().includes(currentUser.email.toLowerCase());
         
@@ -354,7 +359,6 @@ export default function DashboardTab({
                                   e.target.innerText = "SENT ✓";
                                   e.target.classList.add("text-green-600");
                                   
-                                  // Simplified alert routing: just grabs the first email in the string if multiple are assigned
                                   const primaryOperator = item.assignedTo !== "Unassigned" ? item.assignedTo.split(',')[0].trim() : "admin@fcimg.com";
                                   
                                   triggerTeamsAlert(
