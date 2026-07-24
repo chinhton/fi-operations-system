@@ -84,7 +84,7 @@ export default function App() {
   const userEmailRaw = currentUser?.email || "";
   const userEmail = userEmailRaw.toLowerCase();
   const realRole = currentUser?.role;
-  const userDept = currentUser?.department; 
+  const userDept = currentUser?.department || ""; 
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com';
 
@@ -129,10 +129,10 @@ export default function App() {
 
   // --- 2. FILTER DATA SOURCES ---
   const filterHierarchy = (item) => {
-    // Admins, Facilities, and Production: Engineering get global visibility
-    if (isGodMode || userDept === "Facilities" || userDept === "Production: Engineering") return true; 
+    // Admins, Facilities, and ANY Engineering department variant get global visibility
+    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
     
-    // STRICT SILO: Production: Final Assembly & Test AND Production: Sensor Assembly ONLY see their own groups
+    // STRICT SILO: Other departments ONLY see their own groups
     return item.department === userDept; 
   };
 
@@ -140,7 +140,7 @@ export default function App() {
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
   const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Facilities" || userDept === "Production: Engineering") return true; 
+    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
     return u.department === userDept; 
   });
 
