@@ -5,7 +5,7 @@ const CORPORATE_DEPARTMENTS = [
   "Facilities", 
   "Production: Sensor Assembly", 
   "Production: Final Assembly and Test", 
-  "Production Engineering"
+  "Production: Engineering" // <-- Fixed the missing colon here!
 ];
 
 // --- Dynamic Icon Mapper based on Category Name ---
@@ -52,6 +52,10 @@ export default function AssetsTab({
   const [groupBy, setGroupBy] = useState(() => {
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
   });
+
+  // --- STRICT DEPARTMENT SILO LOGIC ---
+  const userDept = currentUser?.department || "";
+  const isDepartmentRestricted = !isSystemAdmin && userDept !== "Facilities" && userDept !== "Production: Engineering";
 
   // --- THE NEW FIX: Cloud Sync the Toggle ---
   const handleGroupChange = async (type) => {
@@ -103,7 +107,9 @@ export default function AssetsTab({
   }, {});
 
   const openRegisterForNew = () => {
-    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: "", operatorEmail: "" });
+    // Automatically lock the department to the user's specific group if they are restricted
+    const defaultDept = isDepartmentRestricted ? userDept : "";
+    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: defaultDept, operatorEmail: "" });
     setIsAddingNewCategory(false);
     setIsRegisterModalOpen(true);
   };
@@ -121,10 +127,13 @@ export default function AssetsTab({
   };
 
   const handleQuickBuildTemplate = (asset) => {
+    // Also auto-lock the template department for restricted users
+    const defaultDept = isDepartmentRestricted ? userDept : (asset.department || "");
+    
     setNewTemplate({
       name: `${asset.name} Maintenance Protocol`,
       interval: "Monthly",
-      department: asset.department || "",
+      department: defaultDept,
       targetCategory: asset.category || "Global",
       managerEmail: "",
       operatorEmail: asset.operatorEmail || "",
@@ -436,12 +445,21 @@ export default function AssetsTab({
                   <select 
                     value={newAsset.department || ""} 
                     onChange={(e) => setNewAsset({...newAsset, department: e.target.value})} 
-                    className="w-full text-xs rounded border-[#005596]/30 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-2.5 border bg-blue-50/30 outline-none"
+                    disabled={isDepartmentRestricted}
+                    className={`w-full text-xs rounded border-[#005596]/30 shadow-sm p-2.5 border outline-none transition-colors ${
+                      isDepartmentRestricted 
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                        : 'bg-blue-50/30 focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
+                    }`}
                   >
-                    <option value="">-- Unassigned (Global View) --</option>
-                    {CORPORATE_DEPARTMENTS.map(dept => (
-                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                    ))}
+                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
+                    {isDepartmentRestricted ? (
+                      <option value={userDept}>{userDept}</option>
+                    ) : (
+                      CORPORATE_DEPARTMENTS.map(dept => (
+                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div>
@@ -498,12 +516,21 @@ export default function AssetsTab({
                   <select 
                     value={newTemplate.department || ""} 
                     onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
-                    className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                    disabled={isDepartmentRestricted}
+                    className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
+                      isDepartmentRestricted 
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                        : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
+                    }`}
                   >
-                    <option value="">-- Unassigned (Global View) --</option>
-                    {CORPORATE_DEPARTMENTS.map(dept => (
-                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                    ))}
+                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
+                    {isDepartmentRestricted ? (
+                      <option value={userDept}>{userDept}</option>
+                    ) : (
+                      CORPORATE_DEPARTMENTS.map(dept => (
+                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div>
