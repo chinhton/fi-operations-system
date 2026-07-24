@@ -5,7 +5,7 @@ const CORPORATE_DEPARTMENTS = [
   "Facilities", 
   "Production: Sensor Assembly", 
   "Production: Final Assembly and Test", 
-  "Production: Engineering" // <-- Fixed the missing colon here!
+  "Production: Engineering"
 ];
 
 // --- Dynamic Icon Mapper based on Category Name ---
@@ -48,19 +48,16 @@ export default function AssetsTab({
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   
-  // --- THE NEW FIX: Initialize state from the Cloud Account first, fallback to LocalStorage ---
   const [groupBy, setGroupBy] = useState(() => {
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
   });
 
-  // --- STRICT DEPARTMENT SILO LOGIC ---
   const userDept = currentUser?.department || "";
   const isDepartmentRestricted = !isSystemAdmin && userDept !== "Facilities" && userDept !== "Production: Engineering";
 
-  // --- THE NEW FIX: Cloud Sync the Toggle ---
   const handleGroupChange = async (type) => {
     setGroupBy(type);
-    localStorage.setItem("fi_oms_asset_grouping", type); // Still save locally for instant reloads
+    localStorage.setItem("fi_oms_asset_grouping", type); 
     
     if (currentUser && setCurrentUser) {
       const updatedUser = {
@@ -71,11 +68,9 @@ export default function AssetsTab({
         }
       };
       
-      // Instantly update the UI state
       setCurrentUser(updatedUser);
       
       try {
-        // The ?skip=/api/history hack perfectly bypasses the email interceptor in App.jsx
         await fetch('/api/users?skip=/api/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -107,7 +102,6 @@ export default function AssetsTab({
   }, {});
 
   const openRegisterForNew = () => {
-    // Automatically lock the department to the user's specific group if they are restricted
     const defaultDept = isDepartmentRestricted ? userDept : "";
     setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: defaultDept, operatorEmail: "" });
     setIsAddingNewCategory(false);
@@ -127,7 +121,6 @@ export default function AssetsTab({
   };
 
   const handleQuickBuildTemplate = (asset) => {
-    // Also auto-lock the template department for restricted users
     const defaultDept = isDepartmentRestricted ? userDept : (asset.department || "");
     
     setNewTemplate({
@@ -141,6 +134,29 @@ export default function AssetsTab({
       attachedManualName: "",
       attachedManualData: null
     });
+    setTargetAssetContext(asset);
+    setShowTemplateModal(true);
+  };
+
+  // --- NEW: Intelligent SOP Editor Routing ---
+  const handleQuickEditTemplate = (asset, specificFreq = null) => {
+    let templateToEdit = null;
+    
+    if (specificFreq) {
+       // Precision target: Pulls the exact frequency SOP if clicked via the pencil icon
+       templateToEdit = (pmTemplates || []).find(t => (t.targetCategory === "Global" || t.targetCategory === asset.category) && t.interval === specificFreq);
+    } else {
+       // Broad target: Grabs the primary category template if clicking the main action row button
+       const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === asset.category);
+       templateToEdit = assetTemplates.length > 0 ? assetTemplates[0] : (pmTemplates || []).find(t => t.targetCategory === "Global");
+    }
+    
+    if (!templateToEdit) {
+      alert("No SOPs exist for this asset yet. Please use 'Build SOP' first.");
+      return;
+    }
+    
+    setNewTemplate(templateToEdit);
     setTargetAssetContext(asset);
     setShowTemplateModal(true);
   };
@@ -210,7 +226,6 @@ export default function AssetsTab({
                 onClick={() => setActiveCategoryModal(groupKey)}
                 className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
               >
-                {/* Admin Delete Button */}
                 {isSystemAdmin && groupBy === 'category' && groupKey !== "Uncategorized" && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); deleteAssetCategory(groupKey); }} 
@@ -260,9 +275,9 @@ export default function AssetsTab({
                           <span className="font-bold text-gray-900 block">{asset.name}</span>
                           
                           {asset.parentId && (
-                             <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
-                               🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
-                             </span>
+                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-bold uppercase block mt-1 w-max">
+                                🔗 Linked to: {assets.find(a => a.id === asset.parentId)?.name || 'Unknown Asset'}
+                              </span>
                           )}
 
                           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -305,7 +320,17 @@ export default function AssetsTab({
                                 return (
                                   <div key={freq} className="flex flex-col text-[10px]">
                                     <div className="flex justify-between items-center mb-0.5 group">
-                                      <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                      <div className="flex items-center space-x-1.5">
+                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
+                                        {/* PRECISION EDITING: Shows a tiny edit icon next to the frequency on hover */}
+                                        <button 
+                                          onClick={() => handleQuickEditTemplate(asset, freq)}
+                                          className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-indigo-600 transition-all"
+                                          title={`Edit ${freq} SOP`}
+                                        >
+                                          ✏️ Edit
+                                        </button>
+                                      </div>
                                       {isCompletedToday ? (
                                           <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
                                               ✅ Completed Today
@@ -328,8 +353,16 @@ export default function AssetsTab({
                         <td className="px-6 py-4 text-right space-x-3">
                           <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
                           <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
+                          
                           <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
+                          
+                          {/* GLOBAL EDIT BUTTON: Appears in action row if SOPs exist */}
+                          {assetTemplates.length > 0 && (
+                            <button onClick={() => handleQuickEditTemplate(asset)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition">Edit SOP</button>
+                          )}
+                          
                           <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
+                          
                           {isSystemAdmin && (
                             <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                           )}
@@ -495,7 +528,9 @@ export default function AssetsTab({
             <button onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
             
             <div className="bg-[#005596] text-white px-6 py-4">
-              <h3 className="font-bold text-sm tracking-wide uppercase">Construct Custom SOP Protocol</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">
+                {newTemplate.id ? 'Edit Custom SOP Protocol' : 'Construct Custom SOP Protocol'}
+              </h3>
               {targetAssetContext && <p className="text-xs text-blue-200 mt-1">Pre-configured for {targetAssetContext.name} ({targetAssetContext.serial})</p>}
             </div>
             
@@ -660,7 +695,7 @@ export default function AssetsTab({
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingTemplate ? 'Saving...' : 'Lock & Save Protocol'}
+                  {isAddingTemplate ? 'Saving...' : (newTemplate.id ? 'Update Protocol' : 'Lock & Save Protocol')}
                 </button>
               </div>
             </form>
