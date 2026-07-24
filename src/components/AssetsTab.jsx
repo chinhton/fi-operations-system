@@ -8,7 +8,7 @@ const CORPORATE_DEPARTMENTS = [
   "Production Engineering"
 ];
 
-// --- THE NEW FIX: Dynamic Icon Mapper based on Category Name ---
+// --- Dynamic Icon Mapper based on Category Name ---
 const getCategoryIcon = (category) => {
   const cat = (category || "").toLowerCase();
   if (cat.includes('vacuum') || cat.includes('pump')) return '🌪️';
@@ -21,8 +21,9 @@ const getCategoryIcon = (category) => {
   if (cat.includes('radiation') || cat.includes('x-ray') || cat.includes('xrp') || cat.includes('laser')) return '☢️';
   if (cat.includes('cleanroom') || cat.includes('lab') || cat.includes('scmos')) return '🔬';
   if (cat.includes('safety') || cat.includes('iipp') || cat.includes('hazard')) return '🦺';
+  if (cat.includes('facilities') || cat.includes('production') || cat.includes('engineering')) return '🏢'; 
   
-  return '🗄️'; // Default fallback for Assets
+  return '🗄️'; 
 };
 
 export default function AssetsTab({
@@ -33,7 +34,10 @@ export default function AssetsTab({
   
   // --- TEMPLATE BUILDER PROPS ---
   newTemplate, setNewTemplate, handleAddTemplateSubmit, uniqueCategories, 
-  activeAccounts, isAddingTemplate
+  activeAccounts, isAddingTemplate,
+
+  // --- NEW: Injecting the active user context to cloud-save preferences ---
+  currentUser, setCurrentUser
 }) {
   
   const [assetSearch, setAssetSearch] = useState("");
@@ -42,29 +46,71 @@ export default function AssetsTab({
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+  
+  // --- THE NEW FIX: Initialize state from the Cloud Account first, fallback to LocalStorage ---
+  const [groupBy, setGroupBy] = useState(() => {
+    return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
+  });
+
+  // --- THE NEW FIX: Cloud Sync the Toggle ---
+  const handleGroupChange = async (type) => {
+    setGroupBy(type);
+    localStorage.setItem("fi_oms_asset_grouping", type); // Still save locally for instant reloads
+    
+    if (currentUser && setCurrentUser) {
+      const updatedUser = {
+        ...currentUser,
+        preferences: {
+          ...(currentUser.preferences || {}),
+          assetGrouping: type
+        }
+      };
+      
+      // Instantly update the UI state
+      setCurrentUser(updatedUser);
+      
+      try {
+        // The ?skip=/api/history hack perfectly bypasses the email interceptor in App.jsx
+        await fetch('/api/users?skip=/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedUser)
+        });
+      } catch (err) {
+        console.error("Failed to sync layout preference to cloud:", err);
+      }
+    }
+  };
 
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
-    a.category?.toLowerCase().includes(assetSearch.toLowerCase())
+    a.category?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.department?.toLowerCase().includes(assetSearch.toLowerCase())
   );
 
   const groupedAssets = filteredAssets.reduce((acc, asset) => {
-    const cat = asset.category || "Uncategorized";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(asset);
+    const key = groupBy === "category" 
+        ? (asset.category || "Uncategorized") 
+        : (asset.department || "Unassigned");
+        
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(asset);
     return acc;
   }, {});
 
   const openRegisterForNew = () => {
     setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: "", operatorEmail: "" });
+    setIsAddingNewCategory(false);
     setIsRegisterModalOpen(true);
   };
 
   const openRegisterForEdit = (asset) => {
     setNewAsset(asset);
+    setIsAddingNewCategory(false);
     setIsRegisterModalOpen(true);
   };
 
@@ -97,6 +143,8 @@ export default function AssetsTab({
     setTargetAssetContext(null);
   };
 
+  const categoryDropdownOptions = [...new Set([...(uniqueCategories || []), newAsset?.category])].filter(Boolean);
+
   return (
     <div className="space-y-8 animate-entrance">
       
@@ -111,7 +159,7 @@ export default function AssetsTab({
 
         <input 
           type="text" 
-          placeholder="Search by Name, S/N, or Category..." 
+          placeholder="Search by Name, S/N, Category, or Dept..." 
           value={assetSearch}
           onChange={(e) => setAssetSearch(e.target.value)}
           className="w-full md:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
@@ -120,35 +168,53 @@ export default function AssetsTab({
       
       {/* MINIMIZED FOLDER DIRECTORY */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+        
+        <div className="bg-[#1A2530] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Hardware Directory</h3>
-          <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{assets.length} Systems Monitored</span>
+          
+          <div className="flex items-center space-x-4 mt-3 sm:mt-0">
+            <div className="flex bg-[#003058] p-1 rounded-lg border border-[#00407a] shadow-inner">
+              <button 
+                onClick={() => handleGroupChange('category')} 
+                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${groupBy === 'category' ? 'bg-white text-[#005596] shadow-sm' : 'text-blue-200 hover:text-white'}`}
+              >
+                By Category
+              </button>
+              <button 
+                onClick={() => handleGroupChange('department')} 
+                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${groupBy === 'department' ? 'bg-white text-[#005596] shadow-sm' : 'text-blue-200 hover:text-white'}`}
+              >
+                By Department
+              </button>
+            </div>
+            <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full hidden md:inline-block">{assets.length} Systems</span>
+          </div>
         </div>
         
         {Object.keys(groupedAssets || {}).length === 0 ? (
-          <div className="p-12 text-center text-xs text-gray-500">No assets registered in the database.</div>
+          <div className="p-12 text-center text-xs text-gray-500">No assets registered matching your search.</div>
         ) : (
           <div className="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 bg-gray-50/50">
-            {Object.entries(groupedAssets || {}).map(([category, catAssets]) => (
+            {Object.entries(groupedAssets || {}).map(([groupKey, groupItems]) => (
               <div 
-                key={category} 
-                onClick={() => setActiveCategoryModal(category)}
+                key={groupKey} 
+                onClick={() => setActiveCategoryModal(groupKey)}
                 className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
               >
-                {isSystemAdmin && (
+                {/* Admin Delete Button */}
+                {isSystemAdmin && groupBy === 'category' && groupKey !== "Uncategorized" && (
                   <button 
-                    onClick={(e) => { e.stopPropagation(); deleteAssetCategory(category); }} 
+                    onClick={(e) => { e.stopPropagation(); deleteAssetCategory(groupKey); }} 
                     className="absolute top-2 right-2 text-[9px] text-red-500 hover:text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded transition opacity-0 group-hover:opacity-100"
                   >
                     Delete
                   </button>
                 )}
                 
-                {/* Dynamic Icon Rendering */}
-                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform opacity-90">{getCategoryIcon(category)}</div>
+                <div className="text-3xl mb-2 group-hover:scale-110 transition-transform opacity-90">{getCategoryIcon(groupKey)}</div>
                 
-                <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-1 line-clamp-1">{category}</h4>
-                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{catAssets.length} System{catAssets.length !== 1 ? 's' : ''}</span>
+                <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider mb-1 line-clamp-1">{groupKey}</h4>
+                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{groupItems.length} System{groupItems.length !== 1 ? 's' : ''}</span>
               </div>
             ))}
           </div>
@@ -160,7 +226,7 @@ export default function AssetsTab({
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
             <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-sm tracking-wide uppercase">{getCategoryIcon(activeCategoryModal)} Category: {activeCategoryModal}</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">{getCategoryIcon(activeCategoryModal)} {groupBy === 'category' ? 'Category' : 'Department'}: {activeCategoryModal}</h3>
               <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
             </div>
             
@@ -264,7 +330,7 @@ export default function AssetsTab({
                   })}
                   {(!groupedAssets[activeCategoryModal] || groupedAssets[activeCategoryModal].length === 0) && (
                     <tr>
-                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 text-xs">No assets remaining in this category.</td>
+                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 text-xs">No assets remaining in this group.</td>
                     </tr>
                   )}
                 </tbody>
@@ -304,10 +370,50 @@ export default function AssetsTab({
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
                   <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
+                
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
-                  <input type="text" value={newAsset.category || ""} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} placeholder="e.g. Vacuum Pump" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  {isAddingNewCategory ? (
+                    <div className="flex space-x-2">
+                      <input 
+                        type="text" 
+                        value={newAsset.category || ""} 
+                        onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} 
+                        placeholder="Type new category..." 
+                        className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none shadow-inner" 
+                        autoFocus
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => { setIsAddingNewCategory(false); setNewAsset({...newAsset, category: ""}); }} 
+                        className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-xs font-bold transition shadow-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex space-x-2">
+                      <select 
+                        value={newAsset.category || ""} 
+                        onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} 
+                        className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none shadow-sm cursor-pointer"
+                      >
+                        <option value="">-- Select Category --</option>
+                        {categoryDropdownOptions.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                      <button 
+                        type="button" 
+                        onClick={() => { setIsAddingNewCategory(true); setNewAsset({...newAsset, category: ""}); }} 
+                        className="px-3 py-2 bg-[#00A1E4] hover:bg-[#0081b8] text-white rounded text-xs font-bold transition whitespace-nowrap shadow-sm"
+                      >
+                        ➕ New
+                      </button>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
                   <input type="text" value={newAsset.location || ""} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
