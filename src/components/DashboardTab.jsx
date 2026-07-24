@@ -25,7 +25,6 @@ export default function DashboardTab({
   const today = new Date();
   today.setHours(0,0,0,0);
   
-  // Bulletproof Zero-Inbox Check: Converts any format to raw time to guarantee a match
   const isToday = (dateStr) => {
       if (!dateStr) return false;
       const d = new Date(dateStr);
@@ -52,13 +51,13 @@ export default function DashboardTab({
           let lowestDays = null;
           
           freqs.forEach(freq => {
-              const lastDoneDate = asset.pmDates?.[freq] || asset.lastPmDate;
+              const explicitLastDone = asset.pmDates?.[freq];
               
-              // ZERO-INBOX SHIELD: If this specific PM was done today, completely ignore it!
-              if (isToday(lastDoneDate)) return;
+              // ZERO-INBOX SHIELD FIX: Only hide if the operator physically executed THIS specific PM today!
+              if (isToday(explicitLastDone)) return;
 
-              const effectiveDate = lastDoneDate ? lastDoneDate : todayStr;
-              const daysLeft = calculateDaysRemaining(effectiveDate, freq);
+              const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
+              const daysLeft = calculateDaysRemaining(baselineDate, freq);
               
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                   lowestDays = daysLeft;
@@ -99,7 +98,11 @@ export default function DashboardTab({
 
         adminGlobalQueue.push(queueItem);
         
-        if (asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase())) { 
+        // Visibility fix: Make sure operators see unassigned tasks in their own department so nothing goes missing!
+        const isAssignedToMe = asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
+        const isUnassignedInMyDept = (!asset.operatorEmail || asset.operatorEmail === "Unassigned") && asset.department === currentUser.department;
+        
+        if (isAssignedToMe || (!isManager && !isSystemAdmin && isUnassignedInMyDept)) { 
             userAssignedTasks.push(queueItem); 
         }
         
@@ -110,7 +113,6 @@ export default function DashboardTab({
     });
   }
 
-  // Injecting Work Orders into the new 3-Tier timing system
   if (workOrders) {
     workOrders.forEach(wo => {
       if (wo.status !== "Completed") {
@@ -156,8 +158,9 @@ export default function DashboardTab({
         
         const isAssignedOp = wo.operatorEmail && wo.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
         const isAssignedMgr = wo.managerEmail && wo.managerEmail.toLowerCase().includes(currentUser.email.toLowerCase());
+        const isUnassignedInMyDept = (!wo.operatorEmail || wo.operatorEmail === "Unassigned") && wo.department === currentUser.department;
         
-        if (isAssignedOp || isAssignedMgr) { 
+        if (isAssignedOp || isAssignedMgr || (!isManager && !isSystemAdmin && isUnassignedInMyDept)) { 
             userAssignedTasks.push(queueItem); 
         }
         
