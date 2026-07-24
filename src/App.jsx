@@ -304,13 +304,14 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
+      // --- CONDITION 1: NEW USER REGISTRATION ---
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) {
               try { newUserDetails = JSON.parse(config.body); } catch (e) {}
           }
           
-          // --- DUAL NOTIFICATION: Alert Admin via Email AND Teams ---
+          // KEEP: Email Admin for access request (You can change "admin@fcimg.com" to your personal email if preferred)
           triggerEmailAlert(
               "admin@fcimg.com", 
               "FI-OMS Alert: New Account Pending Approval",
@@ -322,7 +323,7 @@ export default function App() {
               `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`
           );
 
-          // Alert New User
+          // KEEP: Courtesy email to the new user
           if (newUserDetails.email) {
               triggerEmailAlert(
                   newUserDetails.email,
@@ -334,6 +335,7 @@ export default function App() {
           return response;
       }
 
+      // --- CONDITION 2: SYSTEM ACTIONS (ASSETS, SOPS, USER DIRECTORY) ---
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
         
         let actionName = "System Event";
@@ -399,24 +401,14 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        // --- DUAL NOTIFICATION: Alerts for Assets and SOPs ---
+        // --- TEAMS ONLY: Alerts for Assets and SOPs (Emails Removed) ---
         if (actionName === "Facility Asset" || actionName === "Established SOP") {
-             triggerEmailAlert(
-                 itemDetails.operatorEmail || "admin@fcimg.com", 
-                 `FI-OMS Alert: ${actionName} ${actionTaken}`,
-                 `System Notification:\n\n${activeUser.name} has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\nDetails: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nPlease log in to the Operations Management System to review the changes.`
-             );
              triggerTeamsAlert(
                  `${actionName} ${actionTaken}`,
                  `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
              );
         } else if (actionName === "User Directory") {
-             // --- DUAL NOTIFICATION: Alerts for Account Approvals ---
-             triggerEmailAlert(
-                 itemDetails.email || "admin@fcimg.com", 
-                 `FI-OMS Alert: Account Status Updated`,
-                 `System Notification:\n\nYour account status in the FI-Operations Management System has been updated by ${activeUser.name}.\n\nAction Logged: ${logComment}\nTimestamp: ${new Date().toLocaleString()}\n\nIf you have been approved, you may now log in.`
-             );
+             // --- TEAMS ONLY: Alerts for Account Approvals (Emails Removed) ---
              triggerTeamsAlert(
                  `Account Status Updated`,
                  `**${activeUser.name}** has updated a user account status.\n\n**Action Logged:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
@@ -450,7 +442,7 @@ export default function App() {
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
-    triggerTeamsAlert, // <--- Added the new trigger to your master props
+    triggerTeamsAlert,
 
     pendingApprovals,
     activeAccounts,
