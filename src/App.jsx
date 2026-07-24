@@ -191,7 +191,6 @@ export default function App() {
     const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
 
     try {
-      // Determine if we need to ping a specific person
       const isTargeted = toAddress && toAddress !== "admin@fcimg.com";
       const mentionTag = isTargeted ? `<at>${toAddress}</at>` : "";
       const formattedBody = isTargeted ? `**Attention:** ${mentionTag}\n\n${bodyText}` : bodyText;
@@ -220,7 +219,6 @@ export default function App() {
                   spacing: "Medium"
                 }
               ],
-              // This is the secret sauce that tells MS Teams to actually trigger an Activity Ping
               msteams: isTargeted ? {
                 entities: [
                   {
@@ -228,7 +226,7 @@ export default function App() {
                     text: mentionTag,
                     mentioned: {
                       id: toAddress,
-                      name: toAddress // Teams resolves the display name automatically based on the email ID
+                      name: toAddress 
                     }
                   }
                 ]
@@ -316,12 +314,21 @@ export default function App() {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
           
-          // Only alert for actual manual PMs, not background system logs
-          if (logDetails.assetId !== "SYS-AUTO") {
+          const commentText = logDetails.comments || logDetails.notes || "";
+          
+          // Check if this is a system-generated history log rather than an actual manual PM
+          const isSystemLog = 
+            logDetails.assetId === "SYS-AUTO" || 
+            commentText.includes("Registered new facility asset") ||
+            commentText.includes("Updated facility asset") ||
+            commentText.includes("Automated Tracker");
+
+          // Only alert for actual manual PMs!
+          if (!isSystemLog) {
               triggerTeamsAlert(
-                  "admin@fcimg.com", // Sent to admin by default, but can be updated later
+                  "admin@fcimg.com", // Keep as admin, or change to a dynamic manager email later
                   `✅ PM Executed: ${logDetails.assetName}`,
-                  `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${logDetails.comments || "None"}\n**Time:** ${logDetails.timestamp}`
+                  `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${commentText || "None"}\n**Time:** ${logDetails.timestamp || new Date().toLocaleString()}`
               );
           }
       }
@@ -419,7 +426,7 @@ export default function App() {
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, 
-    triggerTeamsAlert, // This is now properly configured!
+    triggerTeamsAlert, 
     pendingApprovals,
     activeAccounts,
     handleApproveUser,
