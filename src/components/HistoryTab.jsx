@@ -4,11 +4,9 @@ export default function HistoryTab({ history = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   
-  // Sorting and Filtering State
   const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
   const [showOnlyPMs, setShowOnlyPMs] = useState(false);
 
-  // Safely format dates to prevent the "Invalid Date" error
   const formatDate = (dateInput) => {
     if (!dateInput) return "No Date Logged";
     const parsed = new Date(dateInput);
@@ -39,15 +37,12 @@ export default function HistoryTab({ history = [] }) {
     return sortConfig.direction === 'asc' ? <span className="ml-1 text-[#005596]">▲</span> : <span className="ml-1 text-[#005596]">▼</span>;
   };
 
-  // --- FILTERING & SORTING PIPELINE ---
   let processedHistory = [...history];
 
-  // 1. Filter: Equipment PMs Only vs All
   if (showOnlyPMs) {
     processedHistory = processedHistory.filter(item => item.assetId !== "SYS-AUTO");
   }
 
-  // 2. Filter: Search Term
   if (searchTerm) {
     const term = searchTerm.toLowerCase();
     processedHistory = processedHistory.filter(item =>
@@ -58,19 +53,14 @@ export default function HistoryTab({ history = [] }) {
     );
   }
 
-  // 3. Sort Data (Fixed Logic)
   processedHistory.sort((a, b) => {
-    // Special handling for dates to ensure chronological number sorting
     if (sortConfig.key === 'timestamp') {
       const timeA = new Date(a.timestamp || a.date).getTime() || 0;
       const timeB = new Date(b.timestamp || b.date).getTime() || 0;
       return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
     }
-
-    // Standard string sorting (forced lowercase for case-insensitivity)
     const valA = String(a[sortConfig.key] || '').toLowerCase();
     const valB = String(b[sortConfig.key] || '').toLowerCase();
-
     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
@@ -79,23 +69,37 @@ export default function HistoryTab({ history = [] }) {
   return (
     <div className="space-y-6 animate-entrance">
       
-      {/* Embedded print styles for clean PDF export */}
+      {/* 8.5x11 SCALING FIX: Strictly enforces Letter size and removes Tailwind bounds on print */}
       <style>{`
         @media print {
+          @page { size: letter; margin: 0.5in; }
+          body { 
+            margin: 0 !important; 
+            padding: 0 !important; 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+          }
           body * { visibility: hidden; }
           #pdf-print-area, #pdf-print-area * { visibility: visible; }
-          #pdf-print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+          #pdf-print-area { 
+            position: absolute; 
+            left: 0; 
+            top: 0; 
+            width: 100% !important; 
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
           .no-print { display: none !important; }
         }
       `}</style>
 
-      {/* --- MAIN TABLE VIEW --- */}
       {!selectedLog ? (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
             <h2 className="text-lg font-black text-[#005596]">Executed Audit Trail</h2>
             <div className="flex items-center space-x-4">
-              
               <button 
                 onClick={() => setShowOnlyPMs(!showOnlyPMs)}
                 className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-colors shadow-sm border ${
@@ -106,7 +110,6 @@ export default function HistoryTab({ history = [] }) {
               >
                 Equipment PMs
               </button>
-
               <input 
                 type="text" 
                 placeholder="Search by Asset, Tech, or Status..." 
@@ -173,7 +176,6 @@ export default function HistoryTab({ history = [] }) {
         </div>
       ) : (
 
-        /* --- PDF REVIEW OVERLAY --- */
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-entrance">
           <div className="bg-gray-100 p-4 border-b border-gray-200 flex justify-between items-center no-print">
             <button 
@@ -190,22 +192,18 @@ export default function HistoryTab({ history = [] }) {
             </button>
           </div>
 
-          {/* The actual printable document area */}
-          <div id="pdf-print-area" className="p-10 max-w-4xl mx-auto bg-white min-h-[800px]">
+          <div id="pdf-print-area" className="p-10 bg-white">
             
-            {/* Report Header with Logo */}
             <div className="flex justify-between items-end border-b-2 border-[#005596] pb-6 mb-8 mt-4">
               <div>
                 <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto object-contain mb-1" />
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Operations Management System</p>
               </div>
               <div className="text-right">
-                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Maintenance Audit Report</h2>
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Operations Management Report</h2>
                 <p className="text-xs font-mono text-gray-500 mt-1">Log ID: {selectedLog.id || `LOG-SYSTEM`}</p>
               </div>
             </div>
 
-            {/* Meta Information Grid */}
             <div className="grid grid-cols-2 gap-8 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
               <div className="space-y-4">
                 <div>
@@ -240,7 +238,6 @@ export default function HistoryTab({ history = [] }) {
               </div>
             </div>
 
-            {/* NEW SECTION: Dynamic SOP Checklist Box */}
             {(selectedLog.responses || selectedLog.checklist) && (
               <div className="mb-8">
                 <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
@@ -269,7 +266,6 @@ export default function HistoryTab({ history = [] }) {
               </div>
             )}
 
-            {/* Technician Notes / Comments */}
             <div className="mb-12">
               <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Technician Notes & Comments</h3>
               <div className="p-5 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] text-sm text-gray-700 whitespace-pre-wrap font-mono">
@@ -277,17 +273,12 @@ export default function HistoryTab({ history = [] }) {
               </div>
             </div>
 
-            {/* Footer Sign-off */}
-            <div className="mt-16 pt-8 border-t border-gray-300 flex justify-between items-end pb-8">
+            <div className="mt-16 pt-8 border-t border-gray-300">
               <div className="w-72">
                 <div className="border-b-2 border-gray-800 pb-2 mb-2 text-center font-mono text-sm text-gray-800 italic">
                   Electronically Signed: {selectedLog.technician || 'N/A'}
                 </div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">Technician Digital Signature</div>
-              </div>
-              <div className="text-[10px] text-gray-400 font-mono text-right">
-                Document Generated:<br/>
-                {new Date().toLocaleString()}
               </div>
             </div>
 
