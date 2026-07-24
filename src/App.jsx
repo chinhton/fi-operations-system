@@ -312,8 +312,12 @@ export default function App() {
           
           const commentText = logDetails.comments || logDetails.notes || "";
           
-          // Only suppress the PM Executed alert if it's a pure background system log
-          const isSystemLog = logDetails.assetId === "SYS-AUTO"; 
+          // THE FIX: Restoring the text filter to catch and ignore automatic background logs
+          const isSystemLog = 
+            logDetails.assetId === "SYS-AUTO" ||
+            commentText.includes("Registered new facility asset") ||
+            commentText.includes("Updated facility asset") ||
+            commentText.includes("Automated Tracker");
 
           if (!isSystemLog) {
               triggerTeamsAlert(
