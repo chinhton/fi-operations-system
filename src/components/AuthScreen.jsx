@@ -43,7 +43,7 @@ export default function AuthScreen({
                     <option value="Facilities">Facilities</option>
                     <option value="Production: Sensor Assembly">Production: Sensor Assembly</option>
                     <option value="Production: Final Assembly and Test">Production: Final Assembly and Test</option>
-                    <option value="Production: Engineering">Production Engineering</option>
+                    <option value="Production: Engineering">Production: Engineering</option>
                   </select>
                 </div>
               </>
