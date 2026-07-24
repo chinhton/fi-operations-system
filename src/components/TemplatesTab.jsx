@@ -19,10 +19,13 @@ export default function TemplatesTab({
   const [templateSearch, setTemplateSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // --- THE FIX: State to hold the protocol being viewed in the popup ---
+  // --- THE FIX: State to hold the specific SOP being viewed ---
   const [viewingSop, setViewingSop] = useState(null);
+  
+  // --- THE NEW FIX: State to hold the active Category folder being viewed ---
+  const [activeCategoryModal, setActiveCategoryModal] = useState(null);
 
-  // Automatically open the modal ONLY if the admin clicks "Edit" on an existing template card
+  // Automatically open the edit modal ONLY if the admin clicks "Edit" on an existing template card
   useEffect(() => {
     if (editingTemplateId) {
       setIsModalOpen(true);
@@ -40,6 +43,20 @@ export default function TemplatesTab({
     setIsModalOpen(false);
   };
 
+  // Group templates for rendering
+  const filteredTemplates = (pmTemplates || []).filter(t => 
+    (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
+    (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
+    (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
+  );
+
+  const groupedTemplates = filteredTemplates.reduce((acc, template) => {
+    const cat = template.targetCategory || "Global";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(template);
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-8 animate-entrance">
       
@@ -54,83 +71,104 @@ export default function TemplatesTab({
         />
       </div>
 
-      {/* COMPACT TABLE DIRECTORY MAP */}
+      {/* MINIMIZED FOLDER DIRECTORY */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Standard Operating Procedures</h3>
           <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{pmTemplates?.length || 0} Protocols</span>
         </div>
 
-        {(() => {
-          const filteredTemplates = (pmTemplates || []).filter(t => 
-            (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-            (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-            (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
-          );
-
-          const groupedTemplates = filteredTemplates.reduce((acc, template) => {
-            const cat = template.targetCategory || "Global";
-            if (!acc[cat]) acc[cat] = [];
-            acc[cat].push(template);
-            return acc;
-          }, {});
-
-          return Object.keys(groupedTemplates).length === 0 ? (
-            <div className="p-12 text-center text-xs text-gray-500 bg-white rounded-xl border border-gray-200 shadow-sm">No Established SOPs matching search.</div>
-          ) : (
-            Object.entries(groupedTemplates).map(([category, catTemplates]) => (
-              <div key={category} className="mb-0">
-                <div className="bg-gray-100 px-6 py-2 border-y border-gray-200 text-xs font-bold text-gray-700 uppercase tracking-wider shadow-inner flex justify-between items-center">
-                  <div>📁 Category Lock: {category} <span className="ml-2 font-normal text-gray-400">({catTemplates.length} Protocols)</span></div>
-                  {isSystemAdmin && category !== "Global" && <button onClick={() => deleteTemplateCategory(category)} className="text-[10px] text-red-500 hover:text-red-700 transition">Delete Category &times;</button>}
-                </div>
+        {Object.keys(groupedTemplates).length === 0 ? (
+          <div className="p-12 text-center text-xs text-gray-500">No Established SOPs matching search.</div>
+        ) : (
+          <div className="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 bg-gray-50/50">
+            {Object.entries(groupedTemplates).map(([category, catTemplates]) => (
+              <div 
+                key={category} 
+                onClick={() => setActiveCategoryModal(category)}
+                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
+              >
+                {/* Admin Delete Button (Stops propagation so it doesn't open the folder) */}
+                {isSystemAdmin && category !== "Global" && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); deleteTemplateCategory(category); }} 
+                    className="absolute top-2 right-2 text-[9px] text-red-500 hover:text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded transition opacity-0 group-hover:opacity-100"
+                  >
+                    Delete
+                  </button>
+                )}
                 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-left">
-                    <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-                      <tr>
-                        <th className="px-6 py-3.5">Protocol ID & Name</th>
-                        <th className="px-6 py-3.5">Interval & Dept</th>
-                        <th className="px-6 py-3.5">Task Profile</th>
-                        <th className="px-6 py-3.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-xs">
-                      {catTemplates.map((template) => (
-                        <tr key={template.id} className="hover:bg-gray-50/55 transition">
-                          <td className="px-6 py-4">
-                            <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase block mb-0.5">{template.id}</span>
-                            <span className="font-bold text-gray-900 block">{template.name}</span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <span className="bg-blue-50 border border-blue-100 text-[#005596] text-[9px] font-bold px-2 py-0.5 rounded uppercase">{template.interval}</span>
-                              <span className="text-[10px] text-gray-500 font-semibold">{template.department || 'Global Mgmt'}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-[10px] font-medium text-gray-600">
-                            {template.checklist?.length || 0} Actions Logged
-                            {template.attachedManualName && (
-                              <span className="block mt-1 text-[#005596] font-bold">📎 Linked Manual</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right space-x-3">
-                            <button onClick={() => setViewingSop(template)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">View Protocol</button>
-                            <button onClick={() => handleEditTemplateClick(template)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
-                            {isSystemAdmin && (
-                              <button onClick={() => deleteTemplate(template.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <div className="text-3xl mb-2 text-[#00A1E4] group-hover:scale-110 transition-transform">📁</div>
+                <h4 className="font-bold text-[#005596] text-xs uppercase tracking-wider mb-1 line-clamp-1">{category}</h4>
+                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{catTemplates.length} Protocols</span>
               </div>
-            ))
-          );
-        })()}
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* --- CATEGORY FOLDER POPUP (TABLE VIEW) --- */}
+      {activeCategoryModal && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
+            <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-sm tracking-wide uppercase">📁 Category Lock: {activeCategoryModal}</h3>
+              <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
+            </div>
+            
+            <div className="overflow-auto flex-1 bg-white">
+              <table className="min-w-full divide-y divide-gray-200 text-left">
+                <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
+                  <tr>
+                    <th className="px-6 py-3.5">Protocol ID & Name</th>
+                    <th className="px-6 py-3.5">Interval & Dept</th>
+                    <th className="px-6 py-3.5">Task Profile</th>
+                    <th className="px-6 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {(groupedTemplates[activeCategoryModal] || []).map((template) => (
+                    <tr key={template.id} className="hover:bg-gray-50/55 transition">
+                      <td className="px-6 py-4">
+                        <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase block mb-0.5">{template.id}</span>
+                        <span className="font-bold text-gray-900 block">{template.name}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-blue-50 border border-blue-100 text-[#005596] text-[9px] font-bold px-2 py-0.5 rounded uppercase">{template.interval}</span>
+                          <span className="text-[10px] text-gray-500 font-semibold">{template.department || 'Global Mgmt'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-[10px] font-medium text-gray-600">
+                        {template.checklist?.length || 0} Actions Logged
+                        {template.attachedManualName && (
+                          <span className="block mt-1 text-[#005596] font-bold">📎 Linked Manual</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right space-x-3">
+                        <button onClick={() => setViewingSop(template)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">View Protocol</button>
+                        <button onClick={() => handleEditTemplateClick(template)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
+                        {isSystemAdmin && (
+                          <button onClick={() => deleteTemplate(template.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {(!groupedTemplates[activeCategoryModal] || groupedTemplates[activeCategoryModal].length === 0) && (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 text-xs">No protocols remaining in this category.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="bg-gray-100 px-6 py-4 flex justify-end shrink-0 border-t border-gray-200">
+              <button onClick={() => setActiveCategoryModal(null)} className="px-6 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-white transition shadow-sm">Close Folder</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- PROTOCOL VIEWER MODAL (READ-ONLY POPUP) --- */}
       {viewingSop && (
