@@ -4,24 +4,24 @@ export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   openPmModal, currentUser, isSystemAdmin, triggerEmailAlert,
   workOrders, assets, pmTemplates, calculateDaysRemaining,
-  users = [] // <-- Added users to props for the Manager lookup
+  users = []
 }) {
   
   const adminGlobalQueue = [];
   const userAssignedTasks = [];
+  const managerDepartmentQueue = []; // NEW: Array for the Manager's Department View
+  
   const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
 
-  // --- NEW: DYNAMIC MANAGER LOOKUP ---
+  // Determine if the current user is a Manager
+  const isManager = currentUser?.role?.toLowerCase() === 'manager';
+
+  // --- DYNAMIC MANAGER LOOKUP ---
   const getManagerForDepartment = (dept) => {
     if (!users || users.length === 0 || !dept || dept === "Unassigned") return "admin@fcimg.com";
-    
-    // Find the first user in this department who is registered as a Manager
     const manager = users.find(u => u.department === dept && u.role === "Manager");
-    
-    // If a manager exists, route to them. Otherwise, fallback to the main admin/facilities route.
     return manager ? manager.email : "admin@fcimg.com";
   };
-  // ------------------------------------
 
   // --- 1. PROCESS ASSETS (Only surface if Due Soon or Critical) ---
   if (assets && calculateDaysRemaining) {
@@ -43,7 +43,6 @@ export default function DashboardTab({
           freqs.forEach(freq => {
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
               
-              // Skip calculation if the PM was already executed today
               if (targetDate === todayStr) {
                   return; 
               }
@@ -54,7 +53,6 @@ export default function DashboardTab({
               }
           });
 
-          // Show on dashboard if due within 7 days or overdue
           if (lowestDays !== null && lowestDays <= 7) {
               isDueOrCritical = true;
               dueMessage = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
@@ -67,7 +65,7 @@ export default function DashboardTab({
           queueId: `ast-${asset.id}`,
           name: asset.name,
           serial: asset.serial || "N/A",
-          department: asset.department || "Unassigned", // NEW: Pulling in department
+          department: asset.department || "Unassigned",
           badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800",
           displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : "Pending PM",
           displayDate: dueMessage,
@@ -77,11 +75,17 @@ export default function DashboardTab({
           isCritical: isCriticalStatus
         };
 
+        // 1. Push to Admin God View
         adminGlobalQueue.push(queueItem);
 
-        // If assigned to the logged-in user, push to their personal queue
+        // 2. Push to Personal Queue if assigned to the logged-in user
         if (asset.operatorEmail === currentUser.email) {
             userAssignedTasks.push(queueItem);
+        }
+        
+        // 3. Push to Manager Queue if the item belongs to their department
+        if (isManager && asset.department === currentUser.department) {
+            managerDepartmentQueue.push(queueItem);
         }
       }
     });
@@ -96,7 +100,7 @@ export default function DashboardTab({
           queueId: `wo-${wo.id}`,
           name: wo.title || `Work Order ${wo.id}`,
           serial: wo.targetAsset || "N/A",
-          department: wo.department || "Unassigned", // NEW: Pulling in department
+          department: wo.department || "Unassigned",
           badgeColor: isCritical ? "bg-red-100 text-red-800" : "bg-orange-100 text-orange-800",
           displayStatus: wo.status,
           displayDate: wo.dueDate ? new Date(wo.dueDate).toLocaleDateString() : "Pending",
@@ -111,6 +115,10 @@ export default function DashboardTab({
         if (wo.operatorEmail === currentUser.email || wo.managerEmail === currentUser.email) {
             userAssignedTasks.push(queueItem);
         }
+
+        if (isManager && wo.department === currentUser.department) {
+            managerDepartmentQueue.push(queueItem);
+        }
       }
     });
   }
@@ -118,6 +126,9 @@ export default function DashboardTab({
   // --- 3. TRIAGE FOR RENDERING ---
   const overdueAdminQueue = adminGlobalQueue.filter(item => item.isCritical);
   const upcomingAdminQueue = adminGlobalQueue.filter(item => !item.isCritical);
+
+  const overdueManagerQueue = managerDepartmentQueue.filter(item => item.isCritical);
+  const upcomingManagerQueue = managerDepartmentQueue.filter(item => !item.isCritical);
 
   const overdueMyTasks = userAssignedTasks.filter(item => item.isCritical);
   const upcomingMyTasks = userAssignedTasks.filter(item => !item.isCritical);
@@ -304,7 +315,142 @@ export default function DashboardTab({
               </div>
             </div>
           )}
-          {/* ----------------------------------------- */}
+          
+          {/* --- MANAGER VIEW: RENDERS FOR DEPARTMENT MANAGERS --- */}
+          {!isSystemAdmin && isManager && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-6 py-4 flex items-center justify-between border-b border-indigo-900">
+                <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">{currentUser.department} - Team Operations Queue</h3>
+                {managerDepartmentQueue.length > 0 && (
+                  <span className="bg-indigo-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{managerDepartmentQueue.length} Total</span>
+                )}
+              </div>
+              
+              <div className="max-h-[400px] overflow-y-auto bg-gray-50/30">
+                {managerDepartmentQueue.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
+                    No pending maintenance actions for your department. All systems are operational.
+                  </div>
+                ) : (
+                  <>
+                    {/* MANAGER TRIAGE: OVERDUE SECTION */}
+                    {overdueManagerQueue.length > 0 && (
+                      <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
+                        <span>🚨 Critical & Overdue Action Required</span>
+                        <span>{overdueManagerQueue.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white">
+                      {overdueManagerQueue.map(item => (
+                        <div key={item.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : '#eab308' }}>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-900 text-sm block">{item.name}</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
+                                OP: {item.assignedTo}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            {item.displayDate && (
+                              <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">
+                                {item.displayDate}
+                              </div>
+                            )}
+                            <div className="flex items-center space-x-3 mt-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.target.innerText = "SENT ✓";
+                                  e.target.classList.add("text-green-600");
+                                  triggerEmailAlert(
+                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
+                                    `URGENT MANAGER REMINDER: Critical Action Required for ${item.name}`,
+                                    `Hello,\n\nThis is a priority reminder from your department manager. The system ${item.name} (S/N: ${item.serial}) is currently flagged as ${item.displayStatus.toUpperCase()}.\n\nPlease log into the FI-Operations Management System and execute this task immediately to maintain compliance.`
+                                  );
+                                }} 
+                                className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
+                              >
+                                🔔 Remind Operator
+                              </button>
+                              
+                              {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
+                                  Execute PM &rarr;
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* MANAGER TRIAGE: UPCOMING SECTION */}
+                    {upcomingManagerQueue.length > 0 && (
+                      <div className="bg-blue-50 text-[#005596] text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-blue-200 shadow-sm flex justify-between">
+                        <span>📅 Upcoming & Pending Tasks</span>
+                        <span>{upcomingManagerQueue.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white">
+                      {upcomingManagerQueue.map(item => (
+                        <div key={item.queueId} className="p-5 hover:bg-blue-50/30 transition flex justify-between items-center border-l-4 border-[#00A1E4]">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-900 text-sm block">{item.name}</span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">
+                                OP: {item.assignedTo}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            {item.displayDate && (
+                              <div className="mb-2 text-[10px] text-gray-500 font-mono">
+                                {item.displayDate}
+                              </div>
+                            )}
+                            <div className="flex items-center space-x-3 mt-1">
+                              <button 
+                                onClick={(e) => {
+                                  e.target.innerText = "NOTIFIED ✓";
+                                  e.target.classList.add("text-green-600");
+                                  triggerEmailAlert(
+                                    item.assignedTo !== "Unassigned" ? item.assignedTo : "admin@fcimg.com",
+                                    `MANAGER REMINDER: Routine Task Pending for ${item.name}`,
+                                    `Hello,\n\nThis is a standard reminder from your department manager regarding ${item.name} (S/N: ${item.serial}).\n\nCurrent Status: ${item.displayStatus}\n\nPlease ensure this assignment is completed on schedule.`
+                                  );
+                                }} 
+                                className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
+                              >
+                                ✉️ Remind Operator
+                              </button>
+                              
+                              {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">
+                                  Execute PM &rarr;
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
 
           {/* DAY-TO-DAY VIEW: RENDERS FOR EVERYONE */}
@@ -405,8 +551,8 @@ export default function DashboardTab({
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
             <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Operator Duty Board</h4>
             <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex items-center space-x-4 shadow-inner">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596] border border-[#005596]/20' : 'bg-slate-200 text-slate-700 border border-slate-300'}`}>
-                {isSystemAdmin ? 'SYS' : 'OP'}
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${isSystemAdmin ? 'bg-[#005596]/10 text-[#005596] border border-[#005596]/20' : isManager ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-200 text-slate-700 border border-slate-300'}`}>
+                {isSystemAdmin ? 'SYS' : isManager ? 'MGR' : 'OP'}
               </div>
               <div>
                 <span className="block text-sm font-bold text-gray-900 font-sans">{currentUser.name}</span>
