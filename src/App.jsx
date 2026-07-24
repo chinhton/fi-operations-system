@@ -245,73 +245,6 @@ export default function App() {
     }
   };
 
-  // --- AUTOMATED DAILY MAINTENANCE SWEEP ("First Cup of Coffee" Script) ---
-  useEffect(() => {
-    if (!currentUser || !isGodMode || visibleAssets.length === 0 || visibleTemplates.length === 0) return;
-
-    const todayStamp = new Date().toLocaleDateString('en-US');
-    const lastSweep = localStorage.getItem('fi_daily_sweep');
-
-    if (lastSweep !== todayStamp) {
-      const dueAssetsList = [];
-      const fiveDayWarningList = []; // NEW: 5-Day specific tracker
-      
-      visibleAssets.forEach(asset => {
-        let isDue = false;
-        let dueText = "";
-        let lowestDays = null;
-        
-        if (["Maintenance Due", "Out of Calibration", "Corrective Action", "Overdue"].includes(asset.status)) {
-          isDue = true;
-          dueText = "Immediate Action Required";
-        } else {
-          const assetTemplates = visibleTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-          const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-          
-          freqs.forEach(freq => {
-            const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-            if (targetDate === todayStr) return; // PM was already done today
-            const daysLeft = calculateDaysRemaining(targetDate, freq);
-            if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
-                lowestDays = daysLeft;
-            }
-          });
-
-          // Grab anything due within the next 7 days for the general brief
-          if (lowestDays !== null && lowestDays <= 7) {
-            isDue = true;
-            dueText = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
-          }
-        }
-
-        if (isDue) {
-          dueAssetsList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - ${dueText}`);
-        }
-
-        // NEW: Specifically isolate assets that hit exactly 5 days out
-        if (lowestDays === 5) {
-          fiveDayWarningList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - Assigned to: ${asset.operatorEmail || 'Unassigned'}`);
-        }
-      });
-
-      // 1. Send the standard 7-Day Brief
-      if (dueAssetsList.length > 0) {
-        const messageBody = `Good morning. Here is the automated facility maintenance brief for the upcoming 7 days:\n\n${dueAssetsList.join('\n\n')}\n\nPlease log into the FI-Operations Management System to review and assign these tasks.`;
-        triggerTeamsAlert("admin@fcimg.com", `📅 Daily Maintenance Brief: ${dueAssetsList.length} Action(s) Required`, messageBody);
-      }
-
-      // 2. Send the specific 5-Day Warning (if any exist)
-      if (fiveDayWarningList.length > 0) {
-        const warningBody = `⚠️ **5-DAY ADVANCED WARNING** ⚠️\n\nThe following systems have maintenance due in exactly 5 days. Please ensure any required parts are ordered and vendors are scheduled:\n\n${fiveDayWarningList.join('\n\n')}`;
-        triggerTeamsAlert("admin@fcimg.com", `⏳ 5-Day PM Warning: Action Approaching`, warningBody);
-      }
-
-      // Stamp the local storage so neither sweep fires again today
-      localStorage.setItem('fi_daily_sweep', todayStamp);
-    }
-  }, [currentUser, isGodMode, visibleAssets, visibleTemplates]); 
-  // --------------------------------------------------------------------------
-
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
 
@@ -379,11 +312,8 @@ export default function App() {
           
           const commentText = logDetails.comments || logDetails.notes || "";
           
-          const isSystemLog = 
-            logDetails.assetId === "SYS-AUTO" || 
-            commentText.includes("Registered new facility asset") ||
-            commentText.includes("Updated facility asset") ||
-            commentText.includes("Automated Tracker");
+          // Only suppress the PM Executed alert if it's a pure background system log
+          const isSystemLog = logDetails.assetId === "SYS-AUTO"; 
 
           if (!isSystemLog) {
               triggerTeamsAlert(
@@ -449,7 +379,8 @@ export default function App() {
         .then(res => res.json())
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
-        if (actionName === "Established SOP" || (actionName === "Facility Asset" && actionTaken === 'Deleted')) {
+        // Floodgates open: Triggers immediately for ANY SOP or Asset action (Create, Update, Delete)
+        if (actionName === "Established SOP" || actionName === "Facility Asset") {
              triggerTeamsAlert(
                  "admin@fcimg.com",
                  `${actionName} ${actionTaken}`,
