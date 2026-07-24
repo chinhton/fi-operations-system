@@ -8,6 +8,9 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
     return currentUser?.preferences?.historyFilter || localStorage.getItem("fi_oms_history_filter") || "Equipment";
   });
 
+  // --- NEW: Sorting State ---
+  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
+
   // --- Cloud Sync the Toggle ---
   const handleFilterChange = async (type) => {
     setActiveFilter(type);
@@ -38,6 +41,21 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
     }
   };
 
+  // --- NEW: Sorting Handler ---
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return " ↕";
+    return sortConfig.direction === 'asc' ? " ▲" : " ▼";
+  };
+
+  // 1. Filter the History
   const filteredHistory = (history || []).filter(log => {
     // Determine if the log is an automated system action
     const isSystemLog = log.assetId === "SYS-AUTO" || 
@@ -56,6 +74,26 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
       (log.templateName || "").toLowerCase().includes(historySearch.toLowerCase());
       
     return matchesSearch;
+  });
+
+  // 2. Sort the Filtered History
+  const sortedAndFilteredHistory = [...filteredHistory].sort((a, b) => {
+    let valA = a[sortConfig.key];
+    let valB = b[sortConfig.key];
+    
+    // Special handling for Dates
+    if (sortConfig.key === 'timestamp') {
+      valA = new Date(valA).getTime();
+      valB = new Date(valB).getTime();
+    } else {
+      // Standardize strings for accurate alphabetical sorting
+      valA = (valA || "").toString().toLowerCase();
+      valB = (valB || "").toString().toLowerCase();
+    }
+
+    if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+    if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+    return 0;
   });
 
   return (
@@ -102,19 +140,29 @@ export default function HistoryTab({ history, isSystemAdmin, deleteHistoryLog, c
           <table className="w-full text-left text-sm border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider">Date</th>
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider">Asset</th>
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider">Protocol Executed</th>
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider">Technician</th>
-                <th className="p-3 font-bold text-[10px] uppercase tracking-wider">Status</th>
+                <th onClick={() => handleSort('timestamp')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
+                  Date <span className="text-gray-400">{getSortIcon('timestamp')}</span>
+                </th>
+                <th onClick={() => handleSort('assetName')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
+                  Asset <span className="text-gray-400">{getSortIcon('assetName')}</span>
+                </th>
+                <th onClick={() => handleSort('templateName')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
+                  Protocol Executed <span className="text-gray-400">{getSortIcon('templateName')}</span>
+                </th>
+                <th onClick={() => handleSort('technician')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
+                  Technician <span className="text-gray-400">{getSortIcon('technician')}</span>
+                </th>
+                <th onClick={() => handleSort('status')} className="p-3 font-bold text-[10px] uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors select-none">
+                  Status <span className="text-gray-400">{getSortIcon('status')}</span>
+                </th>
                 <th className="p-3 font-bold text-[10px] uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-xs">
-              {filteredHistory.length === 0 ? (
+              {sortedAndFilteredHistory.length === 0 ? (
                 <tr><td colSpan="6" className="p-8 text-center text-gray-400 text-xs italic">No audit history found matching your filters.</td></tr>
               ) : (
-                filteredHistory.map(log => (
+                sortedAndFilteredHistory.map(log => (
                   <tr key={log.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="p-3 font-mono text-[11px] text-gray-500">{new Date(log.timestamp).toLocaleString()}</td>
                     <td className="p-3 font-bold text-gray-800">{log.assetName}</td>
