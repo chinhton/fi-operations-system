@@ -36,10 +36,11 @@ export default function DashboardTab({
           
           let lowestDays = null;
           
-          // FIX: Removed the blocker. The system will now calculate and display ANY task due in the next 7 days, including brand new assets.
           freqs.forEach(freq => {
+              // THE FIX: If lastPmDate is null (brand new asset), fallback to today's date so the math works
               const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-              const daysLeft = calculateDaysRemaining(targetDate, freq);
+              const effectiveDate = targetDate ? targetDate : new Date().toLocaleDateString('en-US');
+              const daysLeft = calculateDaysRemaining(effectiveDate, freq);
               
               if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                   lowestDays = daysLeft;
@@ -69,8 +70,15 @@ export default function DashboardTab({
         };
 
         adminGlobalQueue.push(queueItem);
-        if (asset.operatorEmail === currentUser.email) { userAssignedTasks.push(queueItem); }
-        if (isManager && asset.department === currentUser.department) { managerDepartmentQueue.push(queueItem); }
+        
+        // Ensure the assigned email exactly matches the logged-in user
+        if (asset.operatorEmail && asset.operatorEmail.toLowerCase() === currentUser.email.toLowerCase()) { 
+            userAssignedTasks.push(queueItem); 
+        }
+        
+        if (isManager && asset.department === currentUser.department) { 
+            managerDepartmentQueue.push(queueItem); 
+        }
       }
     });
   }
