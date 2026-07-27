@@ -41,12 +41,11 @@ export default function DashboardTab({
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
       
-      // MOVED OUTSIDE: We now always calculate dates to capture the specific target template
       const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
       const freqs = [...new Set(assetTemplates.map(t => t.interval))];
       
       let lowestDays = null;
-      let targetTemplate = null; // TRACK THE EXACT TEMPLATE
+      let targetTemplate = null; 
       
       freqs.forEach(freq => {
           const explicitLastDone = asset.pmDates?.[freq];
@@ -58,7 +57,7 @@ export default function DashboardTab({
           
           if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
               lowestDays = daysLeft;
-              targetTemplate = assetTemplates.find(t => t.interval === freq); // CAPTURE THE TEMPLATE
+              targetTemplate = assetTemplates.find(t => t.interval === freq); 
           }
       });
 
@@ -93,7 +92,7 @@ export default function DashboardTab({
           type: 'asset',
           isCritical: isCriticalStatus,
           taskCategory: taskCategory,
-          targetTemplate: targetTemplate // PASS IT TO THE RENDERER
+          targetTemplate: targetTemplate 
         };
 
         adminGlobalQueue.push(queueItem);
@@ -151,7 +150,7 @@ export default function DashboardTab({
           type: 'wo',
           isCritical: isCritical,
           taskCategory: taskCategory,
-          targetTemplate: null // Work orders don't use templates
+          targetTemplate: null 
         };
 
         adminGlobalQueue.push(queueItem);
@@ -270,7 +269,7 @@ export default function DashboardTab({
                                 }} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                🔔 Alert Manager
+                                🔔 Alert Manager ({getManagerForDepartment(item.department)})
                               </button>
                               {item.type === 'asset' && (
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
@@ -318,7 +317,7 @@ export default function DashboardTab({
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                ✉️ Notify Manager
+                                ✉️ Notify Manager ({getManagerForDepartment(item.department)})
                               </button>
                               {item.type === 'asset' && (
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
