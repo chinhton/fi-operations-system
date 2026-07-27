@@ -1,5 +1,6 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
+const { sendTeamsMessage } = require('./teamsService'); // <-- Importing the central helper
 
 app.http('dailySweep', {
     methods: ['GET', 'POST'],
@@ -14,11 +15,9 @@ app.http('dailySweep', {
             const dbClient = new CosmosClient(cosmosConn);
             const database = dbClient.database(process.env.COSMOS_DB_NAME || "OmsDatabase");
             
-            // --- THE FIX: FORCED LOWERCASE CONTAINER NAMES ---
             const { resources: workOrders } = await database.container("workorders").items.query("SELECT * FROM c WHERE c.status != 'Completed'").fetchAll();
             const { resources: assets } = await database.container("assets").items.readAll().fetchAll();
             const { resources: templates } = await database.container("templates").items.readAll().fetchAll();
-            // -------------------------------------------------
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -101,40 +100,21 @@ app.http('dailySweep', {
                 }
             }
 
-            const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
-
-            const sendTeamsAlert = async (subject, bodyText, colorTheme) => {
-                const payload = {
-                    type: "message",
-                    attachments: [{
-                        contentType: "application/vnd.microsoft.card.adaptive",
-                        content: {
-                            type: "AdaptiveCard",
-                            $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-                            version: "1.4",
-                            body: [
-                                { type: "TextBlock", text: `🚨 ${subject}`, weight: "Bolder", size: "Medium", color: colorTheme },
-                                { type: "TextBlock", text: bodyText, wrap: true, spacing: "Medium" }
-                            ]
-                        }
-                    }]
-                };
-                await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            };
-
+            // --- REPLACED: Using central teamsService instead of internal function ---
             let sentCount = 0;
             if (criticalList.length > 0) {
-                await sendTeamsAlert(`CRITICAL: ${criticalList.length} Overdue Action(s)`, `The following systems are overdue and require immediate compliance action:\n\n${criticalList.join('\n\n')}`, "Attention");
+                await sendTeamsMessage(`CRITICAL: ${criticalList.length} Overdue Action(s)`, `The following systems are overdue and require immediate compliance action:\n\n${criticalList.join('\n\n')}`, null, "Attention");
                 sentCount++;
             }
             if (dueTodayList.length > 0) {
-                await sendTeamsAlert(`DUE TODAY: ${dueTodayList.length} Action(s)`, `The following routine maintenance actions must be completed today:\n\n${dueTodayList.join('\n\n')}`, "Warning");
+                await sendTeamsMessage(`DUE TODAY: ${dueTodayList.length} Action(s)`, `The following routine maintenance actions must be completed today:\n\n${dueTodayList.join('\n\n')}`, null, "Warning");
                 sentCount++;
             }
             if (upcomingList.length > 0) {
-                await sendTeamsAlert(`UPCOMING: ${upcomingList.length} Action(s) Due in 5 Days`, `Advanced warning for the following systems. Please ensure any required parts are ordered and external vendors are scheduled:\n\n${upcomingList.join('\n\n')}`, "Accent");
+                await sendTeamsMessage(`UPCOMING: ${upcomingList.length} Action(s) Due in 5 Days`, `Advanced warning for the following systems. Please ensure any required parts are ordered and external vendors are scheduled:\n\n${upcomingList.join('\n\n')}`, null, "Accent");
                 sentCount++;
             }
+            // -------------------------------------------------------------------------
 
             return { status: 200, body: `Sweep completed. ${sentCount} digest(s) pushed to Teams.` };
 
