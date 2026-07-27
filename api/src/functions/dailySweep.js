@@ -14,9 +14,11 @@ app.http('dailySweep', {
             const dbClient = new CosmosClient(cosmosConn);
             const database = dbClient.database(process.env.COSMOS_DB_NAME || "OmsDatabase");
             
+            // --- THE FIX: FORCED LOWERCASE CONTAINER NAMES ---
             const { resources: workOrders } = await database.container("workorders").items.query("SELECT * FROM c WHERE c.status != 'Completed'").fetchAll();
-            const { resources: assets } = await database.container("Assets").items.readAll().fetchAll();
-            const { resources: templates } = await database.container("PmTemplates").items.readAll().fetchAll();
+            const { resources: assets } = await database.container("assets").items.readAll().fetchAll();
+            const { resources: templates } = await database.container("templates").items.readAll().fetchAll();
+            // -------------------------------------------------
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
