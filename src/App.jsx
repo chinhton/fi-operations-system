@@ -256,33 +256,36 @@ export default function App() {
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
 
-  const handleApproveUser = async (email) => {
-    const targetUser = users.find(u => u.email === email);
+  // FIXED: Now looking up by ID instead of Email
+  const handleApproveUser = async (id) => {
+    const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
     
     const updatedUser = { ...targetUser, status: "Active" };
     try {
       await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedUser) });
-      setUsers(users.map(u => u.email === email ? updatedUser : u));
+      setUsers(users.map(u => u.id === id ? updatedUser : u));
     } catch (err) { console.error("User approval failed:", err); }
   };
 
-  const handleDenyUser = async (email) => {
-    const targetUser = users.find(u => u.email === email);
+  // FIXED: Now looking up by ID instead of Email
+  const handleDenyUser = async (id) => {
+    const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
     try {
       await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
-      setUsers(users.filter(u => u.email !== email));
+      setUsers(users.filter(u => u.id !== id));
     } catch (err) { console.error("User denial failed:", err); }
   };
 
-  const handleRevokeUser = async (email) => {
-    const targetUser = users.find(u => u.email === email);
+  // FIXED: Now looking up by ID instead of Email
+  const handleRevokeUser = async (id) => {
+    const targetUser = users.find(u => u.id === id);
     if (!targetUser) return;
-    modals.triggerModal("Confirm Revocation", `Are you sure you want to permanently revoke system access for ${email}?`, "confirm", async () => {
+    modals.triggerModal("Confirm Revocation", `Are you sure you want to permanently revoke system access for ${targetUser.email}?`, "confirm", async () => {
         try {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
-          setUsers(users.filter(u => u.email !== email));
+          setUsers(users.filter(u => u.id !== id));
           modals.closeModal();
         } catch (err) { console.error("User revocation failed:", err); }
       }
@@ -328,8 +331,6 @@ export default function App() {
             commentText.includes("Automated Tracker");
 
           if (!isSystemLog) {
-              // THE FIX: Forcing an immediate background sync so the new PM shows up on the audit trail without refreshing
-              // (Teams alert stripped out to prevent double-dipping)
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
           }
       }

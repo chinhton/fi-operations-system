@@ -60,7 +60,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
   const handleRegister = async (e) => {
     e.preventDefault();
 
-    // --- THE FIX: STRICT DOMAIN LOCK ---
+    // --- STRICT DOMAIN LOCK ---
     const normalizedEmail = authEmail.toLowerCase();
     if (!normalizedEmail.endsWith('@fcimg.com')) {
       setAuthError("Access Denied: Registration is strictly restricted to @fcimg.com accounts.");
@@ -78,6 +78,19 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     setAuthSuccess("");
 
     try {
+      // --- THE FIX: DUPLICATE EMAIL GUARD ---
+      // Fetch the current user list to check for duplicates before proceeding
+      const checkRes = await fetch('/api/users');
+      const existingUsers = await checkRes.json();
+      
+      const emailExists = existingUsers.some(u => u.email.toLowerCase() === normalizedEmail);
+      if (emailExists) {
+          setAuthError("Registration Error: An account with this email address already exists.");
+          setIsRegistering(false);
+          return;
+      }
+      // ---------------------------------------
+
       const newUser = {
         id: `USR-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
         name: registerName,
