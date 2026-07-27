@@ -328,13 +328,8 @@ export default function App() {
             commentText.includes("Automated Tracker");
 
           if (!isSystemLog) {
-              triggerTeamsAlert(
-                  "admin@fcimg.com", 
-                  `✅ PM Executed: ${logDetails.assetName}`,
-                  `**${activeUser.name}** just executed a PM on **${logDetails.assetName}**.\n\n**Status:** ${logDetails.status}\n**Notes:** ${commentText || "None"}\n**Time:** ${logDetails.timestamp || new Date().toLocaleString()}`
-              );
-              
               // THE FIX: Forcing an immediate background sync so the new PM shows up on the audit trail without refreshing
+              // (Teams alert stripped out to prevent double-dipping)
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
           }
       }
