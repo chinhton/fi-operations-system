@@ -43,11 +43,25 @@ async function processRoute(request, containerId) {
             const { resources } = await container.items.readAll().fetchAll();
             return createResponse(200, resources);
         }
+        
         if (method === 'POST') {
             const payload = await request.json();
+
+            // --- THE HARD DOMAIN LOCK FOR REGISTRATION ---
+            if (containerId === 'users') {
+                const userEmail = payload.email || "";
+                if (!userEmail.toLowerCase().endsWith('@fcimg.com')) {
+                    return createResponse(403, { 
+                        error: "Unauthorized domain. System access is restricted to @fcimg.com accounts." 
+                    });
+                }
+            }
+            // ---------------------------------------------
+
             const { resource } = await container.items.upsert(payload);
             return createResponse(201, resource);
         }
+        
         if (method === 'DELETE') {
             const id = request.query.get('id');
             if (!id) return createResponse(400, { error: "Missing ID for deletion." });

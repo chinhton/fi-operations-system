@@ -34,7 +34,7 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
       const user = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase() && u.password === authPassword);
       
       if (user) {
-        // --- THE FIX: ENFORCE STRICT STATUS CHECK ---
+        // --- STRICT STATUS CHECK ---
         if (user.status !== "Active") {
             setAuthError("Access Denied: Your account is pending administrator approval.");
             setIsSigningIn(false);
@@ -59,6 +59,14 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+
+    // --- THE FIX: STRICT DOMAIN LOCK ---
+    const normalizedEmail = authEmail.toLowerCase();
+    if (!normalizedEmail.endsWith('@fcimg.com')) {
+      setAuthError("Access Denied: Registration is strictly restricted to @fcimg.com accounts.");
+      return;
+    }
+    // -----------------------------------
     
     if (!registerDepartment) {
       setAuthError("Please select a Corporate Department.");
@@ -87,7 +95,6 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
       });
 
       if (res.ok) {
-        // --- THE FIX: ACCURATE SUCCESS MESSAGING ---
         setAuthSuccess("Access request submitted. Pending administrator approval.");
         setAuthMode("signin");
         setRegisterName("");
