@@ -57,35 +57,7 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
       
       await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyPayload) });
 
-      // --- TEAMS WEBHOOK CONNECTION (Replacing Email) ---
-      const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
-      
-      const teamsPayload = {
-          type: "message",
-          attachments: [{
-              contentType: "application/vnd.microsoft.card.adaptive",
-              content: {
-                  type: "AdaptiveCard",
-                  $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-                  version: "1.4",
-                  body: [
-                      { type: "TextBlock", text: `✅ PM Executed: ${selectedPmAsset.name}`, weight: "Bolder", size: "Medium", color: "Good" },
-                      { 
-                        type: "TextBlock", 
-                        text: `**Protocol:** ${selectedPmTemplate.name}\n**Cycle:** ${selectedPmTemplate.interval}\n**Executed By:** ${currentUser?.name}\n**Final Status:** ${pmStatusState}\n\n**Notes:** ${pmComments || 'No additional notes provided.'}`, 
-                        wrap: true 
-                      }
-                  ]
-              }
-          }]
-      };
-
-      // Fire and forget - we don't need to await this and block the UI closing
-      fetch(TEAMS_WEBHOOK_URL, { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify(teamsPayload) 
-      }).catch(err => console.error("Teams notification failed:", err));
+      // --- REDUNDANT FRONTEND WEBHOOK STRIPPED OUT HERE ---
 
       setAssets(assets.map(a => a.id === selectedPmAsset.id ? updatedAsset : a));
       setHistory([historyPayload, ...history]);
