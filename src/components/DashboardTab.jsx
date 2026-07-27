@@ -40,43 +40,42 @@ export default function DashboardTab({
       let taskCategory = null; 
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
+      
+      // MOVED OUTSIDE: We now always calculate dates to capture the specific target template
+      const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+      const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+      
+      let lowestDays = null;
+      let targetTemplate = null; // TRACK THE EXACT TEMPLATE
+      
+      freqs.forEach(freq => {
+          const explicitLastDone = asset.pmDates?.[freq];
+          
+          if (isToday(explicitLastDone)) return;
+
+          const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
+          const daysLeft = calculateDaysRemaining(baselineDate, freq);
+          
+          if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
+              lowestDays = daysLeft;
+              targetTemplate = assetTemplates.find(t => t.interval === freq); // CAPTURE THE TEMPLATE
+          }
+      });
 
       if (isCriticalStatus) {
           taskCategory = 'Critical';
           dueMessage = "Immediate Action Required";
-      } else {
-          const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-          const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-          
-          let lowestDays = null;
-          
-          freqs.forEach(freq => {
-              const explicitLastDone = asset.pmDates?.[freq];
-              
-              // ZERO-INBOX SHIELD FIX: Only hide if the operator physically executed THIS specific PM today!
-              if (isToday(explicitLastDone)) return;
-
-              const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
-              const daysLeft = calculateDaysRemaining(baselineDate, freq);
-              
-              if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
-                  lowestDays = daysLeft;
-              }
-          });
-
-          // 3-TIER ROUTING LOGIC
-          if (lowestDays !== null) {
-              if (lowestDays < 0) {
-                  taskCategory = 'Critical';
-                  dueMessage = `Overdue by ${Math.abs(lowestDays)} days`;
-                  isCriticalStatus = true;
-              } else if (lowestDays <= 5) {
-                  taskCategory = 'Upcoming';
-                  dueMessage = `Due in ${lowestDays} days`;
-              } else if (lowestDays <= 30) {
-                  taskCategory = 'Pending';
-                  dueMessage = `Due in ${lowestDays} days`;
-              }
+      } else if (lowestDays !== null) {
+          if (lowestDays < 0) {
+              taskCategory = 'Critical';
+              dueMessage = `Overdue by ${Math.abs(lowestDays)} days`;
+              isCriticalStatus = true;
+          } else if (lowestDays <= 5) {
+              taskCategory = 'Upcoming';
+              dueMessage = `Due in ${lowestDays} days`;
+          } else if (lowestDays <= 30) {
+              taskCategory = 'Pending';
+              dueMessage = `Due in ${lowestDays} days`;
           }
       }
 
@@ -93,12 +92,12 @@ export default function DashboardTab({
           rawItem: asset,
           type: 'asset',
           isCritical: isCriticalStatus,
-          taskCategory: taskCategory
+          taskCategory: taskCategory,
+          targetTemplate: targetTemplate // PASS IT TO THE RENDERER
         };
 
         adminGlobalQueue.push(queueItem);
         
-        // Visibility fix: Make sure operators see unassigned tasks in their own department so nothing goes missing!
         const isAssignedToMe = asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
         const isUnassignedInMyDept = (!asset.operatorEmail || asset.operatorEmail === "Unassigned") && asset.department === currentUser.department;
         
@@ -135,7 +134,7 @@ export default function DashboardTab({
                 taskCategory = 'Pending';
                 dueMsg = `Due in ${daysLeft} days`;
             } else {
-                return; // Hide WOs completely if they are more than 30 days out
+                return; 
             }
         }
 
@@ -151,7 +150,8 @@ export default function DashboardTab({
           rawItem: wo,
           type: 'wo',
           isCritical: isCritical,
-          taskCategory: taskCategory
+          taskCategory: taskCategory,
+          targetTemplate: null // Work orders don't use templates
         };
 
         adminGlobalQueue.push(queueItem);
@@ -248,6 +248,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -268,7 +273,7 @@ export default function DashboardTab({
                                 🔔 Alert Manager
                               </button>
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -291,6 +296,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -311,7 +321,7 @@ export default function DashboardTab({
                                 ✉️ Notify Manager
                               </button>
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -334,6 +344,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -343,7 +358,7 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
                             {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -387,6 +402,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -406,7 +426,7 @@ export default function DashboardTab({
                                 🔔 Remind Operator
                               </button>
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -429,6 +449,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -448,7 +473,7 @@ export default function DashboardTab({
                                 ✉️ Remind Operator
                               </button>
                               {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -471,6 +496,11 @@ export default function DashboardTab({
                               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
                                 {item.displayStatus}
                               </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
                               <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">S/N: {item.serial}</span>
@@ -479,7 +509,7 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
                             {item.type === 'asset' && (
-                                <button onClick={() => openPmModal(item.rawItem)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -520,9 +550,14 @@ export default function DashboardTab({
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
                             <span className="font-bold text-gray-900 text-sm block">{task.name}</span>
-                            <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                            <span className="bg-red-100 text-red-800 border border-red-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
                               {task.displayStatus}
                             </span>
+                            {task.targetTemplate && (
+                              <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                {task.targetTemplate.interval}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
                             <span><strong>Target:</strong> {task.serial}</span>
@@ -531,7 +566,7 @@ export default function DashboardTab({
                         </div>
                         <div className="text-right ml-4">
                           <button 
-                            onClick={() => { openPmModal(task.rawItem); }}
+                            onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
                             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             Execute Critical PM
@@ -553,9 +588,14 @@ export default function DashboardTab({
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
                             <span className="font-bold text-gray-900 text-sm block">{task.name}</span>
-                            <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                            <span className="bg-yellow-100 text-yellow-800 border border-yellow-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
                               {task.displayStatus}
                             </span>
+                            {task.targetTemplate && (
+                              <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                {task.targetTemplate.interval}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
                             <span><strong>Target:</strong> {task.serial}</span>
@@ -564,7 +604,7 @@ export default function DashboardTab({
                         </div>
                         <div className="text-right ml-4">
                           <button 
-                            onClick={() => { openPmModal(task.rawItem); }}
+                            onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
                             className="bg-[#00A1E4] hover:bg-[#005596] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             Open Assignment
@@ -586,9 +626,14 @@ export default function DashboardTab({
                         <div className="flex-1">
                           <div className="flex items-center space-x-3">
                             <span className="font-bold text-gray-700 text-sm block">{task.name}</span>
-                            <span className="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">
+                            <span className="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
                               {task.displayStatus}
                             </span>
+                            {task.targetTemplate && (
+                              <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                {task.targetTemplate.interval}
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
                             <span><strong>Target:</strong> {task.serial}</span>
@@ -597,7 +642,7 @@ export default function DashboardTab({
                         </div>
                         <div className="text-right ml-4">
                           <button 
-                            onClick={() => { openPmModal(task.rawItem); }}
+                            onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
                             className="text-slate-600 hover:text-slate-900 border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                           >
                             View Details

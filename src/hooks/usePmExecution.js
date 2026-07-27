@@ -9,9 +9,9 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
   const [pmStatusState, setPmStatusState] = useState("Operational");
   const [isSubmittingPm, setIsSubmittingPm] = useState(false);
 
-  const openPmModal = (asset) => {
+  const openPmModal = (asset, templateToAutoSelect = null) => {
     setSelectedPmAsset(asset);
-    setSelectedPmTemplate("");
+    setSelectedPmTemplate(templateToAutoSelect || ""); // Auto-selects if provided, otherwise leaves blank
     setPmAnswers({});
     setPmComments("");
     setPmStatusState("Operational");
