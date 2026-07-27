@@ -18,7 +18,7 @@ export default function ApprovalsTab({
               <div className="p-6 text-center text-gray-400 text-xs font-sans">No pending registration requests. All tokens are processed.</div>
             ) : (
               pendingApprovals.map((u) => (
-                <div key={u.email} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div key={`${u.email}-pending`} className="p-4 bg-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
                     <div className="flex items-center space-x-2">
                       <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
@@ -50,7 +50,7 @@ export default function ApprovalsTab({
         <div className="p-6">
           <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
             {activeAccounts.map((u) => (
-              <div key={u.email} className="p-4 bg-white hover:bg-gray-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition">
+              <div key={`${u.email}-active`} className="p-4 bg-white hover:bg-gray-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition">
                 <div>
                   <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <h4 className="font-bold text-xs text-gray-900">{u.name}</h4>
