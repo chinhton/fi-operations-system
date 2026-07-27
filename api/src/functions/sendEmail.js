@@ -10,13 +10,16 @@ const createResponse = (status, data) => ({
 // Helper to convert Legacy HTML payloads into clean text for Teams
 const formatHtmlForTeams = (htmlStr) => {
     if (!htmlStr) return "Automated operational update.";
+    
     return htmlStr
-        .replace(/<\/td>/gi, '   ')        // Add spacing after table columns
-        .replace(/<\/tr>/gi, '\n\n')       // Add line breaks after table rows
-        .replace(/<\/p>/gi, '\n\n')        // Add line breaks after paragraphs
-        .replace(/<br\s*[\/]?>/gi, '\n')   // Convert <br> to actual line breaks
-        .replace(/<[^>]+>/g, '')           // Strip all remaining HTML tags out
-        .replace(/&nbsp;/gi, ' ')          // Clean up HTML spaces
+        .replace(/[\r\n\t]+/g, ' ')        // 1. Destroy all raw newlines/tabs from the frontend code
+        .replace(/<\/td>/gi, '   |   ')    // 2. Separate table columns with a clean pipe
+        .replace(/<\/tr>/gi, '\n\n')       // 3. Make table rows actual line breaks
+        .replace(/<\/p>/gi, '\n\n')        // 4. Make paragraphs line breaks
+        .replace(/<br\s*[\/]?>/gi, '\n')   // 5. Convert <br> to actual line breaks
+        .replace(/<[^>]+>/g, '')           // 6. Strip all remaining HTML tags out
+        .replace(/&nbsp;/gi, ' ')          // 7. Clean up HTML spaces
+        .replace(/ {2,}/g, ' ')            // 8. CRITICAL: Collapse multiple spaces into one
         .trim();
 };
 
