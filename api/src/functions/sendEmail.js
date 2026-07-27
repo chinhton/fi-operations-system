@@ -1,5 +1,4 @@
 const { app } = require('@azure/functions');
-const { EmailClient } = require('@azure/communication-email');
 
 // Standardized Response Formatter
 const createResponse = (status, data) => ({
@@ -8,17 +7,9 @@ const createResponse = (status, data) => ({
     body: JSON.stringify(data)
 });
 
-// Helper for Email Recipients
-const formatRecipients = (emailInput) => {
-    if (!emailInput) return [];
-    const emailString = String(emailInput); 
-    return emailString
-        .split(',')
-        .map(email => ({ address: email.trim() }))
-        .filter(obj => obj.address !== ""); 
-};
+const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
 
-// --- ON-DEMAND HTTP EMAIL ENDPOINT ---
+// --- ON-DEMAND TEAMS ALERT ENDPOINT (Hijacking the legacy sendEmail route) ---
 app.http('sendEmail', {
     methods: ['POST'],
     authLevel: 'anonymous',
@@ -29,41 +20,44 @@ app.http('sendEmail', {
                 return createResponse(400, { error: "Payload missing." });
             }
 
-            const { to, cc, subject, body } = requestBody;
-            const connectionString = process.env.COMMUNICATION_SERVICES_CONNECTION_STRING;
-            
-            if (!connectionString) {
-                if (context && context.warn) context.warn("Bypassed: COMMUNICATION_SERVICES_CONNECTION_STRING missing.");
-                return createResponse(200, { success: false, error: "Email bypassed: ACS Connection String missing." });
-            }
+            const { to, subject, body } = requestBody;
 
-            const client = new EmailClient(connectionString);
-            const htmlBody = body ? body.replace(/\n/g, '<br>') : "<p>Automated operational update.</p>";
-
-            const emailMessage = {
-                senderAddress: "DoNotReply@77bb0478-c5db-4ee5-8cf9-84265c1432a3.azurecomm.net",
-                content: {
-                    subject: subject || "Notification from FI Operations System",
-                    plainText: body || "Automated operational update.",
-                    html: htmlBody,
-                },
-                recipients: { to: formatRecipients(to) },
+            // Format the incoming email payload into a Teams Adaptive Card
+            const payload = {
+                type: "message",
+                attachments: [{
+                    contentType: "application/vnd.microsoft.card.adaptive",
+                    content: {
+                        type: "AdaptiveCard",
+                        $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+                        version: "1.4",
+                        body: [
+                            { type: "TextBlock", text: `📋 ${subject || "System Notification"}`, weight: "Bolder", size: "Medium", color: "Accent" },
+                            { type: "TextBlock", text: body || "Automated operational update.", wrap: true, spacing: "Medium" },
+                            { type: "FactSet", facts: [
+                                { title: "Assigned To:", value: to || "Unassigned" }
+                            ]}
+                        ]
+                    }
+                }]
             };
 
-            if (cc) emailMessage.recipients.cc = formatRecipients(cc);
+            // Dispatch to Power Automate Webhook
+            const webhookResponse = await fetch(TEAMS_WEBHOOK_URL, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            });
 
-            const poller = await client.beginSend(emailMessage);
-            const response = await poller.pollUntilDone();
-
-            if (response.status === "Succeeded") {
-                return createResponse(200, { success: true, messageId: response.id });
+            if (webhookResponse.ok) {
+                return createResponse(200, { success: true, message: "Teams alert routed successfully." });
             } else {
-                return createResponse(200, { success: false, error: "Mail server rejected delivery.", details: response.error });
+                return createResponse(500, { success: false, error: "Teams server rejected delivery." });
             }
             
         } catch (error) {
-            if (context && context.error) context.error("Email Dispatch Crash:", error);
-            return createResponse(200, { success: false, error: "Email execution bypassed/failed.", details: error.message });
+            if (context && context.error) context.error("Teams Dispatch Crash:", error);
+            return createResponse(500, { success: false, error: "Alert execution bypassed/failed.", details: error.message });
         }
     }
 });
