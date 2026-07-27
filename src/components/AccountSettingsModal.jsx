@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
 export default function AccountSettingsModal({ currentUser, isSystemAdmin, closeModal, triggerModal, setCurrentUser }) {
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [newPassword, useState] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
   // Default the form role to the user's current role
-  const [selectedRole, setSelectedRole] = useState(currentUser?.role || "Operator");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedRole, setSelectedRole] = React.useState(currentUser?.role || "Operator");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -99,6 +99,8 @@ export default function AccountSettingsModal({ currentUser, isSystemAdmin, close
                 className="w-full text-sm p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#005596] focus:border-[#005596] outline-none"
               >
                 <option value="Operator">Standard Operator</option>
+                {/* THE FIX: Added Manager Role Option */}
+                <option value="Manager">Department Manager</option>
                 <option value="Admin">System Administrator</option>
               </select>
               <p className="text-[10px] text-gray-400 mt-1">Warning: Granting Admin privileges allows global queue access.</p>
