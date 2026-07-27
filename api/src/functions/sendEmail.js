@@ -1,11 +1,24 @@
 const { app } = require('@azure/functions');
-const { sendTeamsMessage } = require('./teamsService'); // <-- Importing your central file
+const { sendTeamsMessage } = require('./teamsService'); 
 
 const createResponse = (status, data) => ({
     status: status,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
 });
+
+// Helper to convert Legacy HTML payloads into clean text for Teams
+const formatHtmlForTeams = (htmlStr) => {
+    if (!htmlStr) return "Automated operational update.";
+    return htmlStr
+        .replace(/<\/td>/gi, '   ')        // Add spacing after table columns
+        .replace(/<\/tr>/gi, '\n\n')       // Add line breaks after table rows
+        .replace(/<\/p>/gi, '\n\n')        // Add line breaks after paragraphs
+        .replace(/<br\s*[\/]?>/gi, '\n')   // Convert <br> to actual line breaks
+        .replace(/<[^>]+>/g, '')           // Strip all remaining HTML tags out
+        .replace(/&nbsp;/gi, ' ')          // Clean up HTML spaces
+        .trim();
+};
 
 app.http('sendEmail', {
     methods: ['POST'],
@@ -17,12 +30,15 @@ app.http('sendEmail', {
 
             const { to, subject, body } = requestBody;
 
-            // Use your centralized service to fire the message
+            // Clean the legacy HTML body before sending to Teams
+            const cleanBodyText = formatHtmlForTeams(body);
+
+            // Use the centralized service to fire the message
             const success = await sendTeamsMessage(
                 subject || "System Notification", 
-                body || "Automated operational update.", 
-                to,       // Passes the assigned email
-                "Good"    // Green header for new PMs
+                cleanBodyText, 
+                to,       
+                "Good"    
             );
 
             if (success) {
