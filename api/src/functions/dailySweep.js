@@ -1,29 +1,33 @@
 const { app } = require('@azure/functions');
-const { CosmosClient } = require("@azure/cosmos");
+const { CosmosClient } = require('@azure/cosmos');
 
-// We set this to run at 8:00 AM every single day.
-// The NCRONTAB format is: {second} {minute} {hour} {day} {month} {day-of-week}
-// Note: You must add an Application Setting in your Azure Portal called "WEBSITE_TIME_ZONE" 
-// and set its value to "Pacific Standard Time" for this to fire exactly at 8am PST.
-app.timer('dailyMaintenanceSweep', {
-    schedule: '0 0 15 * * *', // 15:00 UTC exactly matches 8:00 AM Pacific Time
+app.timer('dailyPmSweepTeams', {
+    schedule: '0 */2 * * * *', // 15:00 UTC = 8:00 AM Pacific Time
     handler: async (myTimer, context) => {
-        context.log('Starting automated daily PM sweep...');
-
         try {
-            // 1. Connect directly to your Cosmos DB
-            const client = new CosmosClient(process.env.COSMOS_CONNECTION_STRING);
-            const database = client.database(process.env.COSMOS_DB_NAME || "fi-oms-db");
+            const cosmosConn = process.env.CosmosDbConnectionString || process.env.COSMOS_CONNECTION_STRING;
+            if (!cosmosConn) {
+                context.log("Bypassed: Missing Cosmos DB connection string.");
+                return;
+            }
+
+            const dbClient = new CosmosClient(cosmosConn);
+            // Defaulting to OmsDatabase, adjust if your DB name is different
+            const database = dbClient.database(process.env.COSMOS_DB_NAME || "OmsDatabase");
             
-            // 2. Fetch Assets and PM Templates
+            const { resources: workOrders } = await database.container("workorders").items.query("SELECT * FROM c WHERE c.status != 'Completed'").fetchAll();
             const { resources: assets } = await database.container("Assets").items.readAll().fetchAll();
             const { resources: templates } = await database.container("PmTemplates").items.readAll().fetchAll();
 
-            const dueAssetsList = [];
-            const fiveDayWarningList = [];
-            const todayStr = new Date().toLocaleDateString('en-US');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toLocaleDateString('en-US');
 
-            // Date math logic mirrored from the frontend
+            // --- NOTIFICATION BUCKETS ---
+            const criticalList = [];
+            const dueTodayList = [];
+            const upcomingList = [];
+
             const calculateNextPmDate = (lastDateStr, freq) => {
                 if (!lastDateStr || !freq) return null;
                 const lastDate = new Date(lastDateStr);
@@ -47,55 +51,62 @@ app.timer('dailyMaintenanceSweep', {
                 return nextDate;
             };
 
-            // 3. Scan the assets to find what is due
-            assets.forEach(asset => {
-                let isDue = false;
-                let dueText = "";
-                let lowestDays = null;
-                
-                if (["Maintenance Due", "Out of Calibration", "Corrective Action", "Overdue"].includes(asset.status)) {
-                    isDue = true;
-                    dueText = "Immediate Action Required";
+            const categorizeItem = (itemName, itemId, targetDate, isCriticalStatus, assignedTo) => {
+                let diffDays;
+                if (isCriticalStatus) {
+                    diffDays = -1; // Force critical logic
                 } else {
-                    const assetTemplates = templates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-                    const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+                    targetDate.setHours(0, 0, 0, 0);
+                    diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                }
+
+                const assignee = assignedTo || 'Unassigned';
+                const itemString = `• **${itemName}** (S/N: ${itemId}) - OP: ${assignee}`;
+
+                if (diffDays < 0) {
+                    criticalList.push(`${itemString} *(Overdue by ${Math.abs(diffDays)} days)*`);
+                } else if (diffDays === 0) {
+                    dueTodayList.push(itemString);
+                } else if (diffDays === 5) {
+                    upcomingList.push(itemString);
+                }
+            };
+
+            // 1. Process Standalone Work Orders
+            for (const wo of workOrders) {
+                if (wo.dueDate) {
+                    categorizeItem(wo.title || wo.name || 'Maintenance Task', wo.id, new Date(wo.dueDate), false, wo.operatorEmail || wo.managerEmail);
+                }
+            }
+
+            // 2. Process Facility Assets
+            for (const asset of assets) {
+                const isCriticalStatus = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Overdue"].includes(asset.status);
+                const assetTemplates = templates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+                const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+
+                let nextActionDate = null;
+                freqs.forEach(freq => {
+                    const explicitLastDone = asset.pmDates?.[freq];
+                    if (explicitLastDone === todayStr) return; // Zero-Inbox shield
+
+                    const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
+                    const calculatedNextDate = calculateNextPmDate(baselineDate, freq);
                     
-                    freqs.forEach(freq => {
-                        const targetDateStr = asset.pmDates?.[freq] || asset.lastPmDate;
-                        if (targetDateStr === todayStr) return; 
-
-                        const nextDate = calculateNextPmDate(targetDateStr, freq);
-                        if (nextDate) {
-                            nextDate.setHours(0,0,0,0);
-                            const today = new Date();
-                            today.setHours(0,0,0,0);
-                            const daysLeft = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
-
-                            if (lowestDays === null || daysLeft < lowestDays) {
-                                lowestDays = daysLeft;
-                            }
-                        }
-                    });
-
-                    if (lowestDays !== null && lowestDays <= 7) {
-                        isDue = true;
-                        dueText = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : `Due in ${lowestDays} days`;
+                    if (calculatedNextDate && (nextActionDate === null || calculatedNextDate < nextActionDate)) {
+                        nextActionDate = calculatedNextDate;
                     }
-                }
+                });
 
-                if (isDue) {
-                    dueAssetsList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - ${dueText}`);
+                if (isCriticalStatus || nextActionDate !== null) {
+                    categorizeItem(asset.name, asset.serial || asset.id, nextActionDate || new Date(), isCriticalStatus, asset.operatorEmail);
                 }
+            }
 
-                if (lowestDays === 5) {
-                    fiveDayWarningList.push(`• **${asset.name}** (S/N: ${asset.serial || 'N/A'}) - Assigned to: ${asset.operatorEmail || 'Unassigned'}`);
-                }
-            });
-
-            // 4. Fire Webhooks to Teams
+            // 3. Dispatch to Teams via Webhook
             const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
 
-            const sendTeamsAlert = async (subject, bodyText) => {
+            const sendTeamsAlert = async (subject, bodyText, colorTheme) => {
                 const payload = {
                     type: "message",
                     attachments: [{
@@ -105,7 +116,7 @@ app.timer('dailyMaintenanceSweep', {
                             $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
                             version: "1.4",
                             body: [
-                                { type: "TextBlock", text: `🚨 ${subject}`, weight: "Bolder", size: "Medium", color: "Accent" },
+                                { type: "TextBlock", text: `🚨 ${subject}`, weight: "Bolder", size: "Medium", color: colorTheme },
                                 { type: "TextBlock", text: bodyText, wrap: true, spacing: "Medium" }
                             ]
                         }
@@ -114,20 +125,33 @@ app.timer('dailyMaintenanceSweep', {
                 await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             };
 
-            if (dueAssetsList.length > 0) {
-                const messageBody = `Hello Team! Below is a list of upcoming action items due within 7 days:\n\n${dueAssetsList.join('\n\n')}\n\nPlease log into the FI-Operations Management System to review and assign these tasks.`;
-                await sendTeamsAlert(`📅 Daily Maintenance Brief: ${dueAssetsList.length} Action(s) Required`, messageBody);
+            // Fire grouped alerts if buckets have data
+            if (criticalList.length > 0) {
+                await sendTeamsAlert(
+                    `CRITICAL: ${criticalList.length} Overdue Action(s)`, 
+                    `The following systems are overdue and require immediate compliance action:\n\n${criticalList.join('\n\n')}`, 
+                    "Attention" // Renders Red in Teams
+                );
+            }
+            if (dueTodayList.length > 0) {
+                await sendTeamsAlert(
+                    `DUE TODAY: ${dueTodayList.length} Action(s)`, 
+                    `The following routine maintenance actions must be completed today:\n\n${dueTodayList.join('\n\n')}`, 
+                    "Warning" // Renders Yellow/Orange in Teams
+                );
+            }
+            if (upcomingList.length > 0) {
+                await sendTeamsAlert(
+                    `UPCOMING: ${upcomingList.length} Action(s) Due in 5 Days`, 
+                    `Advanced warning for the following systems. Please ensure any required parts are ordered and external vendors are scheduled:\n\n${upcomingList.join('\n\n')}`, 
+                    "Accent" // Renders Blue in Teams
+                );
             }
 
-            if (fiveDayWarningList.length > 0) {
-                const warningBody = `⚠️ **5-DAY ADVANCED WARNING** ⚠️\n\nThe following systems have maintenance due in exactly 5 days. Please ensure any required parts are ordered and vendors are scheduled:\n\n${fiveDayWarningList.join('\n\n')}`;
-                await sendTeamsAlert(`⏳ 5-Day PM Warning: Action Approaching`, warningBody);
-            }
-
-            context.log('Daily PM sweep completed successfully.');
+            context.log("Daily PM Teams sweep completed successfully.");
 
         } catch (error) {
-            context.log.error('Failed to run daily PM sweep:', error);
+            context.log.error("Failed to run daily PM Teams sweep:", error);
         }
     }
 });
