@@ -137,6 +137,62 @@ export default function App() {
     return item.department === userDept; 
   };
 
+  const hasSwept = useRef(false);
+
+  // --- THE DAILY SWEEP ENGINE ---
+  useEffect(() => {
+    // Wait until the user is authenticated and data is fully loaded
+    if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
+
+    const runDailySweep = async () => {
+      hasSwept.current = true; // Lock the sweep so it only runs once per session
+      let sweptCount = 0;
+      const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      for (const asset of assets) {
+        // Only evaluate assets that Cosmos DB currently thinks are healthy
+        if (asset.status !== "Operational") continue;
+
+        let isOverdue = false;
+        const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+        const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+
+        freqs.forEach(freq => {
+          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+          if (targetDate && targetDate !== todayStr) {
+            const daysLeft = calculateDaysRemaining(targetDate, freq);
+            if (daysLeft !== null && daysLeft < 0) {
+              isOverdue = true;
+            }
+          }
+        });
+
+        // If the math says it's overdue, force the DB update
+        if (isOverdue) {
+          const updatedAsset = { ...asset, status: "Maintenance Due" };
+          try {
+            // This triggers the real DB update AND your Automated Tracker spy will catch it automatically!
+            await window.fetch('/api/assets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatedAsset)
+            });
+            sweptCount++;
+          } catch (err) {
+            console.error("Background sweep failed for:", asset.name);
+          }
+        }
+      }
+
+      // If we found and updated expired assets, ping Cosmos one last time to instantly sync the UI
+      if (sweptCount > 0) {
+        window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
+      }
+    };
+
+    runDailySweep();
+  }, [assets, pmTemplates, currentUser]);
+
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
@@ -145,28 +201,8 @@ export default function App() {
     return u.department === userDept; 
   });
 
-  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  
-  const visibleAssets = assets.filter(filterHierarchy).map(asset => {
-    let isOverdue = false;
-    const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-    const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-
-    freqs.forEach(freq => {
-      const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-      if (targetDate === todayStr) return; 
-      
-      const daysLeft = calculateDaysRemaining(targetDate, freq);
-      if (daysLeft !== null && daysLeft < 0) {
-        isOverdue = true;
-      }
-    });
-
-    if (isOverdue && asset.status === "Operational") {
-      return { ...asset, status: "Maintenance Due" };
-    }
-    return asset;
-  });
+  // Replaced visual hologram mapping with the standard hierarchy filter
+  const visibleAssets = assets.filter(filterHierarchy);
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
@@ -256,7 +292,6 @@ export default function App() {
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
 
-  // FIXED: Reverted to email lookup, but locked down by status to prevent duplicates
   const handleApproveUser = async (email) => {
     const targetUser = users.find(u => u.email === email && u.status !== "Active");
     if (!targetUser) return;

@@ -28,19 +28,22 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     setAuthSuccess("");
 
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/users?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error("Database fetch failed");
+      
       const users = await res.json();
       
-      const user = users.find(u => u.email.toLowerCase() === authEmail.toLowerCase() && u.password === authPassword);
+      const safeEmail = (authEmail || "").trim().toLowerCase();
+      
+      // THE FIX: Optional chaining (?.) prevents crashes if older database records are missing an email
+      const user = users.find(u => u?.email?.trim().toLowerCase() === safeEmail && u.password === authPassword);
       
       if (user) {
-        // --- STRICT STATUS CHECK ---
         if (user.status !== "Active") {
             setAuthError("Access Denied: Your account is pending administrator approval.");
             setIsSigningIn(false);
             return;
         }
-        // --------------------------------------------
 
         setCurrentUser(user);
         localStorage.setItem('fi_oms_session', JSON.stringify(user));
@@ -51,7 +54,8 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         setAuthError("Invalid credentials or account not found.");
       }
     } catch (err) {
-      setAuthError("Network error during sign in.");
+      console.error("Sign In Error:", err);
+      setAuthError("Network error during sign in. Please try again.");
     } finally {
       setIsSigningIn(false);
     }
@@ -60,13 +64,13 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
   const handleRegister = async (e) => {
     e.preventDefault();
 
+    const safeEmail = (authEmail || "").trim().toLowerCase();
+    
     // --- STRICT DOMAIN LOCK ---
-    const normalizedEmail = authEmail.toLowerCase();
-    if (!normalizedEmail.endsWith('@fcimg.com')) {
+    if (!safeEmail.endsWith('@fcimg.com')) {
       setAuthError("Access Denied: Registration is strictly restricted to @fcimg.com accounts.");
       return;
     }
-    // -----------------------------------
     
     if (!registerDepartment) {
       setAuthError("Please select a Corporate Department.");
@@ -78,25 +82,26 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
     setAuthSuccess("");
 
     try {
-      // --- THE FIX: DUPLICATE EMAIL GUARD ---
-      // Fetch the current user list to check for duplicates before proceeding
-      const checkRes = await fetch('/api/users');
+      const checkRes = await fetch('/api/users?t=' + Date.now(), { cache: 'no-store' });
+      if (!checkRes.ok) throw new Error("Database fetch failed");
+      
       const existingUsers = await checkRes.json();
       
-      const emailExists = existingUsers.some(u => u.email.toLowerCase() === normalizedEmail);
+      // THE FIX: Optional chaining (?.) to safely skip over malformed user documents in Cosmos DB
+      const emailExists = existingUsers.some(u => u?.email?.trim().toLowerCase() === safeEmail);
+      
       if (emailExists) {
           setAuthError("Registration Error: An account with this email address already exists.");
           setIsRegistering(false);
           return;
       }
-      // ---------------------------------------
 
       const newUser = {
         id: `USR-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
-        name: registerName,
-        email: authEmail,
+        name: (registerName || "").trim(),
+        email: safeEmail, 
         password: authPassword,
-        role: registerRole,
+        role: registerRole || "Operator",
         department: registerDepartment,
         status: "Pending" // Locked out by default
       };
@@ -117,7 +122,8 @@ export default function useAuth(changeTab, triggerModal, history, setHistory) {
         setAuthError("Failed to register account.");
       }
     } catch (err) {
-      setAuthError("Network error during registration.");
+      console.error("Registration Error:", err);
+      setAuthError("Network error during registration. Please try again.");
     } finally {
       setIsRegistering(false);
     }
