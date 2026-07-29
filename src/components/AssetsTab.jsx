@@ -529,20 +529,20 @@ export default function AssetsTab({
                   </select>
                 </div>
 
-                {/* --- NEW: OVERRIDE PM HISTORY SECTION --- */}
-                <div className="md:col-span-2 mt-6 p-5 bg-orange-50 border border-orange-200 rounded-lg shadow-inner">
-                  <label className="block text-xs font-black text-orange-800 uppercase tracking-wider mb-1">
-                    ⚠️ Manual PM Override (Advanced)
+                {/* --- REFRESHED: PM HISTORY & BASELINE SECTION --- */}
+                <div className="md:col-span-2 mt-4 p-5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
+                  <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-1">
+                    🗓️ Maintenance Baseline & Schedule
                   </label>
-                  <p className="text-[10px] text-orange-700 mb-4 font-bold">
-                    Force-correct executed PM dates to override the automated tracking system.
+                  <p className="text-[10px] text-slate-500 mb-4">
+                    Establish or adjust the last completed dates for specific PM cycles to anchor the automated tracker.
                   </p>
 
                   {Object.keys(newAsset.pmDates || {}).length > 0 && (
                     <div className="mb-4 space-y-2">
                       {Object.entries(newAsset.pmDates).map(([freq, date]) => (
-                        <div key={freq} className="flex items-center space-x-3 bg-white p-2.5 rounded border border-orange-200 shadow-sm">
-                          <span className="text-[11px] font-black text-[#005596] uppercase tracking-wider w-32">{freq}</span>
+                        <div key={freq} className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-start sm:space-x-4 bg-white p-2.5 rounded border border-slate-200 shadow-sm gap-y-2">
+                          <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider w-full sm:w-28 shrink-0">{freq}</span>
                           <input
                             type="date"
                             value={formatDateForInput(date)}
@@ -550,7 +550,7 @@ export default function AssetsTab({
                               const newDates = { ...(newAsset.pmDates || {}), [freq]: formatDateForSave(e.target.value) };
                               setNewAsset({ ...newAsset, pmDates: newDates });
                             }}
-                            className="text-xs border border-gray-300 rounded p-1.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                            className="w-full sm:w-auto text-xs border border-gray-300 rounded p-1.5 focus:outline-none focus:border-[#005596] focus:ring-1 focus:ring-[#005596] text-slate-700"
                           />
                           <button
                             type="button"
@@ -559,7 +559,7 @@ export default function AssetsTab({
                               delete newDates[freq];
                               setNewAsset({ ...newAsset, pmDates: newDates });
                             }}
-                            className="text-red-500 hover:text-red-700 font-bold text-[10px] uppercase tracking-wider px-2"
+                            className="text-gray-400 hover:text-red-500 font-bold text-[10px] uppercase tracking-wider px-2 transition-colors w-full sm:w-auto text-right sm:text-left"
                           >
                             Remove
                           </button>
@@ -568,11 +568,11 @@ export default function AssetsTab({
                     </div>
                   )}
 
-                  <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                  <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 pt-1">
                     <select
                       value={overrideFreq}
                       onChange={(e) => setOverrideFreq(e.target.value)}
-                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm"
+                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-[#005596] focus:ring-1 focus:ring-[#005596] shadow-sm text-slate-700 cursor-pointer"
                     >
                       <option value="">-- Select Cycle --</option>
                       {PM_CYCLE_OPTIONS.map(opt => <option key={`over-${opt}`} value={opt}>{opt}</option>)}
@@ -581,7 +581,7 @@ export default function AssetsTab({
                       type="date"
                       value={overrideDate}
                       onChange={(e) => setOverrideDate(e.target.value)}
-                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm"
+                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-[#005596] focus:ring-1 focus:ring-[#005596] shadow-sm text-slate-700"
                     />
                     <button
                       type="button"
@@ -592,9 +592,9 @@ export default function AssetsTab({
                         setOverrideFreq("");
                         setOverrideDate("");
                       }}
-                      className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
+                      className="w-full sm:w-auto bg-[#00A1E4] hover:bg-[#0081b8] text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
                     >
-                      ➕ Add Override
+                      ➕ Set Baseline
                     </button>
                   </div>
                 </div>
