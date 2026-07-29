@@ -137,83 +137,6 @@ export default function App() {
     return item.department === userDept; 
   };
 
-  const hasSwept = useRef(false);
-
-  // --- THE DAILY SWEEP ENGINE ---
-  useEffect(() => {
-    if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
-
-    const runDailySweep = async () => {
-      hasSwept.current = true; 
-      let sweptCount = 0;
-      const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-      for (const asset of assets) {
-        if (asset.status !== "Operational") continue;
-
-        let isOverdue = false;
-        const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-        const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-
-        freqs.forEach(freq => {
-          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-          if (targetDate && targetDate !== todayStr) {
-            const daysLeft = calculateDaysRemaining(targetDate, freq);
-            if (daysLeft !== null && daysLeft < 0) {
-              isOverdue = true;
-            }
-          }
-        });
-
-        if (isOverdue) {
-          const updatedAsset = { ...asset, status: "Maintenance Due" };
-          try {
-            await window.fetch('/api/assets', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedAsset)
-            });
-            sweptCount++;
-          } catch (err) {
-            console.error("Background sweep failed for:", asset.name);
-          }
-        }
-      }
-
-      if (sweptCount > 0) {
-        window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
-      }
-    };
-
-    runDailySweep();
-  }, [assets, pmTemplates, currentUser]);
-
-  const visibleWorkOrders = workOrders.filter(filterHierarchy);
-  const visibleTemplates = pmTemplates.filter(filterHierarchy);
-  
-  const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
-    return u.department === userDept; 
-  });
-
-  const visibleAssets = assets.filter(filterHierarchy);
-
-  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
-  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
-  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
-  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
-
-  const dynamicComplianceRate = visibleAssets.length > 0 
-    ? Math.round((visibleAssets.filter(a => a.status === "Operational").length / visibleAssets.length) * 100) 
-    : 100;
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
       const emailPayload = { to: toAddress || "admin@fcimg.com", subject: subjectLine, body: bodyText };
@@ -283,6 +206,119 @@ export default function App() {
     }
   };
 
+  const hasSwept = useRef(false);
+
+  // --- THE NEW DIRECT-FIRE SWEEP ENGINE ---
+  useEffect(() => {
+    if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
+
+    const runDailySweep = async () => {
+      hasSwept.current = true; 
+      let sweptCount = 0;
+      const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      for (const asset of assets) {
+        if (asset.status !== "Operational") continue;
+
+        let isOverdue = false;
+        const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+        const freqs = [...new Set(assetTemplates.map(t => t.interval))];
+
+        freqs.forEach(freq => {
+          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+          if (targetDate && targetDate !== todayStr) {
+            const daysLeft = calculateDaysRemaining(targetDate, freq);
+            if (daysLeft !== null && daysLeft < 0) {
+              isOverdue = true;
+            }
+          }
+        });
+
+        if (isOverdue) {
+          const updatedAsset = { ...asset, status: "Maintenance Due" };
+          try {
+            // Include a custom header to bypass the global interceptor completely
+            await window.fetch('/api/assets', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-background-sweep': 'true'
+              },
+              body: JSON.stringify(updatedAsset)
+            });
+            sweptCount++;
+
+            // NUCLEAR OPTION: Fire the webhook directly from here, completely bypassing the interceptor logic
+            const alertTitle = `⚠️ OVERDUE: Facility Asset`;
+            const logComment = `Automated Tracker: System background sweep flagged Facility Asset (${asset.name}) as overdue.`;
+            const alertBody = `**System Alert:** A facility asset has expired its maintenance window and requires immediate attention.\n\n**Asset:** ${asset.name}\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
+            
+            triggerTeamsAlert("admin@fcimg.com", alertTitle, alertBody);
+
+            // Generate the audit log directly with the bypass header
+            const auditLog = { 
+                id: `LOG-${Date.now().toString().slice(-4)}`, 
+                timestamp: new Date().toLocaleString(), 
+                assetId: "SYS-AUTO", 
+                assetName: "Facility Asset", 
+                templateName: `System Action - System Background`,
+                interval: "Automated", 
+                technician: currentUser.name, 
+                email: currentUser.email, 
+                status: "Completed Pass", 
+                comments: logComment 
+            };
+            window.fetch('/api/history', { 
+              method: 'POST', 
+              headers: { 
+                'Content-Type': 'application/json',
+                'x-background-sweep': 'true'
+              }, 
+              body: JSON.stringify(auditLog) 
+            });
+
+          } catch (err) {
+            console.error("Background sweep failed for:", asset.name);
+          }
+        }
+      }
+
+      // Sync the UI once all sweeps are complete
+      if (sweptCount > 0) {
+        window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
+        window.fetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
+      }
+    };
+
+    runDailySweep();
+  }, [assets, pmTemplates, currentUser]);
+
+  const visibleWorkOrders = workOrders.filter(filterHierarchy);
+  const visibleTemplates = pmTemplates.filter(filterHierarchy);
+  
+  const visibleUsers = users.filter(u => {
+    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
+    return u.department === userDept; 
+  });
+
+  const visibleAssets = assets.filter(filterHierarchy);
+
+  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
+  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
+  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
+  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
+
+  const dynamicComplianceRate = visibleAssets.length > 0 
+    ? Math.round((visibleAssets.filter(a => a.status === "Operational").length / visibleAssets.length) * 100) 
+    : 100;
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const pendingApprovals = users.filter(u => u.status !== 'Active');
   const activeAccounts = users.filter(u => u.status === 'Active');
 
@@ -332,6 +368,12 @@ export default function App() {
       const [url, config] = args;
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
+
+      // SILENT BYPASS: If the sweep engine made this fetch, skip ALL interceptor logic so it doesn't double-fire
+      const isSweep = config && config.headers && config.headers['x-background-sweep'] === 'true';
+      if (isSweep) {
+        return response;
+      }
 
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
@@ -395,34 +437,20 @@ export default function App() {
         }
 
         let actionTaken = 'Updated';
-        let isExpiring = false;
-
-        // --- NEW BULLETPROOF TRANSITION LOGIC ---
         if (config.method.toUpperCase() === 'DELETE') {
             actionTaken = 'Deleted';
         } else {
             if (actionName === "Facility Asset" && itemDetails && itemDetails.id) {
-                // Find the exact state of the asset *before* this fetch was fired
-                const oldAsset = assetsRef.current.find(a => String(a.id) === String(itemDetails.id));
-                if (oldAsset) {
-                    actionTaken = 'Updated';
-                    // Webhook ONLY triggers if it flips directly from Operational to Due
-                    if (oldAsset.status === "Operational" && itemDetails.status === "Maintenance Due") {
-                        isExpiring = true;
-                    }
-                } else {
-                    actionTaken = 'Created';
-                }
+                const isExisting = assetsRef.current.some(a => String(a.id) === String(itemDetails.id));
+                actionTaken = isExisting ? 'Updated' : 'Created';
             } else {
                 actionTaken = config.method.toUpperCase() === 'POST' ? 'Created' : 'Updated';
             }
         }
 
-        const logComment = isExpiring 
-            ? `Automated Tracker: System background sweep flagged ${actionName} (${itemName}) as overdue.`
-            : (itemName 
-                ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
-                : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`);
+        const logComment = itemName 
+            ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
+            : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
 
         const auditLog = { 
             id: `LOG-${Date.now().toString().slice(-4)}`, 
@@ -442,19 +470,14 @@ export default function App() {
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
         const shouldAlertSOP = actionName === "Established SOP";
-        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted" || isExpiring);
+        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted");
 
         if (shouldAlertSOP || shouldAlertAsset) {
-             let alertTitle = `${actionName} ${actionTaken}`;
-             let alertBody = `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
-             
-             // Custom styling just for the expiration event
-             if (isExpiring) {
-                 alertTitle = `⚠️ OVERDUE: ${actionName}`;
-                 alertBody = `**System Alert:** A facility asset has expired its maintenance window and requires immediate attention.\n\n**Asset:** ${itemName}\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
-             }
-
-             triggerTeamsAlert("admin@fcimg.com", alertTitle, alertBody);
+             triggerTeamsAlert(
+                 "admin@fcimg.com",
+                 `${actionName} ${actionTaken}`,
+                 `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
+             );
         } else if (actionName === "User Directory") {
              triggerTeamsAlert(
                  "admin@fcimg.com",
