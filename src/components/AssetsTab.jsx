@@ -26,6 +26,23 @@ const getCategoryIcon = (category) => {
   return '🗄️'; 
 };
 
+// --- Helper Functions to translate string dates back and forth for HTML5 Date Inputs ---
+const formatDateForInput = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const formatDateForSave = (dateStr) => {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split('-');
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 export default function AssetsTab({
   assets = [], users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
@@ -48,6 +65,10 @@ export default function AssetsTab({
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   
+  // Override States
+  const [overrideFreq, setOverrideFreq] = useState("");
+  const [overrideDate, setOverrideDate] = useState("");
+
   const [groupBy, setGroupBy] = useState(() => {
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
   });
@@ -103,14 +124,18 @@ export default function AssetsTab({
 
   const openRegisterForNew = () => {
     const defaultDept = isDepartmentRestricted ? userDept : "";
-    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: defaultDept, operatorEmail: "" });
+    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: defaultDept, operatorEmail: "", pmDates: {} });
     setIsAddingNewCategory(false);
+    setOverrideFreq("");
+    setOverrideDate("");
     setIsRegisterModalOpen(true);
   };
 
   const openRegisterForEdit = (asset) => {
     setNewAsset(asset);
     setIsAddingNewCategory(false);
+    setOverrideFreq("");
+    setOverrideDate("");
     setIsRegisterModalOpen(true);
   };
 
@@ -138,15 +163,12 @@ export default function AssetsTab({
     setShowTemplateModal(true);
   };
 
-  // --- NEW: Intelligent SOP Editor Routing ---
   const handleQuickEditTemplate = (asset, specificFreq = null) => {
     let templateToEdit = null;
     
     if (specificFreq) {
-       // Precision target: Pulls the exact frequency SOP if clicked via the pencil icon
        templateToEdit = (pmTemplates || []).find(t => (t.targetCategory === "Global" || t.targetCategory === asset.category) && t.interval === specificFreq);
     } else {
-       // Broad target: Grabs the primary category template if clicking the main action row button
        const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === asset.category);
        templateToEdit = assetTemplates.length > 0 ? assetTemplates[0] : (pmTemplates || []).find(t => t.targetCategory === "Global");
     }
@@ -322,7 +344,6 @@ export default function AssetsTab({
                                     <div className="flex justify-between items-center mb-0.5 group">
                                       <div className="flex items-center space-x-1.5">
                                         <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                        {/* PRECISION EDITING: Shows a tiny edit icon next to the frequency on hover */}
                                         <button 
                                           onClick={() => handleQuickEditTemplate(asset, freq)}
                                           className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-indigo-600 transition-all"
@@ -356,7 +377,6 @@ export default function AssetsTab({
                           
                           <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
                           
-                          {/* GLOBAL EDIT BUTTON: Appears in action row if SOPs exist */}
                           {assetTemplates.length > 0 && (
                             <button onClick={() => handleQuickEditTemplate(asset)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition">Edit SOP</button>
                           )}
@@ -508,7 +528,79 @@ export default function AssetsTab({
                     ))}
                   </select>
                 </div>
+
+                {/* --- NEW: OVERRIDE PM HISTORY SECTION --- */}
+                <div className="md:col-span-2 mt-6 p-5 bg-orange-50 border border-orange-200 rounded-lg shadow-inner">
+                  <label className="block text-xs font-black text-orange-800 uppercase tracking-wider mb-1">
+                    ⚠️ Manual PM Override (Advanced)
+                  </label>
+                  <p className="text-[10px] text-orange-700 mb-4 font-bold">
+                    Force-correct executed PM dates to override the automated tracking system.
+                  </p>
+
+                  {Object.keys(newAsset.pmDates || {}).length > 0 && (
+                    <div className="mb-4 space-y-2">
+                      {Object.entries(newAsset.pmDates).map(([freq, date]) => (
+                        <div key={freq} className="flex items-center space-x-3 bg-white p-2.5 rounded border border-orange-200 shadow-sm">
+                          <span className="text-[11px] font-black text-[#005596] uppercase tracking-wider w-32">{freq}</span>
+                          <input
+                            type="date"
+                            value={formatDateForInput(date)}
+                            onChange={(e) => {
+                              const newDates = { ...(newAsset.pmDates || {}), [freq]: formatDateForSave(e.target.value) };
+                              setNewAsset({ ...newAsset, pmDates: newDates });
+                            }}
+                            className="text-xs border border-gray-300 rounded p-1.5 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newDates = { ...newAsset.pmDates };
+                              delete newDates[freq];
+                              setNewAsset({ ...newAsset, pmDates: newDates });
+                            }}
+                            className="text-red-500 hover:text-red-700 font-bold text-[10px] uppercase tracking-wider px-2"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                    <select
+                      value={overrideFreq}
+                      onChange={(e) => setOverrideFreq(e.target.value)}
+                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm"
+                    >
+                      <option value="">-- Select Cycle --</option>
+                      {PM_CYCLE_OPTIONS.map(opt => <option key={`over-${opt}`} value={opt}>{opt}</option>)}
+                    </select>
+                    <input
+                      type="date"
+                      value={overrideDate}
+                      onChange={(e) => setOverrideDate(e.target.value)}
+                      className="w-full sm:w-auto text-xs border border-gray-300 rounded p-2 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!overrideFreq || !overrideDate) return;
+                        const newDates = { ...(newAsset.pmDates || {}), [overrideFreq]: formatDateForSave(overrideDate) };
+                        setNewAsset({ ...newAsset, pmDates: newDates });
+                        setOverrideFreq("");
+                        setOverrideDate("");
+                      }}
+                      className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
+                    >
+                      ➕ Add Override
+                    </button>
+                  </div>
+                </div>
+                {/* -------------------------------------- */}
               </div>
+              
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
