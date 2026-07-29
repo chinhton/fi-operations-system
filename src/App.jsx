@@ -141,16 +141,14 @@ export default function App() {
 
   // --- THE DAILY SWEEP ENGINE ---
   useEffect(() => {
-    // Wait until the user is authenticated and data is fully loaded
     if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
 
     const runDailySweep = async () => {
-      hasSwept.current = true; // Lock the sweep so it only runs once per session
+      hasSwept.current = true; 
       let sweptCount = 0;
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       for (const asset of assets) {
-        // Only evaluate assets that Cosmos DB currently thinks are healthy
         if (asset.status !== "Operational") continue;
 
         let isOverdue = false;
@@ -167,11 +165,9 @@ export default function App() {
           }
         });
 
-        // If the math says it's overdue, force the DB update
         if (isOverdue) {
           const updatedAsset = { ...asset, status: "Maintenance Due" };
           try {
-            // This triggers the real DB update AND your Automated Tracker spy will catch it automatically!
             await window.fetch('/api/assets', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -184,7 +180,6 @@ export default function App() {
         }
       }
 
-      // If we found and updated expired assets, ping Cosmos one last time to instantly sync the UI
       if (sweptCount > 0) {
         window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
       }
@@ -201,7 +196,6 @@ export default function App() {
     return u.department === userDept; 
   });
 
-  // Replaced visual hologram mapping with the standard hierarchy filter
   const visibleAssets = assets.filter(filterHierarchy);
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
@@ -401,20 +395,34 @@ export default function App() {
         }
 
         let actionTaken = 'Updated';
+        let isExpiring = false;
+
+        // --- NEW BULLETPROOF TRANSITION LOGIC ---
         if (config.method.toUpperCase() === 'DELETE') {
             actionTaken = 'Deleted';
         } else {
             if (actionName === "Facility Asset" && itemDetails && itemDetails.id) {
-                const isExisting = assetsRef.current.some(a => String(a.id) === String(itemDetails.id));
-                actionTaken = isExisting ? 'Updated' : 'Created';
+                // Find the exact state of the asset *before* this fetch was fired
+                const oldAsset = assetsRef.current.find(a => String(a.id) === String(itemDetails.id));
+                if (oldAsset) {
+                    actionTaken = 'Updated';
+                    // Webhook ONLY triggers if it flips directly from Operational to Due
+                    if (oldAsset.status === "Operational" && itemDetails.status === "Maintenance Due") {
+                        isExpiring = true;
+                    }
+                } else {
+                    actionTaken = 'Created';
+                }
             } else {
                 actionTaken = config.method.toUpperCase() === 'POST' ? 'Created' : 'Updated';
             }
         }
 
-        const logComment = itemName 
-            ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
-            : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`;
+        const logComment = isExpiring 
+            ? `Automated Tracker: System background sweep flagged ${actionName} (${itemName}) as overdue.`
+            : (itemName 
+                ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
+                : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`);
 
         const auditLog = { 
             id: `LOG-${Date.now().toString().slice(-4)}`, 
@@ -434,17 +442,19 @@ export default function App() {
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
         const shouldAlertSOP = actionName === "Established SOP";
-
-        // THE FIX: The webhook will now fire for Creations, Deletions, OR if an Update specifically marks the asset as Overdue.
-        const isExpiring = actionTaken === "Updated" && itemDetails?.status === "Maintenance Due";
         const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted" || isExpiring);
 
         if (shouldAlertSOP || shouldAlertAsset) {
-             triggerTeamsAlert(
-                 "admin@fcimg.com",
-                 `${actionName} ${actionTaken}`,
-                 `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
-             );
+             let alertTitle = `${actionName} ${actionTaken}`;
+             let alertBody = `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
+             
+             // Custom styling just for the expiration event
+             if (isExpiring) {
+                 alertTitle = `⚠️ OVERDUE: ${actionName}`;
+                 alertBody = `**System Alert:** A facility asset has expired its maintenance window and requires immediate attention.\n\n**Asset:** ${itemName}\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
+             }
+
+             triggerTeamsAlert("admin@fcimg.com", alertTitle, alertBody);
         } else if (actionName === "User Directory") {
              triggerTeamsAlert(
                  "admin@fcimg.com",
