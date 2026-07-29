@@ -434,7 +434,10 @@ export default function App() {
         .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
 
         const shouldAlertSOP = actionName === "Established SOP";
-        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted");
+
+        // THE FIX: The webhook will now fire for Creations, Deletions, OR if an Update specifically marks the asset as Overdue.
+        const isExpiring = actionTaken === "Updated" && itemDetails?.status === "Maintenance Due";
+        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted" || isExpiring);
 
         if (shouldAlertSOP || shouldAlertAsset) {
              triggerTeamsAlert(
