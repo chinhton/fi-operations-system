@@ -9,6 +9,46 @@ const CORPORATE_DEPARTMENTS = [
   "Production: Engineering"
 ];
 
+// --- NATIVE CSV PARSER ---
+const parseCSV = (str) => {
+  const arr = [];
+  let quote = false;
+  let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+      let cc = str[c], nc = str[c+1];
+      arr[row] = arr[row] || [];
+      arr[row][col] = arr[row][col] || '';
+      if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
+      if (cc === '"') { quote = !quote; continue; }
+      if (cc === ',' && !quote) { ++col; continue; }
+      if (cc === '\n' && !quote) { ++row; col = 0; continue; }
+      if (cc !== '\r') arr[row][col] += cc;
+  }
+  return arr;
+};
+
+// --- CHECKLIST TRANSLATORS FOR EXCEL ---
+const encodeSteps = (steps) => {
+  if (!steps || !Array.isArray(steps)) return "";
+  return steps.map(s => `[${s.type}] ${s.label}`).join(' | ');
+};
+
+const decodeSteps = (stepString) => {
+  if (!stepString) return [];
+  // Split by the pipe character, allowing for spaces around it
+  return stepString.split(/\s*\|\s*/).filter(Boolean).map(s => {
+    // Looks for "[type] The action description"
+    const match = s.match(/^\[(.*?)\]\s*(.*)$/);
+    if (match) {
+      let t = match[1].toLowerCase().trim();
+      if (!['checkbox', 'text', 'number', 'passfail'].includes(t)) t = 'checkbox';
+      return { type: t, label: match[2].trim() };
+    }
+    // Fallback if they forgot the brackets
+    return { type: 'checkbox', label: s.trim() }; 
+  });
+};
+
 export default function TemplatesTab({
   pmTemplates = [], manuals = [],
   newTemplate, setNewTemplate, handleAddTemplateSubmit,
@@ -21,7 +61,7 @@ export default function TemplatesTab({
   const fileInputRef = useRef(null);
 
   const userDept = currentUser?.department || "";
-  const isDepartmentRestricted = !isSystemAdmin && userDept !== "Facilities" && userDept !== "Production: Engineering";
+  const isDepartmentRestricted = !isSystemAdmin;
 
   const filteredTemplates = pmTemplates.filter(t => 
     t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -29,38 +69,89 @@ export default function TemplatesTab({
     t.department?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // --- JSON EXPORT / IMPORT ENGINE FOR SOPs ---
-  const handleExportJSON = () => {
-    const dataStr = JSON.stringify(pmTemplates, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
+  // --- CSV EXPORT / IMPORT ENGINE FOR SOPs ---
+  const handleExportCSV = () => {
+    const headers = ["id", "name", "interval", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
+    const csvRows = [headers.join(",")];
+
+    pmTemplates.forEach(template => {
+      const row = headers.map(header => {
+        let val = "";
+        if (header === "checklistSteps") {
+          val = encodeSteps(template[header]);
+        } else {
+          val = template[header] || "";
+        }
+        
+        val = val.toString().replace(/"/g, '""'); // Escape double quotes
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; // Wrap in quotes if it contains comma
+        return val;
+      });
+      csvRows.push(row.join(","));
+    });
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `FI-OMS_SOP_Protocols_Export_${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `FI-OMS_SOP_Protocols_Export_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const handleImportJSON = async (e) => {
+  const handleImportCSV = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const importedData = JSON.parse(event.target.result);
-        if (!Array.isArray(importedData)) {
-          alert("Invalid format: The JSON file must contain an array of SOPs.");
+        const textData = event.target.result;
+        const parsedData = parseCSV(textData);
+        
+        if (parsedData.length < 2) {
+          alert("Invalid CSV format or file is empty.");
           return;
         }
 
-        if (!window.confirm(`Are you sure you want to import ${importedData.length} SOP Protocols?`)) {
+        const headers = parsedData[0].map(h => h.trim());
+        const importedTemplates = [];
+
+        for (let i = 1; i < parsedData.length; i++) {
+          const rowData = parsedData[i];
+          if (!rowData || rowData.length === 0 || !rowData[0]) continue;
+
+          const rowObj = {};
+          headers.forEach((h, idx) => {
+             rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
+          });
+
+          const name = rowObj['name'] || rowObj['Title'] || rowObj['SOP Name'] || '';
+          if (!name) continue; 
+
+          const finalTemplate = {
+            id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
+            name: name,
+            interval: rowObj['interval'] || "Monthly",
+            department: rowObj['department'] || "Facilities",
+            targetCategory: rowObj['targetCategory'] || "Global",
+            managerEmail: rowObj['managerEmail'] || "",
+            operatorEmail: rowObj['operatorEmail'] || "",
+            attachedManualName: rowObj['attachedManualName'] || "",
+            checklistSteps: decodeSteps(rowObj['checklistSteps'] || "")
+          };
+
+          importedTemplates.push(finalTemplate);
+        }
+
+        if (!window.confirm(`Found ${importedTemplates.length} SOP Protocols in CSV. Import them now?`)) {
           e.target.value = null; 
           return;
         }
 
-        for (const template of importedData) {
+        for (const template of importedTemplates) {
           await window.fetch('/api/pmTemplates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -73,11 +164,39 @@ export default function TemplatesTab({
         
       } catch (err) {
         console.error("Import error:", err);
-        alert("Failed to parse JSON file. Ensure it is a valid FI-OMS export.");
+        alert("Failed to parse CSV file. Ensure it is formatted correctly.");
       }
       e.target.value = null; 
     };
     reader.readAsText(file);
+  };
+
+  const handleMassDeleteSOPs = async () => {
+    if (filteredTemplates.length === 0) {
+      alert("No SOPs found to delete.");
+      return;
+    }
+
+    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${filteredTemplates.length} SOPs.\n\nThis action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(`To confirm mass deletion of ${filteredTemplates.length} SOPs, please type DELETE in all caps:`);
+    if (confirm2 !== "DELETE") {
+      alert("Mass deletion cancelled.");
+      return;
+    }
+
+    try {
+      for (const t of filteredTemplates) {
+        await window.fetch(`/api/pmTemplates?id=${t.id}`, { method: 'DELETE' });
+      }
+      alert("Mass deletion complete! Refreshing database.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Mass delete error:", err);
+      alert("An error occurred during mass deletion.");
+      window.location.reload();
+    }
   };
 
   // --- MODAL CONTROLS ---
@@ -135,24 +254,31 @@ export default function TemplatesTab({
           {isSystemAdmin && (
             <div className="flex items-center space-x-2 w-full sm:w-auto">
               <button 
-                onClick={handleExportJSON}
+                onClick={handleExportCSV}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Export SOPs to JSON"
+                title="Export SOPs to CSV"
               >
-                📤 Export JSON
+                📤 Export CSV
               </button>
               <button 
                 onClick={() => fileInputRef.current.click()}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Import SOPs from JSON"
+                title="Import SOPs from CSV"
               >
-                📥 Import JSON
+                📥 Import CSV
+              </button>
+              <button 
+                onClick={handleMassDeleteSOPs}
+                className="flex-1 sm:flex-none px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 transition-colors"
+                title="Wipe Current SOP List"
+              >
+                🧨 Wipe List
               </button>
               <input 
                 type="file" 
-                accept=".json" 
+                accept=".csv" 
                 ref={fileInputRef} 
-                onChange={handleImportJSON} 
+                onChange={handleImportCSV} 
                 className="hidden" 
               />
             </div>
