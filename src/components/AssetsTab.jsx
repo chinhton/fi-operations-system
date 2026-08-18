@@ -18,10 +18,10 @@ const getCategoryIcon = (category) => {
   if (cat.includes('chiller') || cat.includes('hvac') || cat.includes('cooling') || cat.includes('ac ')) return '❄️';
   if (cat.includes('chamber') || cat.includes('oven') || cat.includes('furnace')) return '🌡️';
   if (cat.includes('compressor') || cat.includes('air')) return '🗜️';
-  if (cat.includes('radiation') || cat.includes('x-ray') || cat.includes('xrp') || cat.includes('laser')) return '☢️';
+  if (cat.includes('radiation') || cat.includes('x-ray') || cat.includes('xrp') || cat.includes('laser') || cat.includes('sirona')) return '☢️';
   if (cat.includes('cleanroom') || cat.includes('lab') || cat.includes('scmos')) return '🔬';
   if (cat.includes('safety') || cat.includes('iipp') || cat.includes('hazard')) return '🦺';
-  if (cat.includes('facilities') || cat.includes('production') || cat.includes('engineering')) return '🏢'; 
+  if (cat.includes('facilities') || cat.includes('production') || cat.includes('engineering') || cat.includes('assembly')) return '🏢'; 
   
   return '🗄️'; 
 };
@@ -59,6 +59,12 @@ const parseCSV = (str) => {
       if (cc !== '\r') arr[row][col] += cc;
   }
   return arr;
+};
+
+// --- TEXT FORMATTER FOR CSV IMPORTS (Fixes ALL CAPS) ---
+const toTitleCase = (str) => {
+  if (!str) return '';
+  return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 };
 
 export default function AssetsTab({
@@ -144,7 +150,8 @@ export default function AssetsTab({
 
   // --- CSV EXPORT / IMPORT / DELETE ENGINE ---
   const handleExportCSV = () => {
-    const headers = ["id", "name", "model", "serial", "category", "location", "department", "operatorEmail", "status", "parentId"];
+    // Adjusted headers to perfectly match the UI modal structure
+    const headers = ["id", "name", "manufacturer", "model", "serial", "category", "location", "glAccount", "department", "operatorEmail", "status", "parentId"];
     const csvRows = [headers.join(",")];
 
     assets.forEach(asset => {
@@ -196,34 +203,54 @@ export default function AssetsTab({
              rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
           });
 
-          // Intelligent Translation: Try to find Maximo headers, fallback to FI-OMS native headers
-          const name = rowObj['DESCRIPTION'] || rowObj['name'] || '';
+          // Intelligent Translation: Try to find new Custom headers, fallback to old or standard ones.
+          // ALL CAPS fields are processed with toTitleCase() to clean up the UI
+          const rawName = rowObj['Description'] || rowObj['DESCRIPTION'] || rowObj['name'] || '';
+          const name = toTitleCase(rawName);
           if (!name) continue; // Safety check
+
+          // Clean up category, manufacturer, and location
+          const rawCategory = rowObj['Category Type'] || rowObj['category'] || "General Equipment";
+          const category = toTitleCase(rawCategory);
+
+          const rawManufacturer = rowObj['Manufacturer'] || rowObj['MANUFACTURER'] || rowObj['manufacturer'] || '';
+          const manufacturer = toTitleCase(rawManufacturer);
+
+          const rawLocation = rowObj['Location'] || rowObj['LOCATION'] || rowObj['location'] || '';
+          const location = toTitleCase(rawLocation);
+
+          // We do NOT TitleCase these fields as they rely on specific alphanumeric capitalization
+          const model = rowObj['Model Number'] || rowObj['model'] || '';
+          const serial = rowObj['Serial Number'] || rowObj['SERIALNUM'] || rowObj['serial'] || 'N/A';
+          const glAccount = rowObj['GL Account'] || rowObj['GLACCOUNT'] || rowObj['glAccount'] || '';
+          const department = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
+          
+          let operatorEmail = rowObj['Asset Owner'] || rowObj['operatorEmail'] || "";
+          if (operatorEmail && !operatorEmail.includes('@')) {
+             operatorEmail = `${operatorEmail} (Legacy List)`; // Flag names without emails
+          }
 
           // Status Translator
           let status = "Operational";
-          const rawStatus = (rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
-          if (rawStatus.includes('INACTIVE') || rawStatus.includes('NOT WORKING')) {
+          const rawStatus = (rowObj['Status'] || rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
+          if (rawStatus.includes('INACTIVE') || rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
               status = "Maintenance Due";
           } else if (rawStatus && !rawStatus.includes('ACTIVE') && !rawStatus.includes('OPERATING')) {
-              status = rowObj['status'] || "Operational";
+              status = rowObj['Status'] || "Operational";
           }
-
-          // Model & Manufacturer compiler
-          const brand = rowObj['MANUFACTURER'] || rowObj['MANUFACTURE'] || '';
-          const mod = rowObj['Model Number'] || '';
-          const finalModel = rowObj['model'] || `${brand} ${mod}`.trim() || 'Unknown Model';
 
           // Build the final uniform object
           const finalAsset = {
             id: rowObj['id'] || `ast-import-${Date.now()}-${i}`,
             name: name,
-            model: finalModel,
-            serial: rowObj['serial'] || rowObj['SERIALNUM'] || 'N/A',
-            category: rowObj['category'] || "Legacy Maximo",
-            location: rowObj['location'] || rowObj['LOCATION'] || '',
-            department: rowObj['department'] || "Facilities",
-            operatorEmail: rowObj['operatorEmail'] || (rowObj['Named Owner'] ? `${rowObj['Named Owner']} (Legacy)` : "Unassigned"),
+            manufacturer: manufacturer,
+            model: model,
+            serial: serial,
+            category: category,
+            location: location,
+            glAccount: glAccount,
+            department: department,
+            operatorEmail: operatorEmail,
             status: status,
             pmDates: {}, 
             parentId: rowObj['parentId'] || ""
@@ -232,7 +259,7 @@ export default function AssetsTab({
           importedAssets.push(finalAsset);
         }
 
-        if (!window.confirm(`Found ${importedAssets.length} assets in CSV. Import them now?`)) {
+        if (!window.confirm(`Found ${importedAssets.length} assets in CSV.\n\nFormatting: Applied Title Case to Names, Categories, and Locations to fix capitalization issues.\n\nImport them now?`)) {
           e.target.value = null; 
           return;
         }
@@ -291,7 +318,7 @@ export default function AssetsTab({
 
   const openRegisterForNew = () => {
     const defaultDept = isDepartmentRestricted ? userDept : "";
-    setNewAsset({ name: "", model: "", serial: "", category: "", location: "", parentId: "", department: defaultDept, operatorEmail: "", pmDates: {} });
+    setNewAsset({ name: "", manufacturer: "", model: "", serial: "", category: "", location: "", glAccount: "", parentId: "", department: defaultDept, operatorEmail: "", pmDates: {} });
     setIsAddingNewCategory(false);
     setOverrideFreq("");
     setOverrideDate("");
@@ -511,6 +538,7 @@ export default function AssetsTab({
                           </div>
                         </td>
                         <td className="px-6 py-4 font-mono">
+                          <span className="block text-gray-700">Mfr: {asset.manufacturer || 'N/A'}</span>
                           <span className="block text-gray-700">Mod: {asset.model}</span>
                           <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
                         </td>
@@ -623,19 +651,12 @@ export default function AssetsTab({
             
             <form onSubmit={handleLocalAssetSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* ROW 1: Name and Category */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
                   <input type="text" value={newAsset.name || ""} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
-                  <input type="text" value={newAsset.model || ""} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
-                  <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
-                </div>
-                
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
                   {isAddingNewCategory ? (
@@ -679,6 +700,27 @@ export default function AssetsTab({
                   )}
                 </div>
 
+                {/* ROW 2: Manufacturer and Model */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manufacturer</label>
+                  <input type="text" value={newAsset.manufacturer || ""} onChange={(e) => setNewAsset({...newAsset, manufacturer: e.target.value})} placeholder="e.g. NORDSON" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
+                  <input type="text" value={newAsset.model || ""} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+
+                {/* ROW 3: Serial Number and GL Account */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
+                  <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">GL Account (Maximo)</label>
+                  <input type="text" value={newAsset.glAccount || ""} onChange={(e) => setNewAsset({...newAsset, glAccount: e.target.value})} placeholder="e.g. DD-23000-2030" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+
+                {/* ROW 4: Location and Link */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
                   <input type="text" value={newAsset.location || ""} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
@@ -696,6 +738,8 @@ export default function AssetsTab({
                     ))}
                   </select>
                 </div>
+
+                {/* ROW 5: Dept and Operator */}
                 <div>
                   <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-2">Assign Department</label>
                   <select 
