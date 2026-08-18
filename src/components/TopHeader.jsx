@@ -21,7 +21,7 @@ export default function TopHeader({
               <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto max-w-[280px] object-contain" />
             </div>
             <span className="h-10 w-px bg-gray-200"></span>
-            <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Operation Management System</h1></div>
+            <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Maintenance Management System</h1></div>
           </div>
 
           <div className="flex items-center space-x-6">

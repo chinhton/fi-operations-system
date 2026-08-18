@@ -16,7 +16,7 @@ export default function AuthScreen({
           <div className="mb-4 flex justify-center relative z-10">
             <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-24 w-auto max-w-[350px] object-contain rounded-xl bg-white p-3 shadow-md transform hover:scale-105 transition-transform duration-300" />
           </div>
-          <h2 className="text-xl font-bold tracking-tight font-sans relative z-10 drop-shadow-sm">FI-Operations Management System</h2>
+          <h2 className="text-xl font-bold tracking-tight font-sans relative z-10 drop-shadow-sm">FI-Maintenance Management System</h2>
         </div>
 
         <div className="p-8">
