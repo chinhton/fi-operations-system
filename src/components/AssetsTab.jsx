@@ -8,7 +8,6 @@ const CORPORATE_DEPARTMENTS = [
   "Production: Engineering"
 ];
 
-// --- Dynamic Icon Mapper based on Category Name ---
 const getCategoryIcon = (category) => {
   const cat = (category || "").toLowerCase();
   if (cat.includes('vacuum') || cat.includes('pump')) return '🌪️';
@@ -22,11 +21,9 @@ const getCategoryIcon = (category) => {
   if (cat.includes('cleanroom') || cat.includes('lab') || cat.includes('scmos')) return '🔬';
   if (cat.includes('safety') || cat.includes('iipp') || cat.includes('hazard')) return '🦺';
   if (cat.includes('facilities') || cat.includes('production') || cat.includes('engineering') || cat.includes('assembly')) return '🏢'; 
-  
   return '🗄️'; 
 };
 
-// --- Helper Functions to translate string dates back and forth for HTML5 Date Inputs ---
 const formatDateForInput = (dateStr) => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -43,7 +40,6 @@ const formatDateForSave = (dateStr) => {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// --- NATIVE CSV PARSER ---
 const parseCSV = (str) => {
   const arr = [];
   let quote = false;
@@ -61,7 +57,6 @@ const parseCSV = (str) => {
   return arr;
 };
 
-// --- TEXT FORMATTER FOR CSV IMPORTS ---
 const toTitleCase = (str) => {
   if (!str) return '';
   return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
@@ -72,7 +67,6 @@ export default function AssetsTab({
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
   calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, openPmModal, deleteAsset,
-  
   newTemplate, setNewTemplate, handleAddTemplateSubmit, uniqueCategories, 
   activeAccounts, isAddingTemplate, currentUser, setCurrentUser
 }) {
@@ -118,9 +112,7 @@ export default function AssetsTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedUser)
         });
-      } catch (err) {
-        console.error("Failed to sync layout preference to cloud:", err);
-      }
+      } catch (err) {}
     }
   };
 
@@ -143,7 +135,6 @@ export default function AssetsTab({
     return acc;
   }, {});
 
-  // --- BULK RENAME & MERGE ENGINE ---
   const handleBulkMoveGroup = async (oldGroupName) => {
     const isCat = groupBy === 'category';
     const groupTypeStr = isCat ? 'Category' : 'Department';
@@ -160,7 +151,6 @@ export default function AssetsTab({
 
     if (!window.confirm(`You are about to permanently move ${assetsInGroup.length} systems from "${oldGroupName}" into "${trimmedNewName}".\n\nContinue?`)) return;
 
-    // Optimistic Update to make the UI instantly reflect the change
     if (setAssets) {
         const updatedAssetsList = assets.map(a => {
           const match = isCat ? (a.category || "Uncategorized") === oldGroupName : (a.department || "Unassigned") === oldGroupName;
@@ -171,9 +161,8 @@ export default function AssetsTab({
         });
         setAssets(updatedAssetsList);
     }
-    setActiveCategoryModal(trimmedNewName); // Keep the folder open under its new name
+    setActiveCategoryModal(trimmedNewName);
 
-    // Background Database Updates
     try {
       await Promise.all(assetsInGroup.map(asset => {
         const updatedAsset = isCat ? { ...asset, category: trimmedNewName } : { ...asset, department: trimmedNewName };
@@ -183,11 +172,8 @@ export default function AssetsTab({
           body: JSON.stringify(updatedAsset)
         });
       }));
-    } catch (err) {
-      console.error(`Failed to bulk update ${groupTypeStr}`, err);
-    }
+    } catch (err) {}
   };
-  // ---------------------------------
 
   const handleExportCSV = () => {
     const headers = ["id", "name", "manufacturer", "model", "serial", "category", "location", "glAccount", "department", "operatorEmail", "status", "parentId"];
@@ -277,16 +263,16 @@ export default function AssetsTab({
              }
           }
 
-          let status = "Operational";
+          let status = "Active"; // Default to Active instead of Operational
           const rawStatus = (rowObj['Status'] || rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
           if (rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
               status = "Maintenance Due";
           } else if (rawStatus.includes('INACTIVE')) {
               status = "Inactive";
-          } else if (rawStatus.includes('ACTIVE')) {
-              status = "Active";
-          } else if (rawStatus && !rawStatus.includes('OPERATING')) {
-              status = rowObj['Status'] || "Operational";
+          } else if (rawStatus.includes('CORRECTIVE')) {
+              status = "Corrective Maintenance";
+          } else if (rawStatus && !rawStatus.includes('ACTIVE')) {
+              status = rowObj['Status'] || "Active";
           }
 
           const finalAsset = {
@@ -325,7 +311,6 @@ export default function AssetsTab({
         window.location.reload(); 
         
       } catch (err) {
-        console.error("Import error:", err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
       }
       e.target.value = null; 
@@ -350,7 +335,6 @@ export default function AssetsTab({
       alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
     } catch (err) {
-      console.error("Mass delete error:", err);
       alert("An error occurred during mass deletion. Partial delete may have occurred.");
       window.location.reload();
     }
@@ -598,20 +582,19 @@ export default function AssetsTab({
                             value={asset.status}
                             onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
                             className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                              asset.status === "Operational" ? "bg-green-100 text-green-800" :
                               asset.status === "Active" ? "bg-emerald-100 text-emerald-800" :
                               asset.status === "Inactive" ? "bg-gray-200 text-gray-600" :
                               asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
                               asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                              "bg-orange-100 text-orange-800"
+                              asset.status === "Corrective Maintenance" ? "bg-orange-100 text-orange-800" :
+                              "bg-gray-100 text-gray-800"
                             }`}
                           >
-                            <option value="Operational">Operational</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Maintenance Due">Maintenance Due</option>
                             <option value="Out of Calibration">Out of Calibration</option>
-                            <option value="Corrective Maintenance">Corrective Action</option>
+                            <option value="Corrective Maintenance">Corrective Maintenance</option>
                           </select>
                           
                           <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">

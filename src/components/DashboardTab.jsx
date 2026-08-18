@@ -9,7 +9,7 @@ export default function DashboardTab({
   const userAssignedTasks = [];
   const managerDepartmentQueue = [];
   
-  const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Corrective Maintenance", "Overdue"];
+  const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Maintenance"];
 
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
 
@@ -34,6 +34,10 @@ export default function DashboardTab({
 
   if (assets && calculateDaysRemaining) {
     assets.forEach(asset => {
+      
+      // THE FIX: Completely ignore inactive assets so they don't clog your dashboard
+      if (asset.status === "Inactive") return;
+
       let taskCategory = null; 
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
@@ -81,7 +85,7 @@ export default function DashboardTab({
           serial: asset.serial || "N/A",
           department: asset.department || "Unassigned",
           badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"),
-          displayStatus: isCriticalStatus ? (asset.status !== "Operational" ? asset.status : "Overdue") : (taskCategory === 'Upcoming' ? "Upcoming PM" : "Pending PM"),
+          displayStatus: isCriticalStatus ? (asset.status !== "Active" ? asset.status : "Overdue") : (taskCategory === 'Upcoming' ? "Upcoming PM" : "Pending PM"),
           displayDate: dueMessage,
           assignedTo: asset.operatorEmail || "Unassigned",
           rawItem: asset,
@@ -137,7 +141,7 @@ export default function DashboardTab({
               <div className="max-h-[400px] overflow-y-auto bg-gray-50/30">
                 {adminGlobalQueue.length === 0 ? (
                   <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
-                    No pending maintenance actions. All systems are operational.
+                    No pending maintenance actions. All active systems are nominal.
                   </div>
                 ) : (
                   <>
@@ -291,7 +295,7 @@ export default function DashboardTab({
               <div className="max-h-[400px] overflow-y-auto bg-gray-50/30">
                 {managerDepartmentQueue.length === 0 ? (
                   <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
-                    No pending maintenance actions for your department. All systems are operational.
+                    No pending maintenance actions for your department. All active systems are nominal.
                   </div>
                 ) : (
                   <>

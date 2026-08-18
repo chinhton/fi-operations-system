@@ -18,7 +18,6 @@ import useHistory from './hooks/useHistory';
 import useCosmosSync from './hooks/useCosmosSync';
 import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
-import useDashboardStats from './hooks/useDashboardStats';
 
 const customStyles = `
   body {
@@ -38,12 +37,8 @@ const customStyles = `
   }
 
   @media print {
-    @page { 
-      margin: 0; 
-    }
-    body { 
-      padding: 1.5cm; 
-    }
+    @page { margin: 0; }
+    body { padding: 1.5cm; }
   }
 `;
 
@@ -85,7 +80,6 @@ export default function App() {
     if (currentUser && users.length > 0) {
       const liveAccount = users.find(u => u.email === currentUser.email);
       if (!liveAccount || liveAccount.status !== 'Active') {
-        console.warn("FI-OMS Security: Account revoked or pending. Forcing session termination.");
         setCurrentUser(null);
         localStorage.removeItem('fi_oms_session');
       }
@@ -148,7 +142,6 @@ export default function App() {
       await fetch('/api/sendEmail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailPayload) });
       return true;
     } catch (err) {
-      console.error("❌ Email Blast Failed:", err);
       return false;
     }
   };
@@ -171,42 +164,20 @@ export default function App() {
               $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
               version: "1.4",
               body: [
-                {
-                  type: "TextBlock",
-                  text: `🚨 ${subjectLine}`,
-                  weight: "Bolder",
-                  size: "Medium",
-                  color: "Accent"
-                },
-                {
-                  type: "TextBlock",
-                  text: formattedBody,
-                  wrap: true,
-                  spacing: "Medium"
-                }
+                { type: "TextBlock", text: `🚨 ${subjectLine}`, weight: "Bolder", size: "Medium", color: "Accent" },
+                { type: "TextBlock", text: formattedBody, wrap: true, spacing: "Medium" }
               ],
               msteams: isTargeted ? {
-                entities: [
-                  {
-                    type: "mention",
-                    text: mentionTag,
-                    mentioned: { id: toAddress, name: toAddress }
-                  }
-                ]
+                entities: [{ type: "mention", text: mentionTag, mentioned: { id: toAddress, name: toAddress } }]
               } : undefined
             }
           }
         ]
       };
 
-      await fetch(TEAMS_WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       return true;
     } catch (err) {
-      console.error("❌ FI-OMS Teams Blast Failed:", err);
       return false;
     }
   };
@@ -222,7 +193,8 @@ export default function App() {
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       for (const asset of assets) {
-        if (asset.status !== "Operational") continue;
+        // SWEEP IGNORES INACTIVE OR ALREADY OVERDUE ASSETS
+        if (asset.status !== "Active") continue;
 
         let isOverdue = false;
         const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
@@ -247,9 +219,7 @@ export default function App() {
               body: JSON.stringify(updatedAsset)
             });
             sweptCount++;
-          } catch (err) {
-            console.error("Background sweep failed for:", asset.name);
-          }
+          } catch (err) {}
         }
       }
 
@@ -263,12 +233,7 @@ export default function App() {
 
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
-  
-  const visibleUsers = users.filter(u => {
-    if (isGodMode) return true; 
-    return u.department === userDept; 
-  });
-
+  const visibleUsers = users.filter(u => { if (isGodMode) return true; return u.department === userDept; });
   const visibleAssets = assets.filter(filterHierarchy);
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
@@ -276,11 +241,18 @@ export default function App() {
   const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
-  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
-  const dynamicComplianceRate = visibleAssets.length > 0 
-    ? Math.round((visibleAssets.filter(a => a.status === "Operational").length / visibleAssets.length) * 100) 
+  // --- NEW COMPLIANCE MATH: Ignores "Inactive" Assets Completely ---
+  const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
+  const dynamicComplianceRate = scorableAssets.length > 0 
+    ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) 
     : 100;
+
+  // Local KPI Counts
+  const activeCount = visibleAssets.filter(a => a.status === "Active").length;
+  const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
+  const calibrationCount = visibleAssets.filter(a => a.status === "Out of Calibration").length;
+  const correctiveCount = visibleAssets.filter(a => a.status === "Corrective Maintenance").length;
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -293,12 +265,11 @@ export default function App() {
   const handleApproveUser = async (email) => {
     const targetUser = users.find(u => u.email === email && u.status !== "Active");
     if (!targetUser) return;
-    
     const updatedUser = { ...targetUser, status: "Active" };
     try {
       await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedUser) });
       setUsers(users.map(u => (u.email === email && u.status !== "Active") ? updatedUser : u));
-    } catch (err) { console.error("User approval failed:", err); }
+    } catch (err) {}
   };
 
   const handleDenyUser = async (email) => {
@@ -307,7 +278,7 @@ export default function App() {
     try {
       await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
       setUsers(users.filter(u => !(u.email === email && u.status !== "Active")));
-    } catch (err) { console.error("User denial failed:", err); }
+    } catch (err) {}
   };
 
   const handleRevokeUser = async (email) => {
@@ -318,7 +289,7 @@ export default function App() {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           setUsers(users.filter(u => !(u.email === email && u.status === "Active")));
           modals.closeModal();
-        } catch (err) { console.error("User revocation failed:", err); }
+        } catch (err) {}
       }
     );
   };
@@ -334,20 +305,14 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
-      // 1. Alert: User requests registration
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
           
-          triggerTeamsAlert(
-              "admin@fcimg.com",
-              "New Account Pending Approval",
-              `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`
-          );
+          triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`);
           return response;
       }
 
-      // 2. Alert: Technician PM Executions only (STRICTLY FILTERED)
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
@@ -355,8 +320,6 @@ export default function App() {
           const commentText = logDetails.comments || logDetails.notes || "";
           const templateName = logDetails.templateName || "";
           
-          // FIX: A real PM execution must have an SOP name. 
-          // If the templateName is missing, or is just "Asset Profile Update", skip it completely!
           const isSystemLog = 
             !templateName ||
             logDetails.assetId === "SYS-AUTO" ||
@@ -368,16 +331,10 @@ export default function App() {
 
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
-              
-              triggerTeamsAlert(
-                  "admin@fcimg.com",
-                  `✅ PM Executed: ${logDetails.assetName || 'Asset'}`,
-                  `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`
-              );
+              triggerTeamsAlert("admin@fcimg.com", `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`);
           }
       }
 
-      // 3. State sync without firing outgoing Teams Webhook alerts for bulk asset/SOP updates
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
         if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
         if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
@@ -412,17 +369,12 @@ export default function App() {
   
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
-    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
+    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks,
     complianceRate: dynamicComplianceRate,
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
-    triggerEmailAlert, 
-    triggerTeamsAlert, 
-    pendingApprovals,
-    activeAccounts,
-    handleApproveUser,
-    handleDenyUser,
-    handleRevokeUser,
+    triggerEmailAlert, triggerTeamsAlert, 
+    pendingApprovals, activeAccounts, handleApproveUser, handleDenyUser, handleRevokeUser,
     history, setHistory, 
     assets: visibleAssets, setAssets, 
     pmTemplates: visibleTemplates, setPmTemplates, 
@@ -430,6 +382,9 @@ export default function App() {
     users: visibleUsers, setUsers,
     manuals, setManuals, 
     calculateDaysRemaining, calculateNextPmDate,
+    
+    // Pass local stats down
+    activeCount, overdueCount, calibrationCount, correctiveCount
   };
 
   return (
@@ -437,13 +392,7 @@ export default function App() {
       <style>{customStyles}</style>
       <TopHeader {...masterProps} />
       
-      <KpiBanner 
-        complianceRate={dynamicComplianceRate} 
-        operationalCount={stats?.operationalCount || 0}
-        overdueCount={stats?.overdueCount || 0}
-        calibrationCount={stats?.calibrationCount || 0}
-        correctiveCount={stats?.correctiveCount || 0}
-      />
+      <KpiBanner {...masterProps} />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
         <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? pendingApprovals.length : 0} {...masterProps} />
