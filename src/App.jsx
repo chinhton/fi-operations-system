@@ -50,14 +50,22 @@ const customStyles = `
 const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("fi_current_tab") || "dashboard");
+  
+  // --- RESTORED DASHBOARD ROUTING ---
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem("fi_current_tab");
+    return saved ? saved : "dashboard";
+  });
+  
   const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
+  // ----------------------------------
+
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
   const [pmTemplates, setPmTemplates] = useState([]);
-  const [workOrders, setWorkOrders] = useState([]);
+  const [workOrders, setWorkOrders] = useState([]); 
   const [users, setUsers] = useState([]);
   const [manuals, setManuals] = useState([]); 
 
@@ -91,7 +99,6 @@ export default function App() {
   const realRole = currentUser?.role;
   const userDept = currentUser?.department || ""; 
   
-  // --- STRICT GOD MODE DEFINITION ---
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com' || userDept === 'System Administration';
 
   const calculateNextPmDate = (lastDateStr, freq) => {
@@ -132,7 +139,6 @@ export default function App() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // --- STRICT SILO FILTERING ---
   const filterHierarchy = (item) => {
     if (isGodMode) return true; 
     return item.department === userDept; 
@@ -209,7 +215,6 @@ export default function App() {
 
   const hasSwept = useRef(false);
 
-  // --- THE DAILY SWEEP ENGINE ---
   useEffect(() => {
     if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
 
@@ -331,7 +336,6 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
-      // 1. Alert: User requests registration
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
@@ -344,7 +348,6 @@ export default function App() {
           return response;
       }
 
-      // 2. Alert: Technician PM Executions only
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
@@ -368,7 +371,6 @@ export default function App() {
           }
       }
 
-      // 3. State sync without firing outgoing Teams Webhook alerts for bulk asset/SOP updates
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
         if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
         if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
@@ -430,7 +432,6 @@ export default function App() {
       
       <KpiBanner 
         changeTab={changeTab} 
-        workOrdersCount={(visibleWorkOrders || []).filter(w => w.status !== "Completed").length}
         assetsCount={(visibleAssets || []).length} 
         complianceRate={dynamicComplianceRate} 
         historyCount={(history || []).length}

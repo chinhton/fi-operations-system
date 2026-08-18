@@ -3,7 +3,7 @@ import React from 'react';
 export default function DashboardTab({
   operationalCount, overdueCount, calibrationCount, correctiveCount,
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
-  workOrders, assets, pmTemplates, calculateDaysRemaining,
+  assets, pmTemplates, calculateDaysRemaining, complianceRate,
   users = []
 }) {
   
@@ -111,65 +111,6 @@ export default function DashboardTab({
     });
   }
 
-  if (workOrders) {
-    workOrders.forEach(wo => {
-      if (wo.status !== "Completed") {
-        const isCritical = criticalStatuses.includes(wo.status);
-        let taskCategory = 'Upcoming';
-        let dueMsg = "Pending";
-        
-        if (wo.dueDate) {
-            const d = new Date(wo.dueDate);
-            d.setHours(0,0,0,0);
-            const daysLeft = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysLeft < 0 || isCritical) {
-                taskCategory = 'Critical';
-                dueMsg = `Overdue (${Math.abs(daysLeft)}d)`;
-            } else if (daysLeft <= 5) {
-                taskCategory = 'Upcoming';
-                dueMsg = `Due in ${daysLeft} days`;
-            } else if (daysLeft <= 30) {
-                taskCategory = 'Pending';
-                dueMsg = `Due in ${daysLeft} days`;
-            } else {
-                return; 
-            }
-        }
-
-        const queueItem = {
-          queueId: `wo-${wo.id}`,
-          name: wo.title || `Work Order ${wo.id}`,
-          serial: wo.targetAsset || "N/A",
-          department: wo.department || "Unassigned",
-          badgeColor: isCritical ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-orange-100 text-orange-800" : "bg-gray-100 text-gray-600"),
-          displayStatus: wo.status,
-          displayDate: dueMsg,
-          assignedTo: wo.operatorEmail || "Unassigned",
-          rawItem: wo,
-          type: 'wo',
-          isCritical: isCritical,
-          taskCategory: taskCategory,
-          targetTemplate: null 
-        };
-
-        adminGlobalQueue.push(queueItem);
-        
-        const isAssignedOp = wo.operatorEmail && wo.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
-        const isAssignedMgr = wo.managerEmail && wo.managerEmail.toLowerCase().includes(currentUser.email.toLowerCase());
-        const isUnassignedInMyDept = (!wo.operatorEmail || wo.operatorEmail === "Unassigned") && wo.department === currentUser.department;
-        
-        if (isAssignedOp || isAssignedMgr || (!isManager && !isSystemAdmin && isUnassignedInMyDept)) { 
-            userAssignedTasks.push(queueItem); 
-        }
-        
-        if (isManager && wo.department === currentUser.department) { 
-            managerDepartmentQueue.push(queueItem); 
-        }
-      }
-    });
-  }
-
   // --- QUEUE SPLITTERS ---
   const adminCritical = adminGlobalQueue.filter(item => item.taskCategory === 'Critical');
   const adminUpcoming = adminGlobalQueue.filter(item => item.taskCategory === 'Upcoming');
@@ -185,29 +126,34 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-8 animate-entrance">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Operational Health</span>
-            <div className="text-4xl font-black mt-3 text-green-600 drop-shadow-sm">{operationalCount}</div>
-          </div>
+      
+      {/* --- REBUILT COMPLIANCE & HEALTH HEADER --- */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col xl:flex-row">
+        <div className="bg-[#1A2530] text-white p-8 xl:w-1/3 flex flex-col justify-center items-center text-center border-b xl:border-b-0 xl:border-r border-gray-700">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-blue-200 mb-2">System Compliance Factor</h2>
+          <div className="text-7xl font-black mb-2">{complianceRate || 100}%</div>
+          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Optimal Health Ratio</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Overdue Maintenance</span>
-            <div className="text-4xl font-black mt-3 text-yellow-600 drop-shadow-sm">{overdueCount}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Out Of Calibration</span>
-            <div className="text-4xl font-black mt-3 text-red-600 drop-shadow-sm">{calibrationCount}</div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm hover:shadow-md border border-gray-100 p-6 flex flex-col justify-between transform hover:-translate-y-1 transition-all duration-300">
-          <div>
-            <span className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">Corrective Action</span>
-            <div className="text-4xl font-black mt-3 text-orange-600 drop-shadow-sm">{correctiveCount}</div>
+        
+        <div className="p-8 xl:w-2/3 flex flex-col justify-center bg-gray-50/50">
+          <h3 className="text-sm font-black text-[#005596] mb-5 uppercase tracking-wider">Operations Health Overview</h3>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-green-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
+              <span className="text-[9px] uppercase font-extrabold text-green-700 tracking-wider">Operational</span>
+              <div className="text-3xl font-black mt-2 text-green-600 drop-shadow-sm">{operationalCount}</div>
+            </div>
+            <div className="bg-white border border-yellow-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
+              <span className="text-[9px] uppercase font-extrabold text-yellow-700 tracking-wider">Overdue PM</span>
+              <div className="text-3xl font-black mt-2 text-yellow-600 drop-shadow-sm">{overdueCount}</div>
+            </div>
+            <div className="bg-white border border-red-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
+              <span className="text-[9px] uppercase font-extrabold text-red-700 tracking-wider">Calibration</span>
+              <div className="text-3xl font-black mt-2 text-red-600 drop-shadow-sm">{calibrationCount}</div>
+            </div>
+            <div className="bg-white border border-orange-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
+              <span className="text-[9px] uppercase font-extrabold text-orange-700 tracking-wider">Corrective</span>
+              <div className="text-3xl font-black mt-2 text-orange-600 drop-shadow-sm">{correctiveCount}</div>
+            </div>
           </div>
         </div>
       </div>
