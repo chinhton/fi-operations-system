@@ -51,14 +51,12 @@ const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annua
 
 export default function App() {
   
-  // --- RESTORED DASHBOARD ROUTING ---
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem("fi_current_tab");
     return saved ? saved : "dashboard";
   });
   
   const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
-  // ----------------------------------
 
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -278,6 +276,8 @@ export default function App() {
   const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  
+  // --- EXTRACTED STATS FOR BANNER ---
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   const dynamicComplianceRate = visibleAssets.length > 0 
@@ -430,11 +430,13 @@ export default function App() {
       <style>{customStyles}</style>
       <TopHeader {...masterProps} />
       
+      {/* --- NEW KPI BANNER (PASSED THE ACTUAL STATS) --- */}
       <KpiBanner 
-        changeTab={changeTab} 
-        assetsCount={(visibleAssets || []).length} 
         complianceRate={dynamicComplianceRate} 
-        historyCount={(history || []).length}
+        operationalCount={stats?.operationalCount || 0}
+        overdueCount={stats?.overdueCount || 0}
+        calibrationCount={stats?.calibrationCount || 0}
+        correctiveCount={stats?.correctiveCount || 0}
       />
 
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
