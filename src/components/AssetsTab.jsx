@@ -220,33 +220,34 @@ export default function AssetsTab({
           const glAccount = rowObj['GL Account'] || rowObj['GLACCOUNT'] || rowObj['glAccount'] || '';
           const department = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
           
-          // --- INTELLIGENT USER MAPPING & SANITIZATION ---
           let operatorEmail = "Unassigned";
           let rawOperator = rowObj['operatorEmail'] || rowObj['Asset Owner'] || rowObj['Named Owner'] || "";
           
           if (rawOperator) {
-             // Actively strip out old dirt text if it exists from a previous export
              rawOperator = rawOperator.replace(/\(Legacy List\)/gi, '').trim();
              
              if (rawOperator.includes('@')) {
                  operatorEmail = rawOperator;
              } else if (rawOperator.length > 0) {
-                 // Cross-reference the pristine name with actual system users
                  const matchedUser = users.find(u => u.name && u.name.toLowerCase().includes(rawOperator.toLowerCase()));
                  if (matchedUser) {
                      operatorEmail = matchedUser.email;
                  } else {
-                     operatorEmail = rawOperator; // Default to clean name if email not found
+                     operatorEmail = rawOperator;
                  }
              }
           }
 
-          // Status Translator
+          // UPDATED: Status Translator cleanly maps "Active" and "Inactive"
           let status = "Operational";
           const rawStatus = (rowObj['Status'] || rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
-          if (rawStatus.includes('INACTIVE') || rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
+          if (rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
               status = "Maintenance Due";
-          } else if (rawStatus && !rawStatus.includes('ACTIVE') && !rawStatus.includes('OPERATING')) {
+          } else if (rawStatus.includes('INACTIVE')) {
+              status = "Inactive";
+          } else if (rawStatus.includes('ACTIVE')) {
+              status = "Active";
+          } else if (rawStatus && !rawStatus.includes('OPERATING')) {
               status = rowObj['Status'] || "Operational";
           }
 
@@ -552,17 +553,22 @@ export default function AssetsTab({
                           <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
                         </td>
                         <td className="px-6 py-4">
+                          {/* UPDATED DROPDOWN MENU */}
                           <select
                             value={asset.status}
                             onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
                             className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
                               asset.status === "Operational" ? "bg-green-100 text-green-800" :
+                              asset.status === "Active" ? "bg-emerald-100 text-emerald-800" :
+                              asset.status === "Inactive" ? "bg-gray-200 text-gray-600" :
                               asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
                               asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
                               "bg-orange-100 text-orange-800"
                             }`}
                           >
                             <option value="Operational">Operational</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
                             <option value="Maintenance Due">Maintenance Due</option>
                             <option value="Out of Calibration">Out of Calibration</option>
                             <option value="Corrective Maintenance">Corrective Action</option>
