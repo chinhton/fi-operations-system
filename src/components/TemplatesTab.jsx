@@ -1,263 +1,262 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
-// --- THE FIX: Aligned departments strictly with AuthScreen ---
+// --- Aligned departments strictly with AuthScreen ---
 const CORPORATE_DEPARTMENTS = [
   "Facilities", 
   "Production: Sensor Assembly", 
   "Production: Final Assembly and Test", 
-  "Production Engineering"
+  "Production: Engineering"
 ];
 
 export default function TemplatesTab({
-  handleAddTemplateSubmit, newTemplate, setNewTemplate, 
-  uniqueCategories, activeAccounts, editingTemplateId, cancelEditTemplate, 
-  isAddingTemplate, pmTemplates, 
-  isSystemAdmin, deleteTemplateCategory, handleEditTemplateClick, deleteTemplate,
-  manuals = [], PM_CYCLE_OPTIONS
+  pmTemplates = [], manuals = [],
+  newTemplate, setNewTemplate, handleAddTemplateSubmit,
+  PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
+  isAddingTemplate, currentUser
 }) {
   
-  const [templateSearch, setTemplateSearch] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // --- THE FIX: State to hold the specific SOP being viewed ---
-  const [viewingSop, setViewingSop] = useState(null);
-  
-  // --- THE NEW FIX: State to hold the active Category folder being viewed ---
-  const [activeCategoryModal, setActiveCategoryModal] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Automatically open the edit modal ONLY if the admin clicks "Edit" on an existing template card
-  useEffect(() => {
-    if (editingTemplateId) {
-      setIsModalOpen(true);
-    }
-  }, [editingTemplateId]);
+  const userDept = currentUser?.department || "";
+  const isDepartmentRestricted = !isSystemAdmin && userDept !== "Facilities" && userDept !== "Production: Engineering";
+
+  const filteredTemplates = pmTemplates.filter(t => 
+    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.department?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // --- JSON EXPORT / IMPORT ENGINE FOR SOPs ---
+  const handleExportJSON = () => {
+    const dataStr = JSON.stringify(pmTemplates, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `FI-OMS_SOP_Protocols_Export_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportJSON = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        if (!Array.isArray(importedData)) {
+          alert("Invalid format: The JSON file must contain an array of SOPs.");
+          return;
+        }
+
+        if (!window.confirm(`Are you sure you want to import ${importedData.length} SOP Protocols?`)) {
+          e.target.value = null; 
+          return;
+        }
+
+        for (const template of importedData) {
+          await window.fetch('/api/pmTemplates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(template)
+          });
+        }
+        
+        alert("SOP Import complete! Refreshing page to sync database.");
+        window.location.reload(); 
+        
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("Failed to parse JSON file. Ensure it is a valid FI-OMS export.");
+      }
+      e.target.value = null; 
+    };
+    reader.readAsText(file);
+  };
+
+  // --- MODAL CONTROLS ---
+  const openBuildModal = () => {
+    const defaultDept = isDepartmentRestricted ? userDept : "";
+    setNewTemplate({
+      name: "",
+      interval: "Monthly",
+      department: defaultDept,
+      targetCategory: "Global",
+      managerEmail: "",
+      operatorEmail: "",
+      checklistSteps: [],
+      attachedManualName: "",
+      attachedManualData: null
+    });
+    setShowTemplateModal(true);
+  };
+
+  const openEditModal = (template) => {
+    setNewTemplate(template);
+    setShowTemplateModal(true);
+  };
 
   const handleLocalSubmit = async (e) => {
     e.preventDefault();
     await handleAddTemplateSubmit(e);
-    setIsModalOpen(false);
+    setShowTemplateModal(false);
   };
 
-  const closeAndCancel = () => {
-    if (editingTemplateId) cancelEditTemplate();
-    setIsModalOpen(false);
+  const handleDeleteTemplate = async (id) => {
+    if (!window.confirm("Are you sure you want to permanently delete this SOP? Active assets relying on it will lose their PM framework.")) return;
+    try {
+      await window.fetch(`/api/pmTemplates?id=${id}`, { method: 'DELETE' });
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to delete SOP:", err);
+    }
   };
-
-  // Group templates for rendering
-  const filteredTemplates = (pmTemplates || []).filter(t => 
-    (t.name || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-    (t.targetCategory || "").toLowerCase().includes(templateSearch.toLowerCase()) ||
-    (t.department || "").toLowerCase().includes(templateSearch.toLowerCase())
-  );
-
-  const groupedTemplates = filteredTemplates.reduce((acc, template) => {
-    const cat = template.targetCategory || "Global";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(template);
-    return acc;
-  }, {});
 
   return (
-    <div className="space-y-8 animate-entrance">
+    <div className="space-y-8 animate-entrance w-full">
       
       {/* DIRECTORY HEADER & CONTROLS */}
-      <div className="flex justify-end items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+      <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          <button 
+            onClick={openBuildModal}
+            className="w-full sm:w-auto bg-purple-700 hover:bg-purple-800 text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
+          >
+            ➕ Build New SOP
+          </button>
+
+          {isSystemAdmin && (
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <button 
+                onClick={handleExportJSON}
+                className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                title="Export SOPs to JSON"
+              >
+                📤 Export JSON
+              </button>
+              <button 
+                onClick={() => fileInputRef.current.click()}
+                className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                title="Import SOPs from JSON"
+              >
+                📥 Import JSON
+              </button>
+              <input 
+                type="file" 
+                accept=".json" 
+                ref={fileInputRef} 
+                onChange={handleImportJSON} 
+                className="hidden" 
+              />
+            </div>
+          )}
+        </div>
+
         <input 
           type="text" 
-          placeholder="Search Established SOPs by Name, Category, or Dept..." 
-          value={templateSearch}
-          onChange={(e) => setTemplateSearch(e.target.value)}
-          className="w-full md:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
+          placeholder="Search by Title, Category, or Dept..." 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full xl:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
         />
       </div>
 
-      {/* MINIMIZED FOLDER DIRECTORY */}
+      {/* SOP DIRECTORY GRID */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="bg-[#1A2530] text-white px-6 py-4 flex items-center justify-between">
+        <div className="bg-[#1A2530] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Standard Operating Procedures</h3>
-          <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{pmTemplates?.length || 0} Protocols</span>
+          <span className="text-[10px] bg-gray-700 px-3 py-1 rounded-full font-bold shadow-inner mt-2 sm:mt-0">{filteredTemplates.length} Protocols Active</span>
         </div>
 
-        {Object.keys(groupedTemplates).length === 0 ? (
-          <div className="p-12 text-center text-xs text-gray-500">No Established SOPs matching search.</div>
+        {filteredTemplates.length === 0 ? (
+          <div className="p-16 text-center text-gray-400 text-sm italic bg-gray-50/50">
+            No Established SOPs matching search. Use the "Build New SOP" button to construct a master protocol.
+          </div>
         ) : (
-          <div className="p-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 bg-gray-50/50">
-            {Object.entries(groupedTemplates).map(([category, catTemplates]) => (
-              <div 
-                key={category} 
-                onClick={() => setActiveCategoryModal(category)}
-                className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-center items-center text-center group relative h-32"
-              >
-                {/* Admin Delete Button (Stops propagation so it doesn't open the folder) */}
-                {isSystemAdmin && category !== "Global" && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); deleteTemplateCategory(category); }} 
-                    className="absolute top-2 right-2 text-[9px] text-red-500 hover:text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded transition opacity-0 group-hover:opacity-100"
-                  >
-                    Delete
-                  </button>
-                )}
+          <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 bg-gray-50/50">
+            {filteredTemplates.map(template => (
+              <div key={template.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between group relative overflow-hidden">
+                {/* Decorative top border */}
+                <div className={`absolute top-0 left-0 w-full h-1.5 ${template.targetCategory === 'Global' ? 'bg-[#00A1E4]' : 'bg-purple-500'}`}></div>
                 
-                <div className="text-3xl mb-2 text-[#00A1E4] group-hover:scale-110 transition-transform">📁</div>
-                <h4 className="font-bold text-[#005596] text-xs uppercase tracking-wider mb-1 line-clamp-1">{category}</h4>
-                <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-full">{catTemplates.length} Protocols</span>
+                <div>
+                  <div className="flex justify-between items-start mb-3">
+                    <h4 className="font-black text-gray-800 text-sm leading-tight pr-4">{template.name}</h4>
+                    <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 border border-gray-200 shadow-sm">
+                      {template.interval}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1.5 mb-5">
+                    <div className="flex items-center text-[10px]">
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Map:</span>
+                      <span className={`font-bold uppercase tracking-wider ${template.targetCategory === 'Global' ? 'text-[#00A1E4]' : 'text-purple-600'}`}>
+                        {template.targetCategory}
+                      </span>
+                    </div>
+                    <div className="flex items-center text-[10px]">
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Dept:</span>
+                      <span className="text-gray-700 font-bold">{template.department || 'Global'}</span>
+                    </div>
+                    <div className="flex items-center text-[10px]">
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Actions:</span>
+                      <span className="text-gray-700 font-mono font-bold">{template.checklistSteps?.length || 0} Steps Configured</span>
+                    </div>
+                    {template.attachedManualName && (
+                      <div className="flex items-center text-[10px] pt-1">
+                        <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Doc:</span>
+                        <span className="text-[#005596] font-bold truncate">📎 {template.attachedManualName}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+                  <button onClick={() => openEditModal(template)} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors">
+                    ✏️ Edit SOP
+                  </button>
+                  {isSystemAdmin && (
+                    <button onClick={() => handleDeleteTemplate(template.id)} className="text-[10px] font-bold text-red-500 hover:text-red-700 uppercase tracking-wider transition-colors">
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* --- CATEGORY FOLDER POPUP (TABLE VIEW) --- */}
-      {activeCategoryModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
-            <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-sm tracking-wide uppercase">📁 Category Lock: {activeCategoryModal}</h3>
-              <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
-            </div>
-            
-            <div className="overflow-auto flex-1 bg-white">
-              <table className="min-w-full divide-y divide-gray-200 text-left">
-                <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
-                  <tr>
-                    <th className="px-6 py-3.5">Protocol ID & Name</th>
-                    <th className="px-6 py-3.5">Interval & Dept</th>
-                    <th className="px-6 py-3.5">Task Profile</th>
-                    <th className="px-6 py-3.5 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-xs">
-                  {(groupedTemplates[activeCategoryModal] || []).map((template) => (
-                    <tr key={template.id} className="hover:bg-gray-50/55 transition">
-                      <td className="px-6 py-4">
-                        <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase block mb-0.5">{template.id}</span>
-                        <span className="font-bold text-gray-900 block">{template.name}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="bg-blue-50 border border-blue-100 text-[#005596] text-[9px] font-bold px-2 py-0.5 rounded uppercase">{template.interval}</span>
-                          <span className="text-[10px] text-gray-500 font-semibold">{template.department || 'Global Mgmt'}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-[10px] font-medium text-gray-600">
-                        {template.checklist?.length || 0} Actions Logged
-                        {template.attachedManualName && (
-                          <span className="block mt-1 text-[#005596] font-bold">📎 Linked Manual</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-3">
-                        <button onClick={() => setViewingSop(template)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">View Protocol</button>
-                        <button onClick={() => handleEditTemplateClick(template)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
-                        {isSystemAdmin && (
-                          <button onClick={() => deleteTemplate(template.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {(!groupedTemplates[activeCategoryModal] || groupedTemplates[activeCategoryModal].length === 0) && (
-                    <tr>
-                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 text-xs">No protocols remaining in this category.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            
-            <div className="bg-gray-100 px-6 py-4 flex justify-end shrink-0 border-t border-gray-200">
-              <button onClick={() => setActiveCategoryModal(null)} className="px-6 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-white transition shadow-sm">Close Folder</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- PROTOCOL VIEWER MODAL (READ-ONLY POPUP) --- */}
-      {viewingSop && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
-            
-            <div className="bg-[#005596] px-6 py-4 flex justify-between items-center shrink-0">
-               <h3 className="text-white font-bold text-sm tracking-widest uppercase">Protocol Overview</h3>
-               <button onClick={() => setViewingSop(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
-            </div>
-            
-            <div className="p-6 overflow-y-auto">
-               <div className="mb-4">
-                 <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase block mb-1">{viewingSop.id}</span>
-                 <h4 className="font-bold text-lg text-[#005596] leading-tight">{viewingSop.name}</h4>
-               </div>
-               
-               <div className="flex items-center gap-2 mb-6 border-b border-gray-100 pb-4">
-                 <span className="bg-blue-50 border border-blue-100 text-[#005596] text-[10px] font-bold px-2 py-0.5 rounded uppercase">{viewingSop.interval}</span>
-                 <span className="text-[10px] text-gray-500 font-semibold uppercase">{viewingSop.department || 'Global Mgmt'}</span>
-                 {viewingSop.targetCategory !== "Global" && (
-                   <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-2 py-0.5 uppercase rounded ml-auto">Target: {viewingSop.targetCategory}</span>
-                 )}
-               </div>
-
-               {(viewingSop.managerEmail || viewingSop.operatorEmail) && (
-                 <div className="mb-6 text-[11px] text-gray-600 bg-gray-50 p-4 rounded border border-gray-200 shadow-inner grid grid-cols-2 gap-4">
-                   {viewingSop.managerEmail && <div><span className="block text-[9px] font-bold uppercase text-gray-400 mb-1">Manager Notification</span><span className="font-mono text-gray-800">{viewingSop.managerEmail}</span></div>}
-                   {viewingSop.operatorEmail && <div><span className="block text-[9px] font-bold uppercase text-gray-400 mb-1">Operator Assignment</span><span className="font-mono text-gray-800">{viewingSop.operatorEmail}</span></div>}
-                 </div>
-               )}
-
-               {viewingSop.attachedManualName && (
-                 <div className="mb-6 text-[11px] text-[#005596] font-bold bg-blue-50/50 p-3 rounded border border-blue-100 flex items-center shadow-sm">
-                     📎 Reference Document: {viewingSop.attachedManualName}
-                 </div>
-               )}
-               
-               <h5 className="font-bold text-xs text-gray-700 uppercase tracking-wider mb-3">Checklist Steps ({viewingSop.checklist?.length || 0})</h5>
-               <ul className="space-y-2 list-none text-xs text-gray-700">
-                 {viewingSop.checklist?.map((item, idx) => {
-                   const label = typeof item === 'string' ? item : item.label;
-                   const type = typeof item === 'string' ? 'checkbox' : item.type;
-                   return (
-                     <li key={idx} className="flex items-start bg-gray-50 p-3 rounded border border-gray-100">
-                       <span className="uppercase text-[9px] font-bold text-[#00A1E4] bg-sky-50 px-1.5 py-0.5 rounded mr-3 border border-sky-100 shrink-0">[{type}]</span> 
-                       <span className="font-medium text-gray-800 leading-tight pt-0.5">{label}</span>
-                     </li>
-                   );
-                 })}
-               </ul>
-            </div>
-            
-            <div className="bg-gray-100 px-6 py-4 flex justify-end shrink-0 border-t border-gray-200">
-              <button onClick={() => setViewingSop(null)} className="px-6 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-white transition shadow-sm">Close Protocol</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- TEMPLATE EDIT MODAL OVERLAY --- */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4">
+      {/* --- QUICK TEMPLATE BUILDER MODAL --- */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
             
-            <button onClick={closeAndCancel} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
+            <button onClick={() => setShowTemplateModal(false)} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
             
             <div className="bg-[#005596] text-white px-6 py-4">
-              <h3 className="font-bold text-sm tracking-wide uppercase">Edit Custom SOP Protocol</h3>
+              <h3 className="font-bold text-sm tracking-wide uppercase">
+                {newTemplate.id ? 'Edit Custom SOP Protocol' : 'Construct Custom SOP Protocol'}
+              </h3>
+              <p className="text-xs text-blue-200 mt-1">Global Library Definition</p>
             </div>
             
             <form onSubmit={handleLocalSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
-                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                   <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    {PM_CYCLE_OPTIONS?.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>) || (
-                      <>
-                        <option value="Daily">Daily Cycle</option>
-                        <option value="Weekly">Weekly Cycle</option>
-                        <option value="Monthly">Monthly Cycle</option>
-                        <option value="Quarterly">Quarterly Cycle</option>
-                        <option value="Annually">Annually Cycle</option>
-                      </>
-                    )}
+                    {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
                   </select>
                 </div>
                 <div>
@@ -265,12 +264,21 @@ export default function TemplatesTab({
                   <select 
                     value={newTemplate.department || ""} 
                     onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
-                    className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                    disabled={isDepartmentRestricted}
+                    className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
+                      isDepartmentRestricted 
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                        : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
+                    }`}
                   >
-                    <option value="">-- Unassigned (Global View) --</option>
-                    {CORPORATE_DEPARTMENTS.map(dept => (
-                      <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                    ))}
+                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
+                    {isDepartmentRestricted ? (
+                      <option value={userDept}>{userDept}</option>
+                    ) : (
+                      CORPORATE_DEPARTMENTS.map(dept => (
+                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                      ))
+                    )}
                   </select>
                 </div>
                 <div>
@@ -278,20 +286,6 @@ export default function TemplatesTab({
                   <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
                     <option value="Global">Global (All Assets)</option>
                     {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                  </select>
-                </div>
-                <div> 
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manager Email (For Notifications)</label>
-                  <select value={newTemplate.managerEmail} onChange={(e) => setNewTemplate({...newTemplate, managerEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    <option value="">-- Select Manager Account --</option>
-                    {activeAccounts.map(u => <option key={`mgr-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Operator Email (Primary Notification)</label>
-                  <select value={newTemplate.operatorEmail} onChange={(e) => setNewTemplate({...newTemplate, operatorEmail: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    <option value="">-- Select Operator Account --</option>
-                    {activeAccounts.map(u => <option key={`op-${u.email}`} value={u.email}>{u.name} ({u.email})</option>)}
                   </select>
                 </div>
                 
@@ -361,19 +355,19 @@ export default function TemplatesTab({
 
                   {/* Add Row Controls */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
-                    <select id="builderTypeModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
+                    <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
                         <option value="text">Short Text (Serial, Note)</option>
                         <option value="number">Numeric (PSI, Temp)</option>
                         <option value="passfail">Pass/Fail Dropdown</option>
                     </select>
-                    <input type="text" id="builderLabelModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepModal').click(); }}} />
-                    <button type="button" id="btnAddStepModal" onClick={() => {
-                        const type = document.getElementById('builderTypeModal').value;
-                        const label = document.getElementById('builderLabelModal').value.trim();
+                    <input type="text" id="builderLabelSOPModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepSOPModal').click(); }}} />
+                    <button type="button" id="btnAddStepSOPModal" onClick={() => {
+                        const type = document.getElementById('builderTypeSOPModal').value;
+                        const label = document.getElementById('builderLabelSOPModal').value.trim();
                         if(!label) return;
                         setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
-                        document.getElementById('builderLabelModal').value = '';
+                        document.getElementById('builderLabelSOPModal').value = '';
                     }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row to Grid</button>
                   </div>
                 </div>
@@ -412,9 +406,9 @@ export default function TemplatesTab({
 
               </div> 
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                <button type="button" onClick={closeAndCancel} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel Edit</button>
+                <button type="button" onClick={() => setShowTemplateModal(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingTemplate ? 'Processing...' : 'Update Protocol'}
+                  {isAddingTemplate ? 'Saving...' : (newTemplate.id ? 'Update Protocol' : 'Lock & Save Protocol')}
                 </button>
               </div>
             </form>
