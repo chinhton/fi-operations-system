@@ -61,24 +61,20 @@ const parseCSV = (str) => {
   return arr;
 };
 
-// --- TEXT FORMATTER FOR CSV IMPORTS (Fixes ALL CAPS) ---
+// --- TEXT FORMATTER FOR CSV IMPORTS ---
 const toTitleCase = (str) => {
   if (!str) return '';
   return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 };
 
 export default function AssetsTab({
-  assets = [], users = [], manuals = [], pmTemplates = [],
+  assets = [], setAssets, users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
   calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, openPmModal, deleteAsset,
   
-  // --- TEMPLATE BUILDER PROPS ---
   newTemplate, setNewTemplate, handleAddTemplateSubmit, uniqueCategories, 
-  activeAccounts, isAddingTemplate,
-
-  // --- NEW: Injecting the active user context to cloud-save preferences ---
-  currentUser, setCurrentUser
+  activeAccounts, isAddingTemplate, currentUser, setCurrentUser
 }) {
   
   const [assetSearch, setAssetSearch] = useState("");
@@ -99,8 +95,6 @@ export default function AssetsTab({
   });
 
   const userDept = currentUser?.department || "";
-  
-  // STRICT SILO LOGIC: Only System Admins can bypass department restrictions
   const isDepartmentRestricted = !isSystemAdmin;
 
   const handleGroupChange = async (type) => {
@@ -149,7 +143,52 @@ export default function AssetsTab({
     return acc;
   }, {});
 
-  // --- CSV EXPORT / IMPORT / DELETE ENGINE ---
+  // --- BULK RENAME & MERGE ENGINE ---
+  const handleBulkMoveGroup = async (oldGroupName) => {
+    const isCat = groupBy === 'category';
+    const groupTypeStr = isCat ? 'Category' : 'Department';
+    
+    const newGroupName = window.prompt(
+      `BULK MERGE / RENAME:\n\nEnter the target ${groupTypeStr} name.\nIf you type an existing name, they will seamlessly merge.`, 
+      oldGroupName
+    );
+
+    if (!newGroupName || newGroupName.trim() === "" || newGroupName === oldGroupName) return;
+
+    const trimmedNewName = newGroupName.trim();
+    const assetsInGroup = groupedAssets[oldGroupName] || [];
+
+    if (!window.confirm(`You are about to permanently move ${assetsInGroup.length} systems from "${oldGroupName}" into "${trimmedNewName}".\n\nContinue?`)) return;
+
+    // Optimistic Update to make the UI instantly reflect the change
+    if (setAssets) {
+        const updatedAssetsList = assets.map(a => {
+          const match = isCat ? (a.category || "Uncategorized") === oldGroupName : (a.department || "Unassigned") === oldGroupName;
+          if (match) {
+            return isCat ? { ...a, category: trimmedNewName } : { ...a, department: trimmedNewName };
+          }
+          return a;
+        });
+        setAssets(updatedAssetsList);
+    }
+    setActiveCategoryModal(trimmedNewName); // Keep the folder open under its new name
+
+    // Background Database Updates
+    try {
+      await Promise.all(assetsInGroup.map(asset => {
+        const updatedAsset = isCat ? { ...asset, category: trimmedNewName } : { ...asset, department: trimmedNewName };
+        return window.fetch('/api/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedAsset)
+        });
+      }));
+    } catch (err) {
+      console.error(`Failed to bulk update ${groupTypeStr}`, err);
+    }
+  };
+  // ---------------------------------
+
   const handleExportCSV = () => {
     const headers = ["id", "name", "manufacturer", "model", "serial", "category", "location", "glAccount", "department", "operatorEmail", "status", "parentId"];
     const csvRows = [headers.join(",")];
@@ -157,8 +196,8 @@ export default function AssetsTab({
     assets.forEach(asset => {
       const row = headers.map(header => {
         let val = asset[header] || "";
-        val = val.toString().replace(/"/g, '""'); // Escape double quotes
-        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; // Wrap in quotes if it contains comma
+        val = val.toString().replace(/"/g, '""'); 
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; 
         return val;
       });
       csvRows.push(row.join(","));
@@ -238,7 +277,6 @@ export default function AssetsTab({
              }
           }
 
-          // UPDATED: Status Translator cleanly maps "Active" and "Inactive"
           let status = "Operational";
           const rawStatus = (rowObj['Status'] || rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
           if (rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
@@ -297,20 +335,13 @@ export default function AssetsTab({
 
   const handleMassDelete = async () => {
     const targetAssets = filteredAssets;
-    
-    if (targetAssets.length === 0) {
-      alert("No assets found to delete.");
-      return;
-    }
+    if (targetAssets.length === 0) { alert("No assets found to delete."); return; }
 
     const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${targetAssets.length} assets.\n\nThis will wipe them from the Azure database completely. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
     if (!confirm1) return;
 
     const confirm2 = window.prompt(`To confirm mass deletion of ${targetAssets.length} assets, please type DELETE in all caps:`);
-    if (confirm2 !== "DELETE") {
-      alert("Mass deletion cancelled.");
-      return;
-    }
+    if (confirm2 !== "DELETE") { alert("Mass deletion cancelled."); return; }
 
     try {
       for (const asset of targetAssets) {
@@ -324,7 +355,6 @@ export default function AssetsTab({
       window.location.reload();
     }
   };
-  // ---------------------------------
 
   const openRegisterForNew = () => {
     const defaultDept = isDepartmentRestricted ? userDept : "";
@@ -511,8 +541,19 @@ export default function AssetsTab({
       {activeCategoryModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] lg:max-w-7xl max-h-[90vh] overflow-hidden flex flex-col animate-entrance relative border border-gray-300">
+            
             <div className="bg-[#005596] text-white px-6 py-4 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-sm tracking-wide uppercase">{getCategoryIcon(activeCategoryModal)} {groupBy === 'category' ? 'Category' : 'Department'}: {activeCategoryModal}</h3>
+              <div className="flex items-center space-x-3">
+                <h3 className="font-bold text-sm tracking-wide uppercase">{getCategoryIcon(activeCategoryModal)} {groupBy === 'category' ? 'Category' : 'Department'}: {activeCategoryModal}</h3>
+                {isSystemAdmin && (
+                  <button 
+                    onClick={() => handleBulkMoveGroup(activeCategoryModal)}
+                    className="text-[9px] bg-white/20 hover:bg-white/30 px-2 py-1 rounded border border-white/30 font-bold uppercase tracking-wider transition-colors shadow-sm ml-4"
+                  >
+                    ✏️ Rename / Merge Folder
+                  </button>
+                )}
+              </div>
               <button onClick={() => setActiveCategoryModal(null)} className="text-white hover:text-red-400 text-2xl leading-none transition">&times;</button>
             </div>
             
@@ -553,7 +594,6 @@ export default function AssetsTab({
                           <span className="block text-[11px] text-gray-400">S/N: {asset.serial}</span>
                         </td>
                         <td className="px-6 py-4">
-                          {/* UPDATED DROPDOWN MENU */}
                           <select
                             value={asset.status}
                             onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
