@@ -210,7 +210,7 @@ export default function AssetsTab({
           if (!name) continue; // Safety check
 
           // Clean up category, manufacturer, and location
-          const rawCategory = rowObj['Category Type'] || rowObj['category'] || "General Equipment";
+          const rawCategory = rowObj['Category Type'] || rowObj['category'] || "Imported Equipment";
           const category = toTitleCase(rawCategory);
 
           const rawManufacturer = rowObj['Manufacturer'] || rowObj['MANUFACTURER'] || rowObj['manufacturer'] || '';
@@ -716,7 +716,7 @@ export default function AssetsTab({
                   <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">GL Account (Maximo)</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">GL Account</label>
                   <input type="text" value={newAsset.glAccount || ""} onChange={(e) => setNewAsset({...newAsset, glAccount: e.target.value})} placeholder="e.g. DD-23000-2030" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
 
