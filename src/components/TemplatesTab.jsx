@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 
 // --- Aligned departments strictly with AuthScreen ---
 const CORPORATE_DEPARTMENTS = [
+  "System Administration",
   "Facilities", 
   "Production: Sensor Assembly", 
   "Production: Final Assembly and Test", 

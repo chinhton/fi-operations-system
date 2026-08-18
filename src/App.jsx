@@ -92,7 +92,8 @@ export default function App() {
   const realRole = currentUser?.role;
   const userDept = currentUser?.department || ""; 
   
-  const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com';
+  // --- STRICT GOD MODE DEFINITION ---
+  const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com' || userDept === 'System Administration';
 
   const calculateNextPmDate = (lastDateStr, freq) => {
     if (!lastDateStr || !freq) return null;
@@ -132,9 +133,10 @@ export default function App() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // --- STRICT SILO FILTERING ---
   const filterHierarchy = (item) => {
-    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
-    return item.department === userDept; 
+    if (isGodMode) return true; // ONLY System Admins see everything
+    return item.department === userDept; // Everyone else strictly sees their own department
   };
 
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
@@ -261,7 +263,7 @@ export default function App() {
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   
   const visibleUsers = users.filter(u => {
-    if (isGodMode || userDept === "Facilities" || userDept.includes("Engineering")) return true; 
+    if (isGodMode) return true; 
     return u.department === userDept; 
   });
 
@@ -345,7 +347,7 @@ export default function App() {
           return response;
       }
 
-      // --- FIX 1: THE PM EXECUTION WEBHOOK ---
+      // --- THE PM EXECUTION WEBHOOK ---
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
@@ -406,7 +408,7 @@ export default function App() {
         let actionTaken = 'Updated';
         let isExpiring = false;
 
-        // --- FIX 2: THE OVERDUE TRANSITION CHECK ---
+        // --- THE OVERDUE TRANSITION CHECK ---
         if (config.method.toUpperCase() === 'DELETE') {
             actionTaken = 'Deleted';
         } else {

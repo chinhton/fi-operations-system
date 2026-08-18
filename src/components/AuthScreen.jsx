@@ -39,11 +39,12 @@ export default function AuthScreen({
                     required 
                     className="w-full text-xs rounded-lg border-gray-300 shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] p-3 border bg-white outline-none"
                   >
-                    <option value="" disabled>-- Select Department --</option>
-                    <option value="Facilities">Facilities</option>
-                    <option value="Production: Sensor Assembly">Production: Sensor Assembly</option>
-                    <option value="Production: Final Assembly and Test">Production: Final Assembly and Test</option>
-                    <option value="Production: Engineering">Production: Engineering</option>
+                    <option value="">-- Select Department --</option>
+  <option value="System Administration">System Administration</option>
+  <option value="Facilities">Facilities</option>
+  <option value="Production: Sensor Assembly">Production: Sensor Assembly</option>
+  <option value="Production: Final Assembly and Test">Production: Final Assembly and Test</option>
+  <option value="Production: Engineering">Production: Engineering</option>
                   </select>
                 </div>
 
