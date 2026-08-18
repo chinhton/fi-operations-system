@@ -204,12 +204,10 @@ export default function AssetsTab({
           });
 
           // Intelligent Translation: Try to find new Custom headers, fallback to old or standard ones.
-          // ALL CAPS fields are processed with toTitleCase() to clean up the UI
           const rawName = rowObj['Description'] || rowObj['DESCRIPTION'] || rowObj['name'] || '';
           const name = toTitleCase(rawName);
           if (!name) continue; // Safety check
 
-          // Clean up category, manufacturer, and location
           const rawCategory = rowObj['Category Type'] || rowObj['category'] || "Imported Equipment";
           const category = toTitleCase(rawCategory);
 
@@ -219,15 +217,27 @@ export default function AssetsTab({
           const rawLocation = rowObj['Location'] || rowObj['LOCATION'] || rowObj['location'] || '';
           const location = toTitleCase(rawLocation);
 
-          // We do NOT TitleCase these fields as they rely on specific alphanumeric capitalization
           const model = rowObj['Model Number'] || rowObj['model'] || '';
           const serial = rowObj['Serial Number'] || rowObj['SERIALNUM'] || rowObj['serial'] || 'N/A';
           const glAccount = rowObj['GL Account'] || rowObj['GLACCOUNT'] || rowObj['glAccount'] || '';
           const department = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
           
-          let operatorEmail = rowObj['Asset Owner'] || rowObj['operatorEmail'] || "";
-          if (operatorEmail && !operatorEmail.includes('@')) {
-             operatorEmail = `${operatorEmail} (Legacy List)`; // Flag names without emails
+          // --- INTELLIGENT USER MAPPING ---
+          let operatorEmail = "Unassigned";
+          let rawOperator = rowObj['Asset Owner'] || rowObj['operatorEmail'] || "";
+          
+          if (rawOperator) {
+             rawOperator = rawOperator.replace('(Legacy List)', '').trim(); // Clean up old exports just in case
+             
+             if (rawOperator.includes('@')) {
+                 operatorEmail = rawOperator;
+             } else {
+                 // Cross-reference the name with actual system users
+                 const matchedUser = users.find(u => u.name && u.name.toLowerCase().includes(rawOperator.toLowerCase()));
+                 if (matchedUser) {
+                     operatorEmail = matchedUser.email;
+                 }
+             }
           }
 
           // Status Translator
@@ -259,7 +269,7 @@ export default function AssetsTab({
           importedAssets.push(finalAsset);
         }
 
-        if (!window.confirm(`Found ${importedAssets.length} assets in CSV.\n\nFormatting: Applied Title Case to Names, Categories, and Locations to fix capitalization issues.\n\nImport them now?`)) {
+        if (!window.confirm(`Found ${importedAssets.length} assets in CSV.\n\nFormatting: Applied Title Case to Names, Categories, and Locations. Automatically mapped Asset Owners to official user emails.\n\nImport them now?`)) {
           e.target.value = null; 
           return;
         }
