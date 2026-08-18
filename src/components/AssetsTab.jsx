@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 // --- THE FIX: Aligned departments strictly with AuthScreen ---
 const CORPORATE_DEPARTMENTS = [
@@ -43,6 +43,24 @@ const formatDateForSave = (dateStr) => {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+// --- NATIVE CSV PARSER ---
+const parseCSV = (str) => {
+  const arr = [];
+  let quote = false;
+  let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+      let cc = str[c], nc = str[c+1];
+      arr[row] = arr[row] || [];
+      arr[row][col] = arr[row][col] || '';
+      if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
+      if (cc === '"') { quote = !quote; continue; }
+      if (cc === ',' && !quote) { ++col; continue; }
+      if (cc === '\n' && !quote) { ++row; col = 0; continue; }
+      if (cc !== '\r') arr[row][col] += cc;
+  }
+  return arr;
+};
+
 export default function AssetsTab({
   assets = [], users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
@@ -68,6 +86,8 @@ export default function AssetsTab({
   // Override States
   const [overrideFreq, setOverrideFreq] = useState("");
   const [overrideDate, setOverrideDate] = useState("");
+
+  const fileInputRef = useRef(null); // Ref for the hidden import button
 
   const [groupBy, setGroupBy] = useState(() => {
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
@@ -102,6 +122,118 @@ export default function AssetsTab({
       }
     }
   };
+
+  // --- CSV EXPORT / IMPORT ENGINE ---
+  const handleExportCSV = () => {
+    const headers = ["id", "name", "model", "serial", "category", "location", "department", "operatorEmail", "status", "parentId"];
+    const csvRows = [headers.join(",")];
+
+    assets.forEach(asset => {
+      const row = headers.map(header => {
+        let val = asset[header] || "";
+        val = val.toString().replace(/"/g, '""'); // Escape double quotes
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; // Wrap in quotes if it contains comma
+        return val;
+      });
+      csvRows.push(row.join(","));
+    });
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `FI-OMS_Assets_Export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const textData = event.target.result;
+        const parsedData = parseCSV(textData);
+        
+        if (parsedData.length < 2) {
+          alert("Invalid CSV format or file is empty.");
+          return;
+        }
+
+        const headers = parsedData[0].map(h => h.trim());
+        const importedAssets = [];
+
+        for (let i = 1; i < parsedData.length; i++) {
+          const rowData = parsedData[i];
+          if (!rowData || rowData.length === 0 || !rowData[0]) continue; // Skip empty rows
+
+          // Map the row data back to the headers
+          const rowObj = {};
+          headers.forEach((h, idx) => {
+             rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
+          });
+
+          // Intelligent Translation: Try to find Maximo headers, fallback to FI-OMS native headers
+          const name = rowObj['DESCRIPTION'] || rowObj['name'] || '';
+          if (!name) continue; // Safety check
+
+          // Status Translator
+          let status = "Operational";
+          const rawStatus = (rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
+          if (rawStatus === 'INACTIVE' || rawStatus.includes('NOT WORKING')) {
+              status = "Maintenance Due";
+          } else if (rawStatus && rawStatus !== 'ACTIVE') {
+              status = rowObj['status'] || "Operational";
+          }
+
+          // Build the final uniform object
+          const finalAsset = {
+            id: rowObj['id'] || `ast-import-${Date.now()}-${i}`,
+            name: name,
+            model: rowObj['model'] || `${rowObj['MANUFACTURE'] || ''} ${rowObj['Model Number'] || ''}`.trim() || 'Unknown Model',
+            serial: rowObj['serial'] || rowObj['SERIALNUM'] || 'N/A',
+            category: rowObj['category'] || "Legacy Maximo",
+            location: rowObj['location'] || rowObj['LOCATION'] || '',
+            department: rowObj['department'] || "Facilities",
+            operatorEmail: rowObj['operatorEmail'] || (rowObj['Named Owner'] ? `${rowObj['Named Owner']} (Legacy)` : "Unassigned"),
+            status: status,
+            pmDates: {}, 
+            parentId: rowObj['parentId'] || ""
+          };
+
+          importedAssets.push(finalAsset);
+        }
+
+        if (!window.confirm(`Found ${importedAssets.length} assets in CSV. Import them now?`)) {
+          e.target.value = null; 
+          return;
+        }
+
+        // Loop through and POST each imported asset to Azure
+        for (const asset of importedAssets) {
+          await window.fetch('/api/assets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(asset)
+          });
+        }
+        
+        alert("Import complete! Refreshing page to sync database.");
+        window.location.reload(); 
+        
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("Failed to parse CSV file. Ensure it is formatted correctly.");
+      }
+      e.target.value = null; // Reset input
+    };
+    reader.readAsText(file);
+  };
+  // ---------------------------------
 
   const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -196,20 +328,49 @@ export default function AssetsTab({
     <div className="space-y-8 animate-entrance">
       
       {/* DIRECTORY HEADER & CONTROLS */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-        <button 
-          onClick={openRegisterForNew}
-          className="w-full md:w-auto bg-[#005596] hover:bg-[#00407a] text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
-        >
-          ➕ Register New Asset
-        </button>
+      <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+        
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+          <button 
+            onClick={openRegisterForNew}
+            className="w-full sm:w-auto bg-[#005596] hover:bg-[#00407a] text-white px-6 py-3 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md transition-all transform hover:-translate-y-0.5"
+          >
+            ➕ Register New Asset
+          </button>
+
+          {isSystemAdmin && (
+            <div className="flex items-center space-x-2 w-full sm:w-auto">
+              <button 
+                onClick={handleExportCSV}
+                className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                title="Export Database to CSV (Excel)"
+              >
+                📤 Export CSV
+              </button>
+              <button 
+                onClick={() => fileInputRef.current.click()}
+                className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                title="Import Database from CSV (Excel)"
+              >
+                📥 Import CSV
+              </button>
+              <input 
+                type="file" 
+                accept=".csv" 
+                ref={fileInputRef} 
+                onChange={handleImportCSV} 
+                className="hidden" 
+              />
+            </div>
+          )}
+        </div>
 
         <input 
           type="text" 
           placeholder="Search by Name, S/N, Category, or Dept..." 
           value={assetSearch}
           onChange={(e) => setAssetSearch(e.target.value)}
-          className="w-full md:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
+          className="w-full xl:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#005596] transition-all"
         />
       </div>
       
