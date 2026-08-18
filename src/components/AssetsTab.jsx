@@ -123,7 +123,26 @@ export default function AssetsTab({
     }
   };
 
-  // --- CSV EXPORT / IMPORT ENGINE ---
+  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const filteredAssets = assets.filter(a =>
+    a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.category?.toLowerCase().includes(assetSearch.toLowerCase()) ||
+    a.department?.toLowerCase().includes(assetSearch.toLowerCase())
+  );
+
+  const groupedAssets = filteredAssets.reduce((acc, asset) => {
+    const key = groupBy === "category" 
+        ? (asset.category || "Uncategorized") 
+        : (asset.department || "Unassigned");
+        
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(asset);
+    return acc;
+  }, {});
+
+  // --- CSV EXPORT / IMPORT / DELETE ENGINE ---
   const handleExportCSV = () => {
     const headers = ["id", "name", "model", "serial", "category", "location", "department", "operatorEmail", "status", "parentId"];
     const csvRows = [headers.join(",")];
@@ -184,17 +203,22 @@ export default function AssetsTab({
           // Status Translator
           let status = "Operational";
           const rawStatus = (rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
-          if (rawStatus === 'INACTIVE' || rawStatus.includes('NOT WORKING')) {
+          if (rawStatus.includes('INACTIVE') || rawStatus.includes('NOT WORKING')) {
               status = "Maintenance Due";
-          } else if (rawStatus && rawStatus !== 'ACTIVE') {
+          } else if (rawStatus && !rawStatus.includes('ACTIVE') && !rawStatus.includes('OPERATING')) {
               status = rowObj['status'] || "Operational";
           }
+
+          // Model & Manufacturer compiler
+          const brand = rowObj['MANUFACTURER'] || rowObj['MANUFACTURE'] || '';
+          const mod = rowObj['Model Number'] || '';
+          const finalModel = rowObj['model'] || `${brand} ${mod}`.trim() || 'Unknown Model';
 
           // Build the final uniform object
           const finalAsset = {
             id: rowObj['id'] || `ast-import-${Date.now()}-${i}`,
             name: name,
-            model: rowObj['model'] || `${rowObj['MANUFACTURE'] || ''} ${rowObj['Model Number'] || ''}`.trim() || 'Unknown Model',
+            model: finalModel,
             serial: rowObj['serial'] || rowObj['SERIALNUM'] || 'N/A',
             category: rowObj['category'] || "Legacy Maximo",
             location: rowObj['location'] || rowObj['LOCATION'] || '',
@@ -233,26 +257,37 @@ export default function AssetsTab({
     };
     reader.readAsText(file);
   };
+
+  const handleMassDelete = async () => {
+    const targetAssets = filteredAssets;
+    
+    if (targetAssets.length === 0) {
+      alert("No assets found to delete.");
+      return;
+    }
+
+    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${targetAssets.length} assets.\n\nThis will wipe them from the Azure database completely. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(`To confirm mass deletion of ${targetAssets.length} assets, please type DELETE in all caps:`);
+    if (confirm2 !== "DELETE") {
+      alert("Mass deletion cancelled.");
+      return;
+    }
+
+    try {
+      for (const asset of targetAssets) {
+        await window.fetch(`/api/assets?id=${asset.id}`, { method: 'DELETE' });
+      }
+      alert("Mass deletion complete! Refreshing database.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Mass delete error:", err);
+      alert("An error occurred during mass deletion. Partial delete may have occurred.");
+      window.location.reload();
+    }
+  };
   // ---------------------------------
-
-  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-  const filteredAssets = assets.filter(a =>
-    a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
-    a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
-    a.category?.toLowerCase().includes(assetSearch.toLowerCase()) ||
-    a.department?.toLowerCase().includes(assetSearch.toLowerCase())
-  );
-
-  const groupedAssets = filteredAssets.reduce((acc, asset) => {
-    const key = groupBy === "category" 
-        ? (asset.category || "Uncategorized") 
-        : (asset.department || "Unassigned");
-        
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(asset);
-    return acc;
-  }, {});
 
   const openRegisterForNew = () => {
     const defaultDept = isDepartmentRestricted ? userDept : "";
@@ -353,6 +388,13 @@ export default function AssetsTab({
                 title="Import Database from CSV (Excel)"
               >
                 📥 Import CSV
+              </button>
+              <button 
+                onClick={handleMassDelete}
+                className="flex-1 sm:flex-none px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 transition-colors"
+                title="Wipe Current Asset List"
+              >
+                🧨 Wipe List
               </button>
               <input 
                 type="file" 
