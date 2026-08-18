@@ -276,8 +276,6 @@ export default function App() {
   const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
-  
-  // --- EXTRACTED STATS FOR BANNER ---
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   const dynamicComplianceRate = visibleAssets.length > 0 
@@ -336,6 +334,7 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
+      // 1. Alert: User requests registration
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
@@ -348,14 +347,21 @@ export default function App() {
           return response;
       }
 
+      // 2. Alert: Technician PM Executions only (STRICTLY FILTERED)
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
           
           const commentText = logDetails.comments || logDetails.notes || "";
+          const templateName = logDetails.templateName || "";
           
+          // FIX: A real PM execution must have an SOP name. 
+          // If the templateName is missing, or is just "Asset Profile Update", skip it completely!
           const isSystemLog = 
+            !templateName ||
             logDetails.assetId === "SYS-AUTO" ||
+            templateName.includes("System Action") ||
+            templateName.includes("Asset Profile Update") ||
             commentText.includes("Registered new facility asset") ||
             commentText.includes("Updated facility asset") ||
             commentText.includes("Automated Tracker");
@@ -366,11 +372,12 @@ export default function App() {
               triggerTeamsAlert(
                   "admin@fcimg.com",
                   `✅ PM Executed: ${logDetails.assetName || 'Asset'}`,
-                  `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${logDetails.templateName || 'Unknown'}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`
+                  `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`
               );
           }
       }
 
+      // 3. State sync without firing outgoing Teams Webhook alerts for bulk asset/SOP updates
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
         if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
         if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
@@ -430,7 +437,6 @@ export default function App() {
       <style>{customStyles}</style>
       <TopHeader {...masterProps} />
       
-      {/* --- NEW KPI BANNER (PASSED THE ACTUAL STATS) --- */}
       <KpiBanner 
         complianceRate={dynamicComplianceRate} 
         operationalCount={stats?.operationalCount || 0}
