@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function HistoryTab({ history = [] }) {
+export default function HistoryTab({ history = [], isSystemAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   
@@ -66,6 +66,36 @@ export default function HistoryTab({ history = [] }) {
     return 0;
   });
 
+  // --- NEW: MASS DELETE LOGS ENGINE ---
+  const handleMassDeleteLogs = async () => {
+    if (processedHistory.length === 0) {
+      alert("No logs found to delete based on your current search/filters.");
+      return;
+    }
+
+    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${processedHistory.length} audit logs.\n\nThis will wipe them from the Azure database completely. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(`To confirm mass deletion of ${processedHistory.length} audit logs, please type DELETE in all caps:`);
+    if (confirm2 !== "DELETE") {
+      alert("Mass deletion cancelled.");
+      return;
+    }
+
+    try {
+      for (const log of processedHistory) {
+        await window.fetch(`/api/history?id=${log.id}`, { method: 'DELETE' });
+      }
+      alert("Mass deletion complete! Refreshing database.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Mass delete error:", err);
+      alert("An error occurred during mass deletion. Partial delete may have occurred.");
+      window.location.reload();
+    }
+  };
+  // ------------------------------------
+
   return (
     <div className="space-y-6 animate-entrance">
       
@@ -97,9 +127,22 @@ export default function HistoryTab({ history = [] }) {
 
       {!selectedLog ? (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <div className="p-6 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-start lg:items-center bg-gray-50/50 gap-4">
             <h2 className="text-lg font-black text-[#005596]">Executed Audit Trail</h2>
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+              
+              {/* --- MASS WIPE BUTTON --- */}
+              {isSystemAdmin && (
+                <button 
+                  onClick={handleMassDeleteLogs}
+                  className="text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-colors shadow-sm border bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                  title="Wipe the currently filtered logs"
+                >
+                  🧨 WIPE LOGS
+                </button>
+              )}
+              {/* ------------------------ */}
+
               <button 
                 onClick={() => setShowOnlyPMs(!showOnlyPMs)}
                 className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-colors shadow-sm border ${
@@ -115,7 +158,7 @@ export default function HistoryTab({ history = [] }) {
                 placeholder="Search by Asset, Tech, or Status..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="border border-gray-300 rounded-lg px-4 py-2 text-xs focus:ring-2 focus:ring-[#005596] outline-none shadow-sm w-72"
+                className="flex-1 lg:flex-none border border-gray-300 rounded-lg px-4 py-2 text-xs focus:ring-2 focus:ring-[#005596] outline-none shadow-sm w-full lg:w-72"
               />
             </div>
           </div>
