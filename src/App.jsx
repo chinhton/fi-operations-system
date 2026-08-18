@@ -37,7 +37,6 @@ const customStyles = `
     animation: movingGradient 15s ease infinite;
   }
 
-  /* --- HARDCODED PDF EXPORT FIX: Removes Browser Headers/Footers --- */
   @media print {
     @page { 
       margin: 0; 
@@ -135,8 +134,8 @@ export default function App() {
 
   // --- STRICT SILO FILTERING ---
   const filterHierarchy = (item) => {
-    if (isGodMode) return true; // ONLY System Admins see everything
-    return item.department === userDept; // Everyone else strictly sees their own department
+    if (isGodMode) return true; 
+    return item.department === userDept; 
   };
 
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
@@ -324,9 +323,6 @@ export default function App() {
   const userRef = useRef(currentUser);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
 
-  const assetsRef = useRef(assets);
-  useEffect(() => { assetsRef.current = assets; }, [assets]);
-
   useEffect(() => {
     const originalFetch = window.fetch;
 
@@ -335,6 +331,7 @@ export default function App() {
       const response = await originalFetch(url, config);
       const activeUser = userRef.current;
 
+      // 1. Alert: User requests registration
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
@@ -347,7 +344,7 @@ export default function App() {
           return response;
       }
 
-      // --- THE PM EXECUTION WEBHOOK ---
+      // 2. Alert: Technician PM Executions only
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
@@ -363,7 +360,6 @@ export default function App() {
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
               
-              // We inject the Teams Alert right here so every executed PM triggers a notification
               triggerTeamsAlert(
                   "admin@fcimg.com",
                   `✅ PM Executed: ${logDetails.assetName || 'Asset'}`,
@@ -372,19 +368,11 @@ export default function App() {
           }
       }
 
-      // Main generic interceptor block (Explicitly ensuring it only intercepts /api/ traffic, not Webhook URLs)
-      if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/') && !url.includes('/api/history') && !url.includes('/api/sendEmail') && !url.includes('/api/manuals') && !url.includes('/api/upload')) {
-        
-        let actionName = "System Event";
-        let tabSource = "System Background";
-
-        if (url.includes('/api/assets')) { actionName = "Facility Asset"; tabSource = "Facility Assets Tab"; }
-        if (url.includes('/api/pmTemplates')) { actionName = "Established SOP"; tabSource = "Established SOPs Tab"; }
-        if (url.includes('/api/users')) { actionName = "User Directory"; tabSource = "Account Approvals Tab"; }
-
-        if (actionName === "Facility Asset") { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); } 
-        else if (actionName === "Established SOP") { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); } 
-        else if (actionName === "User Directory") {
+      // 3. State sync without firing outgoing Teams Webhook alerts for bulk asset/SOP updates
+      if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
+        if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
+        if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
+        if (url.includes('/api/users') && !url.includes('/api/history')) {
             originalFetch('/api/users').then(r => r.json()).then(data => {
                 setUsers(data);
                 const updatedMe = data.find(u => u.email === activeUser.email);
@@ -394,84 +382,8 @@ export default function App() {
                 }
             }).catch(console.error);
         }
-
-        let itemName = "";
-        let itemDetails = {};
-        if (config.body) {
-            try {
-                const parsedBody = JSON.parse(config.body);
-                itemDetails = parsedBody;
-                itemName = parsedBody.name || parsedBody.title || parsedBody.id || "";
-            } catch (e) {}
-        }
-
-        let actionTaken = 'Updated';
-        let isExpiring = false;
-
-        // --- THE OVERDUE TRANSITION CHECK ---
-        if (config.method.toUpperCase() === 'DELETE') {
-            actionTaken = 'Deleted';
-        } else {
-            if (actionName === "Facility Asset" && itemDetails && itemDetails.id) {
-                const oldAsset = assetsRef.current.find(a => String(a.id) === String(itemDetails.id));
-                if (oldAsset) {
-                    actionTaken = 'Updated';
-                    // We check if the state flipped exactly from Operational to Due to prevent spamming
-                    if (oldAsset.status === "Operational" && itemDetails.status === "Maintenance Due") {
-                        isExpiring = true;
-                    }
-                } else {
-                    actionTaken = 'Created';
-                }
-            } else {
-                actionTaken = config.method.toUpperCase() === 'POST' ? 'Created' : 'Updated';
-            }
-        }
-
-        const logComment = isExpiring
-            ? `Automated Tracker: System background sweep flagged Facility Asset (${itemName}) as overdue.`
-            : (itemName 
-                ? `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName} (${itemName}).` 
-                : `Automated Tracker: ${activeUser.name} ${actionTaken.toLowerCase()} a ${actionName}.`);
-
-        const auditLog = { 
-            id: `LOG-${Date.now().toString().slice(-4)}`, 
-            timestamp: new Date().toLocaleString(), 
-            assetId: "SYS-AUTO", 
-            assetName: actionName, 
-            templateName: `System Action - ${tabSource}`,
-            interval: "Automated", 
-            technician: activeUser.name, 
-            email: activeUser.email, 
-            status: "Completed Pass", 
-            comments: logComment 
-        };
-
-        originalFetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(auditLog) })
-        .then(res => res.json())
-        .then(savedLog => { setHistory(prev => [savedLog, ...prev]); }).catch(console.error);
-
-        const shouldAlertSOP = actionName === "Established SOP";
-        const shouldAlertAsset = actionName === "Facility Asset" && (actionTaken === "Created" || actionTaken === "Deleted" || isExpiring);
-
-        if (shouldAlertSOP || shouldAlertAsset) {
-             let alertTitle = `${actionName} ${actionTaken}`;
-             let alertBody = `**${activeUser.name}** has ${actionTaken.toLowerCase()} a ${actionName} via the ${tabSource}.\n\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
-             
-             if (isExpiring) {
-                 alertTitle = `⚠️ OVERDUE: ${actionName}`;
-                 alertBody = `**System Alert:** A facility asset has expired its maintenance window and requires immediate attention.\n\n**Asset:** ${itemName}\n**Details:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`;
-             }
-
-             triggerTeamsAlert("admin@fcimg.com", alertTitle, alertBody);
-        } else if (actionName === "User Directory") {
-             triggerTeamsAlert(
-                 "admin@fcimg.com",
-                 `Account Status Updated`,
-                 `**${activeUser.name}** has updated a user account status.\n\n**Action Logged:** ${logComment}\n**Timestamp:** ${new Date().toLocaleString()}`
-             );
-        }
       }
+
       return response;
     };
 
