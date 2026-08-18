@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 
-// --- THE FIX: Aligned departments strictly with AuthScreen ---
 const CORPORATE_DEPARTMENTS = [
   "System Administration",
   "Facilities", 
@@ -90,18 +89,19 @@ export default function AssetsTab({
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   
-  // Override States
   const [overrideFreq, setOverrideFreq] = useState("");
   const [overrideDate, setOverrideDate] = useState("");
 
-  const fileInputRef = useRef(null); // Ref for the hidden import button
+  const fileInputRef = useRef(null); 
 
   const [groupBy, setGroupBy] = useState(() => {
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
   });
 
   const userDept = currentUser?.department || "";
-  const isDepartmentRestricted = !isSystemAdmin && userDept !== "Facilities" && userDept !== "Production: Engineering";
+  
+  // STRICT SILO LOGIC: Only System Admins can bypass department restrictions
+  const isDepartmentRestricted = !isSystemAdmin;
 
   const handleGroupChange = async (type) => {
     setGroupBy(type);
@@ -151,7 +151,6 @@ export default function AssetsTab({
 
   // --- CSV EXPORT / IMPORT / DELETE ENGINE ---
   const handleExportCSV = () => {
-    // Adjusted headers to perfectly match the UI modal structure
     const headers = ["id", "name", "manufacturer", "model", "serial", "category", "location", "glAccount", "department", "operatorEmail", "status", "parentId"];
     const csvRows = [headers.join(",")];
 
@@ -196,18 +195,16 @@ export default function AssetsTab({
 
         for (let i = 1; i < parsedData.length; i++) {
           const rowData = parsedData[i];
-          if (!rowData || rowData.length === 0 || !rowData[0]) continue; // Skip empty rows
+          if (!rowData || rowData.length === 0 || !rowData[0]) continue; 
 
-          // Map the row data back to the headers
           const rowObj = {};
           headers.forEach((h, idx) => {
              rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
           });
 
-          // Intelligent Translation: Try to find new Custom headers, fallback to old or standard ones.
           const rawName = rowObj['Description'] || rowObj['DESCRIPTION'] || rowObj['name'] || '';
           const name = toTitleCase(rawName);
-          if (!name) continue; // Safety check
+          if (!name) continue; 
 
           const rawCategory = rowObj['Category Type'] || rowObj['category'] || "Imported Equipment";
           const category = toTitleCase(rawCategory);
@@ -223,20 +220,23 @@ export default function AssetsTab({
           const glAccount = rowObj['GL Account'] || rowObj['GLACCOUNT'] || rowObj['glAccount'] || '';
           const department = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
           
-          // --- INTELLIGENT USER MAPPING ---
+          // --- INTELLIGENT USER MAPPING & SANITIZATION ---
           let operatorEmail = "Unassigned";
-          let rawOperator = rowObj['Asset Owner'] || rowObj['operatorEmail'] || "";
+          let rawOperator = rowObj['operatorEmail'] || rowObj['Asset Owner'] || rowObj['Named Owner'] || "";
           
           if (rawOperator) {
-             rawOperator = rawOperator.replace('(Legacy List)', '').trim(); // Clean up old exports just in case
+             // Actively strip out old dirt text if it exists from a previous export
+             rawOperator = rawOperator.replace(/\(Legacy List\)/gi, '').trim();
              
              if (rawOperator.includes('@')) {
                  operatorEmail = rawOperator;
-             } else {
-                 // Cross-reference the name with actual system users
+             } else if (rawOperator.length > 0) {
+                 // Cross-reference the pristine name with actual system users
                  const matchedUser = users.find(u => u.name && u.name.toLowerCase().includes(rawOperator.toLowerCase()));
                  if (matchedUser) {
                      operatorEmail = matchedUser.email;
+                 } else {
+                     operatorEmail = rawOperator; // Default to clean name if email not found
                  }
              }
           }
@@ -250,7 +250,6 @@ export default function AssetsTab({
               status = rowObj['Status'] || "Operational";
           }
 
-          // Build the final uniform object
           const finalAsset = {
             id: rowObj['id'] || `ast-import-${Date.now()}-${i}`,
             name: name,
@@ -270,12 +269,11 @@ export default function AssetsTab({
           importedAssets.push(finalAsset);
         }
 
-        if (!window.confirm(`Found ${importedAssets.length} assets in CSV.\n\nFormatting: Applied Title Case to Names, Categories, and Locations. Automatically mapped Asset Owners to official user emails.\n\nImport them now?`)) {
+        if (!window.confirm(`Found ${importedAssets.length} assets in CSV.\n\nFormatting: Applied Title Case to Names and Categories. Active emails successfully mapped.\n\nImport them now?`)) {
           e.target.value = null; 
           return;
         }
 
-        // Loop through and POST each imported asset to Azure
         for (const asset of importedAssets) {
           await window.fetch('/api/assets', {
             method: 'POST',
@@ -291,7 +289,7 @@ export default function AssetsTab({
         console.error("Import error:", err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
       }
-      e.target.value = null; // Reset input
+      e.target.value = null; 
     };
     reader.readAsText(file);
   };
