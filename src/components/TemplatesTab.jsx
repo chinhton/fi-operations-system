@@ -44,7 +44,7 @@ const decodeSteps = (stepString) => {
 };
 
 export default function TemplatesTab({
-  pmTemplates = [], manuals = [],
+  pmTemplates = [], manuals = [], assets = [], // --- ADDED ASSETS HERE ---
   newTemplate, setNewTemplate, handleAddTemplateSubmit,
   PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
   isAddingTemplate, currentUser
@@ -237,12 +237,28 @@ export default function TemplatesTab({
     return matchesSearch || t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // --- DYNAMIC CATEGORY FILTER ENGINE ---
+  // Calculates which categories actually belong to the selected department(s)
+  const isDeptMatch = (assetDept, selectedDepts) => {
+    if (!selectedDepts || selectedDepts === "Global" || selectedDepts.length === 0) return true;
+    const aDepts = Array.isArray(assetDept) ? assetDept : [assetDept || "Unassigned"];
+    const sDepts = Array.isArray(selectedDepts) ? selectedDepts : [selectedDepts];
+    return aDepts.some(d => sDepts.includes(d));
+  };
+
+  const dynamicCategories = [...new Set(
+    assets
+      .filter(a => isDeptMatch(a.department, newTemplate?.department))
+      .map(a => a.category)
+      .filter(Boolean)
+  )];
+
   // --- DYNAMIC DATALIST ENGINE ---
   // Calculates the active targets to display in the section dropdown
   let availableTags = [];
   if (showTemplateModal) {
     if (!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) {
-        availableTags = uniqueCategories || [];
+        availableTags = dynamicCategories || []; // Falls back to filtered departments
     } else {
         availableTags = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
     }
@@ -403,10 +419,10 @@ export default function TemplatesTab({
                         let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
                         
                         if (val === "Global") {
-                          setNewTemplate({...newTemplate, department: "Global"});
+                          setNewTemplate({...newTemplate, department: "Global", targetCategory: "Global"}); // Reset target map when dept resets
                         } else {
                           if (!selectedArray.includes(val)) {
-                            setNewTemplate({...newTemplate, department: [...selectedArray, val]});
+                            setNewTemplate({...newTemplate, department: [...selectedArray, val], targetCategory: "Global"});
                           }
                         }
                       }} 
@@ -445,7 +461,7 @@ export default function TemplatesTab({
                                   onClick={() => {
                                     const arr = Array.isArray(newTemplate.department) ? newTemplate.department : [newTemplate.department];
                                     const filtered = arr.filter(c => c !== dept);
-                                    setNewTemplate({...newTemplate, department: filtered.length > 0 ? filtered : "Global"});
+                                    setNewTemplate({...newTemplate, department: filtered.length > 0 ? filtered : "Global", targetCategory: "Global"});
                                   }} 
                                   className="ml-1.5 text-blue-500 hover:text-[#005596] font-bold text-sm leading-none"
                                 >
@@ -458,7 +474,7 @@ export default function TemplatesTab({
                   </div>
                 </div>
                 
-                {/* --- CATEGORY MULTI-SELECT --- */}
+                {/* --- TARGET ASSET MULTI-SELECT (NOW FILTERED BY DEPARTMENT) --- */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
                   <div className="flex flex-col space-y-2">
@@ -484,7 +500,8 @@ export default function TemplatesTab({
                       <option value="">-- Add Category Target --</option>
                       {(!Array.isArray(newTemplate.targetCategory) || newTemplate.targetCategory.length === 0) && <option value="Global">Global (All Assets)</option>}
                       
-                      {(uniqueCategories || []).filter(cat => {
+                      {/* Uses the newly mapped dynamicCategories which are restricted by department */}
+                      {(dynamicCategories || []).filter(cat => {
                         let current = newTemplate.targetCategory;
                         let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
                         return !selectedArray.includes(cat);
