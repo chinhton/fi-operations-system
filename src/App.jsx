@@ -18,6 +18,7 @@ import useHistory from './hooks/useHistory';
 import useCosmosSync from './hooks/useCosmosSync';
 import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
+import useDashboardStats from './hooks/useDashboardStats';
 
 const customStyles = `
   body {
@@ -193,7 +194,6 @@ export default function App() {
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       for (const asset of assets) {
-        // SWEEP IGNORES INACTIVE OR ALREADY OVERDUE ASSETS
         if (asset.status !== "Active") continue;
 
         let isOverdue = false;
@@ -236,19 +236,20 @@ export default function App() {
   const visibleUsers = users.filter(u => { if (isGodMode) return true; return u.department === userDept; });
   const visibleAssets = assets.filter(filterHierarchy);
 
+  // --- RESTORED STATS ENGINE FOR THE SIDEBAR ---
+  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
+
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
   const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
 
-  // --- NEW COMPLIANCE MATH: Ignores "Inactive" Assets Completely ---
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
   const dynamicComplianceRate = scorableAssets.length > 0 
     ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) 
     : 100;
 
-  // Local KPI Counts
   const activeCount = visibleAssets.filter(a => a.status === "Active").length;
   const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
   const calibrationCount = visibleAssets.filter(a => a.status === "Out of Calibration").length;
@@ -369,7 +370,7 @@ export default function App() {
   
   const masterProps = {
     activeTab, changeTab, currentTime, PM_CYCLE_OPTIONS, expandedActionQueue: [], 
-    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks,
+    ...modals, ...historyHooks, ...auth, ...assetHooks, ...woHooks, ...templateHooks, ...manualHooks, ...pmHooks, ...stats,
     complianceRate: dynamicComplianceRate,
     currentUser: effectiveUser,
     isSystemAdmin: isGodMode, 
@@ -382,8 +383,6 @@ export default function App() {
     users: visibleUsers, setUsers,
     manuals, setManuals, 
     calculateDaysRemaining, calculateNextPmDate,
-    
-    // Pass local stats down
     activeCount, overdueCount, calibrationCount, correctiveCount
   };
 
