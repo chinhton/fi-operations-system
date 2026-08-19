@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 
+// --- BULLETPROOF CSV PARSER ---
 const parseCSV = (str) => {
   const arr = [];
   let quote = false;
@@ -11,13 +12,15 @@ const parseCSV = (str) => {
       if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
       if (cc === '"') { quote = !quote; continue; }
       if (cc === ',' && !quote) { ++col; continue; }
+      // Safely handle Windows (\r\n) and Mac (\n) line endings
+      if (cc === '\r' && nc === '\n' && !quote) { ++row; col = 0; ++c; continue; } 
       if (cc === '\n' && !quote) { ++row; col = 0; continue; }
       if (cc !== '\r') arr[row][col] += cc;
   }
   return arr;
 };
 
-export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin }) {
+export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -125,7 +128,8 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
           return;
         }
 
-        const headers = parsedData[0].map(h => h.trim().toLowerCase());
+        // AGGRESSIVE STRIPPER: Removes all spaces, #, -, and special chars so Excel headers easily map
+        const headers = parsedData[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
         const importedKeys = [];
 
         for (let i = 1; i < parsedData.length; i++) {
@@ -137,18 +141,17 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
              rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
           });
 
-          // Intelligent Mapping
-          const keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['key tag #'] || rowObj['id'] || '';
+          // HYPER-TOLERANT MAPPING: Will catch almost any variation of your Excel columns
+          const keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['item'] || rowObj['id'] || '';
           if (!keyTag) continue; 
 
-          const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['room #'] || '';
-          const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['description'] || '';
-          const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storage location'] || 'Master Key Box';
-          const assignedTo = rowObj['assignedto'] || rowObj['possession'] || rowObj['owner'] || '';
+          const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['rm'] || '';
+          const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['areadoor'] || rowObj['description'] || '';
+          const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storagelocation'] || 'Master Key Box';
+          const assignedTo = rowObj['assignedto'] || rowObj['possession'] || rowObj['owner'] || rowObj['assignee'] || '';
           
           let lastVerified = rowObj['lastverified'] || rowObj['date'] || rowObj['verified'] || '';
           if (lastVerified && lastVerified.includes('/')) {
-              // Convert MM/DD/YYYY to YYYY-MM-DD for standard HTML inputs
               const parts = lastVerified.split('/');
               if(parts.length === 3) {
                   lastVerified = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
@@ -389,18 +392,16 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
                   <input type="text" value={newKey.keyLocation} onChange={e => setNewKey({...newKey, keyLocation: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-amber-500 outline-none" placeholder="e.g. Facilities Lockbox 1" />
                 </div>
                 
+                {/* THE FIX: Changed from <select> user list to an open text input */}
                 <div>
                   <label className="block text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1.5">Assigned To / Checked Out By</label>
-                  <select 
+                  <input 
+                    type="text" 
                     value={newKey.assignedTo || ""} 
                     onChange={e => setNewKey({...newKey, assignedTo: e.target.value})} 
-                    className="w-full text-xs rounded border-red-200 bg-red-50/30 p-2.5 border focus:ring-1 focus:ring-red-500 outline-none cursor-pointer"
-                  >
-                    <option value="">-- Maintained in Storage --</option>
-                    {users.map(u => (
-                      <option key={`usr-${u.email}`} value={u.name}>{u.name} ({u.department})</option>
-                    ))}
-                  </select>
+                    className="w-full text-xs rounded border-red-200 bg-red-50/30 p-2.5 border focus:ring-1 focus:ring-red-500 outline-none placeholder-red-300"
+                    placeholder="e.g. John Doe (Leave blank if stored)"
+                  />
                 </div>
 
                 <div className="sm:col-span-2">
