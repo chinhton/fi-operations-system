@@ -84,7 +84,6 @@ export default function AssetsTab({
   const [overrideFreq, setOverrideFreq] = useState("");
   const [overrideDate, setOverrideDate] = useState("");
 
-  // --- NEW: Visual Progress State for Imports & Wipes ---
   const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
 
   const fileInputRef = useRef(null); 
@@ -131,7 +130,6 @@ export default function AssetsTab({
   );
 
   const groupedAssets = filteredAssets.reduce((acc, asset) => {
-    // If grouping by department, we use the primary (first) department
     const key = groupBy === "category" 
         ? (asset.category || "Uncategorized") 
         : (Array.isArray(asset.department) ? asset.department[0] : (asset.department || "Unassigned"));
@@ -312,7 +310,6 @@ export default function AssetsTab({
           return;
         }
 
-        // --- NEW: Trigger the Import Progress UI ---
         setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedAssets.length });
 
         for (let i = 0; i < importedAssets.length; i++) {
@@ -348,7 +345,6 @@ export default function AssetsTab({
     const confirm2 = window.prompt(`To confirm mass deletion of ${targetAssets.length} assets, please type DELETE in all caps:`);
     if (confirm2 !== "DELETE") { alert("Mass deletion cancelled."); return; }
 
-    // --- NEW: Trigger the Delete Progress UI ---
     setSyncProgress({ active: true, action: 'Deleting', current: 0, total: targetAssets.length });
 
     try {
@@ -384,10 +380,53 @@ export default function AssetsTab({
     setIsRegisterModalOpen(true);
   };
 
+  // --- NEW: AUTO-SYNC CATEGORY LOGIC ---
+  const handleFieldChange = (field, value) => {
+    const updatedAsset = { ...newAsset, [field]: value };
+    
+    // Automatically construct the folder name if they change Manufacturer, Name, or Model
+    if (['name', 'manufacturer', 'model'].includes(field)) {
+      const mfr = updatedAsset.manufacturer ? updatedAsset.manufacturer.trim() : "";
+      const name = updatedAsset.name ? updatedAsset.name.trim() : "";
+      const mod = updatedAsset.model ? updatedAsset.model.trim() : "";
+      
+      let autoCat = [];
+      if (mfr) autoCat.push(mfr);
+      if (name) autoCat.push(name);
+      
+      let catString = autoCat.join(' | ');
+      if (catString && mod) catString += ` - ${mod}`;
+      else if (!catString && mod) catString = mod;
+      
+      updatedAsset.category = catString;
+      
+      // Automatically switch to "New Category" view so they can see it typing out
+      setIsAddingNewCategory(true);
+    }
+    
+    setNewAsset(updatedAsset);
+  };
+
   const handleLocalAssetSubmit = async (e) => {
     e.preventDefault();
-    await handleAddAssetSubmit(e);
-    setIsRegisterModalOpen(false);
+    
+    if (!newAsset.name || newAsset.name.trim() === "") {
+      alert("⚠️ Equipment Name is required. Please fill it out.");
+      return; 
+    }
+    
+    if (!newAsset.category || newAsset.category.trim() === "") {
+      alert("⚠️ Category Type is required. Please select or add one.");
+      return; 
+    }
+
+    try {
+      await handleAddAssetSubmit(e);
+      setIsRegisterModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save asset:", error);
+      alert("An error occurred while communicating with the database.");
+    }
   };
 
   const categoryDropdownOptions = [...new Set([...(uniqueCategories || []), newAsset?.category])].filter(Boolean);
@@ -653,16 +692,26 @@ export default function AssetsTab({
             <form onSubmit={handleLocalAssetSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
+                {/* --- AUTO-SYNC INPUTS --- */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
-                  <input type="text" value={newAsset.name || ""} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name <span className="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={newAsset.name || ""} 
+                    onChange={(e) => handleFieldChange('name', e.target.value)} 
+                    placeholder="e.g. Air Compressor" 
+                    className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" 
+                  />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type</label>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Category Type <span className="text-red-500">*</span></label>
                   {isAddingNewCategory ? (
                     <div className="flex space-x-2">
                       <input 
                         type="text" 
+                        required
                         value={newAsset.category || ""} 
                         onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} 
                         placeholder="Type new category..." 
@@ -680,6 +729,7 @@ export default function AssetsTab({
                   ) : (
                     <div className="flex space-x-2">
                       <select 
+                        required
                         value={newAsset.category || ""} 
                         onChange={(e) => setNewAsset({...newAsset, category: e.target.value})} 
                         className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none shadow-sm cursor-pointer"
@@ -702,11 +752,24 @@ export default function AssetsTab({
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manufacturer</label>
-                  <input type="text" value={newAsset.manufacturer || ""} onChange={(e) => setNewAsset({...newAsset, manufacturer: e.target.value})} placeholder="e.g. NORDSON" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input 
+                    type="text" 
+                    value={newAsset.manufacturer || ""} 
+                    onChange={(e) => handleFieldChange('manufacturer', e.target.value)} 
+                    placeholder="e.g. Quincy" 
+                    className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" 
+                  />
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Model Identifier</label>
-                  <input type="text" value={newAsset.model || ""} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  <input 
+                    type="text" 
+                    value={newAsset.model || ""} 
+                    onChange={(e) => handleFieldChange('model', e.target.value)} 
+                    placeholder="e.g. KNWA00-B/H" 
+                    className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" 
+                  />
                 </div>
 
                 <div>
