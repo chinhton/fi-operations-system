@@ -22,6 +22,10 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // --- NEW: Visual Progress State for Imports & Wipes ---
+  const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
+  
   const fileInputRef = useRef(null);
 
   const [newKey, setNewKey] = useState({
@@ -136,7 +140,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
              rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
           });
 
-          // Aggressive Fallback: If headers are completely unmatched, strictly grab the first column as Key Tag
           let keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['item'] || rowObj['id'] || '';
           if (!keyTag) {
               keyTag = rowData[0] ? rowData[0].trim() : `UNKNOWN-TAG-${i}`;
@@ -171,23 +174,26 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           return;
         }
 
-        // --- THE FIX: BULK FLAG & THROTTLE ---
-        for (const key of importedKeys) {
+        // --- NEW: Trigger the Import Progress UI ---
+        setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedKeys.length });
+
+        for (let i = 0; i < importedKeys.length; i++) {
           await window.fetch('/api/keys?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(key)
+            body: JSON.stringify(importedKeys[i])
           });
-          // 50ms buffer to keep Cosmos DB from throwing a 429 Too Many Requests Error
+          
+          setSyncProgress(prev => ({ ...prev, current: i + 1 }));
           await new Promise(resolve => setTimeout(resolve, 50)); 
         }
         
-        alert("Import complete! Refreshing page to sync database.");
         window.location.reload(); 
         
       } catch (err) {
         console.error("Import error:", err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
+        setSyncProgress({ active: false, action: '', current: 0, total: 0 });
       }
       e.target.value = null; 
     };
@@ -209,13 +215,17 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
       return;
     }
 
+    // --- NEW: Trigger the Delete Progress UI ---
+    setSyncProgress({ active: true, action: 'Deleting', current: 0, total: filteredKeys.length });
+
     try {
-      // --- THE FIX: BULK FLAG ---
-      for (const key of filteredKeys) {
-        await window.fetch(`/api/keys?id=${key.id}&bulk=true`, { method: 'DELETE' });
+      for (let i = 0; i < filteredKeys.length; i++) {
+        await window.fetch(`/api/keys?id=${filteredKeys[i].id}&bulk=true`, { method: 'DELETE' });
+        
+        setSyncProgress(prev => ({ ...prev, current: i + 1 }));
         await new Promise(resolve => setTimeout(resolve, 30));
       }
-      alert("Mass deletion complete! Refreshing database.");
+      
       window.location.reload();
     } catch (err) {
       console.error("Mass delete error:", err);
@@ -225,7 +235,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   };
 
   return (
-    <div className="space-y-6 animate-entrance w-full">
+    <div className="space-y-6 animate-entrance w-full relative">
       
       {/* HEADER & CONTROLS */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col xl:flex-row justify-between items-center gap-4">
@@ -422,6 +432,32 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           </div>
         </div>
       )}
+
+      {/* --- PROGRESS OVERLAY FOR IMPORTS / WIPES --- */}
+      {syncProgress.active && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center animate-entrance">
+            <span className="text-5xl mb-4 block animate-bounce">
+              {syncProgress.action === 'Deleting' ? '🗑️' : '📥'}
+            </span>
+            <h3 className={`font-black text-xl uppercase tracking-wider mb-2 ${syncProgress.action === 'Deleting' ? 'text-red-600' : 'text-[#005596]'}`}>
+              {syncProgress.action === 'Deleting' ? 'Wiping Database...' : 'Importing Records...'}
+            </h3>
+            <p className="text-gray-500 font-bold mb-6">Please do not close this window or refresh the page.</p>
+            
+            <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden shadow-inner">
+              <div 
+                className={`${syncProgress.action === 'Deleting' ? 'bg-red-500' : 'bg-[#00A1E4]'} h-4 rounded-full transition-all duration-300`} 
+                style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+              ></div>
+            </div>
+            <p className="text-sm font-mono font-bold text-gray-700">
+              {syncProgress.action === 'Deleting' ? 'Deleted' : 'Imported'} {syncProgress.current} of {syncProgress.total} records
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
