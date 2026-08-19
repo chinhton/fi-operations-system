@@ -45,13 +45,14 @@ const decodeSteps = (stepString) => {
 
 export default function TemplatesTab({
   pmTemplates = [], manuals = [], assets = [],
-  newTemplate, setNewTemplate, handleAddTemplateSubmit,
+  newTemplate, setNewTemplate, handleAddTemplateSubmit, // Still accepted but we will safely bypass it
   PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
-  isAddingTemplate, currentUser
+  currentUser
 }) {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // --- THE FIX: Local saving state ---
   const fileInputRef = useRef(null);
 
   const userDept = currentUser?.department || "";
@@ -147,11 +148,12 @@ export default function TemplatesTab({
         }
 
         for (const template of importedTemplates) {
-          await window.fetch('/api/pmTemplates', {
+          await window.fetch('/api/pmTemplates?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(template)
           });
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
         
         alert("SOP Import complete! Refreshing page to sync database.");
@@ -182,7 +184,8 @@ export default function TemplatesTab({
 
     try {
       for (const t of filteredTemplates) {
-        await window.fetch(`/api/pmTemplates?id=${t.id}`, { method: 'DELETE' });
+        await window.fetch(`/api/pmTemplates?id=${t.id}&bulk=true`, { method: 'DELETE' });
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
       alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
@@ -213,17 +216,42 @@ export default function TemplatesTab({
     setShowTemplateModal(true);
   };
 
+  // --- THE FIX: Bypass the buggy background hook and save array data securely here ---
   const handleLocalSubmit = async (e) => {
     e.preventDefault();
-    await handleAddTemplateSubmit(e);
-    setShowTemplateModal(false);
+    
+    if (!newTemplate.name || newTemplate.name.trim() === "") {
+      alert("⚠️ SOP Checklist Title is required.");
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      const payload = {
+        ...newTemplate,
+        id: newTemplate.id || `sop-${Date.now()}`
+      };
+      
+      await window.fetch('/api/pmTemplates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      setShowTemplateModal(false);
+    } catch (error) {
+      console.error("Failed to save SOP:", error);
+      alert("An error occurred while communicating with the database.");
+    }
+    
+    setIsSaving(false);
   };
 
   const handleDeleteTemplate = async (id) => {
     if (!window.confirm("Are you sure you want to permanently delete this SOP? Active assets relying on it will lose their PM framework.")) return;
     try {
       await window.fetch(`/api/pmTemplates?id=${id}`, { method: 'DELETE' });
-      window.location.reload();
     } catch (err) {}
   };
 
@@ -526,7 +554,6 @@ export default function TemplatesTab({
                   </div>
                 </div>
                 
-                {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
                 <div className="md:col-span-2 mt-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
                   
@@ -538,7 +565,6 @@ export default function TemplatesTab({
                           <th className="px-4 py-3 w-48 border-r border-gray-200">Asset / Section Tag</th>
                           <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
                           <th className="px-4 py-3 w-32 border-r border-gray-200">Input Type</th>
-                          {/* --- THE FIX: WIDENED ACTIONS COLUMN --- */}
                           <th className="px-4 py-3 w-20 text-center">Actions</th>
                         </tr>
                       </thead>
@@ -592,13 +618,12 @@ export default function TemplatesTab({
                               </select>
                             </td>
 
-                            {/* --- THE FIX: DUPLICATE AND DELETE BUTTONS --- */}
                             <td className="px-4 py-3 text-center flex justify-center items-center space-x-3 mt-1">
                               <button 
                                 type="button" 
                                 onClick={() => {
                                   const newSteps = [...newTemplate.checklistSteps];
-                                  newSteps.splice(idx + 1, 0, { ...step }); // Duplicate exactly below
+                                  newSteps.splice(idx + 1, 0, { ...step }); 
                                   setNewTemplate({...newTemplate, checklistSteps: newSteps});
                                 }} 
                                 className="text-blue-400 hover:text-blue-600 transition-colors" 
@@ -695,8 +720,8 @@ export default function TemplatesTab({
               </div> 
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setShowTemplateModal(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingTemplate ? 'Saving...' : (newTemplate.id ? 'Update Protocol' : 'Lock & Save Protocol')}
+                <button type="submit" disabled={isSaving} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                  {isSaving ? 'Saving...' : (newTemplate.id ? 'Update Protocol' : 'Lock & Save Protocol')}
                 </button>
               </div>
             </form>
