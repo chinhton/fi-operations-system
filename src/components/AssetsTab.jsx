@@ -70,24 +70,22 @@ const checkCategoryMatch = (templateCat, assetCat) => {
 };
 
 export default function AssetsTab({
-  assets = [], setAssets, users = [], manuals = [], pmTemplates = [],
+  assets = [], setAssets, users = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
   isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
-  calculateDaysRemaining, calculateNextPmDate, handleOpenAssetModal, openPmModal, deleteAsset,
-  newTemplate, setNewTemplate, handleAddTemplateSubmit, uniqueCategories, 
-  activeAccounts, isAddingTemplate, currentUser, setCurrentUser
+  calculateDaysRemaining, calculateNextPmDate, openPmModal, deleteAsset,
+  uniqueCategories, currentUser, setCurrentUser
 }) {
   
   const [assetSearch, setAssetSearch] = useState("");
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [targetAssetContext, setTargetAssetContext] = useState(null);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  
   const [activeCategoryModal, setActiveCategoryModal] = useState(null);
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
-  
   const [overrideFreq, setOverrideFreq] = useState("");
   const [overrideDate, setOverrideDate] = useState("");
+
+  // --- NEW: Visual Progress State for Imports & Wipes ---
+  const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
 
   const fileInputRef = useRef(null); 
 
@@ -314,19 +312,26 @@ export default function AssetsTab({
           return;
         }
 
-        for (const asset of importedAssets) {
-          await window.fetch('/api/assets', {
+        // --- NEW: Trigger the Import Progress UI ---
+        setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedAssets.length });
+
+        for (let i = 0; i < importedAssets.length; i++) {
+          await window.fetch('/api/assets?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(asset)
+            body: JSON.stringify(importedAssets[i])
           });
+          
+          setSyncProgress(prev => ({ ...prev, current: i + 1 }));
+          await new Promise(resolve => setTimeout(resolve, 50)); 
         }
         
-        alert("Import complete! Refreshing page to sync database.");
         window.location.reload(); 
         
       } catch (err) {
+        console.error("Import error:", err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
+        setSyncProgress({ active: false, action: '', current: 0, total: 0 });
       }
       e.target.value = null; 
     };
@@ -343,13 +348,20 @@ export default function AssetsTab({
     const confirm2 = window.prompt(`To confirm mass deletion of ${targetAssets.length} assets, please type DELETE in all caps:`);
     if (confirm2 !== "DELETE") { alert("Mass deletion cancelled."); return; }
 
+    // --- NEW: Trigger the Delete Progress UI ---
+    setSyncProgress({ active: true, action: 'Deleting', current: 0, total: targetAssets.length });
+
     try {
-      for (const asset of targetAssets) {
-        await window.fetch(`/api/assets?id=${asset.id}`, { method: 'DELETE' });
+      for (let i = 0; i < targetAssets.length; i++) {
+        await window.fetch(`/api/assets?id=${targetAssets[i].id}&bulk=true`, { method: 'DELETE' });
+        
+        setSyncProgress(prev => ({ ...prev, current: i + 1 }));
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
-      alert("Mass deletion complete! Refreshing database.");
+      
       window.location.reload();
     } catch (err) {
+      console.error("Mass delete error:", err);
       alert("An error occurred during mass deletion. Partial delete may have occurred.");
       window.location.reload();
     }
@@ -378,55 +390,10 @@ export default function AssetsTab({
     setIsRegisterModalOpen(false);
   };
 
-  const handleQuickBuildTemplate = (asset) => {
-    const defaultDept = isDepartmentRestricted ? [userDept] : (asset.department || []);
-    
-    setNewTemplate({
-      name: `${asset.name} Maintenance Protocol`,
-      interval: "Monthly",
-      department: defaultDept,
-      targetCategory: [asset.category || "Global"],
-      managerEmail: "",
-      operatorEmail: asset.operatorEmail || "",
-      checklistSteps: [],
-      attachedManualName: "",
-      attachedManualData: null
-    });
-    setTargetAssetContext(asset);
-    setShowTemplateModal(true);
-  };
-
-  const handleQuickEditTemplate = (asset, specificFreq = null) => {
-    let templateToEdit = null;
-    
-    if (specificFreq) {
-       templateToEdit = (pmTemplates || []).find(t => checkCategoryMatch(t.targetCategory, asset.category) && t.interval === specificFreq);
-    } else {
-       const assetTemplates = (pmTemplates || []).filter(t => checkCategoryMatch(t.targetCategory, asset.category));
-       templateToEdit = assetTemplates.length > 0 ? assetTemplates[0] : (pmTemplates || []).find(t => t.targetCategory === "Global");
-    }
-    
-    if (!templateToEdit) {
-      alert("No SOPs exist for this asset yet. Please use 'Build SOP' first.");
-      return;
-    }
-    
-    setNewTemplate(templateToEdit);
-    setTargetAssetContext(asset);
-    setShowTemplateModal(true);
-  };
-
-  const handleLocalTemplateSubmit = async (e) => {
-    e.preventDefault();
-    await handleAddTemplateSubmit(e);
-    setShowTemplateModal(false);
-    setTargetAssetContext(null);
-  };
-
   const categoryDropdownOptions = [...new Set([...(uniqueCategories || []), newAsset?.category])].filter(Boolean);
 
   return (
-    <div className="space-y-8 animate-entrance">
+    <div className="space-y-8 animate-entrance relative">
       
       {/* DIRECTORY HEADER & CONTROLS */}
       <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
@@ -576,7 +543,6 @@ export default function AssetsTab({
                           )}
 
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            {/* --- DISPLAY ARRAY DEPARTMENTS FIX --- */}
                             {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${Array.isArray(asset.department) ? asset.department.join(', ') : asset.department}`}>DEPT: {Array.isArray(asset.department) ? asset.department.join(', ') : asset.department}</span>}
                             {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
                           </div>
@@ -624,13 +590,6 @@ export default function AssetsTab({
                                     <div className="flex justify-between items-center mb-0.5 group">
                                       <div className="flex items-center space-x-1.5">
                                         <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                        <button 
-                                          onClick={() => handleQuickEditTemplate(asset, freq)}
-                                          className="opacity-0 group-hover:opacity-100 text-[10px] text-gray-400 hover:text-indigo-600 transition-all"
-                                          title={`Edit ${freq} SOP`}
-                                        >
-                                          ✏️ Edit
-                                        </button>
                                       </div>
                                       {isCompletedToday ? (
                                           <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
@@ -653,13 +612,6 @@ export default function AssetsTab({
                         </td>
                         <td className="px-6 py-4 text-right space-x-3">
                           <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
-                          <button onClick={() => handleOpenAssetModal(asset)} className="text-xs font-bold text-[#00A1E4] hover:text-[#0081b8] transition">Hardware & Vendors</button>
-                          
-                          <button onClick={() => handleQuickBuildTemplate(asset)} className="text-xs font-bold text-purple-600 hover:text-purple-800 transition">Build SOP</button>
-                          
-                          {assetTemplates.length > 0 && (
-                            <button onClick={() => handleQuickEditTemplate(asset)} className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition">Edit SOP</button>
-                          )}
                           
                           <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
                           
@@ -784,7 +736,6 @@ export default function AssetsTab({
                   </select>
                 </div>
 
-                {/* --- DEPARTMENT MULTI-SELECT UPGRADE (ASSET REGISTRATION) --- */}
                 <div>
                   <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-2">Assign Department (Multi-Select)</label>
                   <div className="flex flex-col space-y-2">
@@ -943,6 +894,32 @@ export default function AssetsTab({
           </div>
         </div>
       )}
+
+      {/* --- PROGRESS OVERLAY FOR IMPORTS / WIPES --- */}
+      {syncProgress.active && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center animate-entrance">
+            <span className="text-5xl mb-4 block animate-bounce">
+              {syncProgress.action === 'Deleting' ? '🗑️' : '📥'}
+            </span>
+            <h3 className={`font-black text-xl uppercase tracking-wider mb-2 ${syncProgress.action === 'Deleting' ? 'text-red-600' : 'text-[#005596]'}`}>
+              {syncProgress.action === 'Deleting' ? 'Wiping Database...' : 'Importing Records...'}
+            </h3>
+            <p className="text-gray-500 font-bold mb-6">Please do not close this window or refresh the page.</p>
+            
+            <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden shadow-inner">
+              <div 
+                className={`${syncProgress.action === 'Deleting' ? 'bg-red-500' : 'bg-[#00A1E4]'} h-4 rounded-full transition-all duration-300`} 
+                style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+              ></div>
+            </div>
+            <p className="text-sm font-mono font-bold text-gray-700">
+              {syncProgress.action === 'Deleting' ? 'Deleted' : 'Imported'} {syncProgress.current} of {syncProgress.total} records
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
