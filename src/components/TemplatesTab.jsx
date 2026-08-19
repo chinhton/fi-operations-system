@@ -57,7 +57,6 @@ export default function TemplatesTab({
   const userDept = currentUser?.department || "";
   const isDepartmentRestricted = !isSystemAdmin;
 
-  // --- MULTI-CATEGORY EXPORT/IMPORT UPGRADE ---
   const handleExportCSV = () => {
     const headers = ["id", "name", "interval", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
@@ -67,8 +66,7 @@ export default function TemplatesTab({
         let val = "";
         if (header === "checklistSteps") {
           val = encodeSteps(template[header]);
-        } else if (header === "targetCategory") {
-          // Flatten array into semicolon-separated string for Excel
+        } else if (header === "targetCategory" || header === "department") {
           val = Array.isArray(template[header]) ? template[header].join(';') : (template[header] || "Global");
         } else {
           val = template[header] || "";
@@ -122,15 +120,17 @@ export default function TemplatesTab({
           const name = rowObj['name'] || rowObj['Title'] || rowObj['SOP Name'] || '';
           if (!name) continue; 
           
-          // Decode semicolon-separated array back into JSON array
           const rawTarget = rowObj['targetCategory'] || "Global";
           const parsedTarget = rawTarget.includes(';') ? rawTarget.split(';').map(s => s.trim()) : rawTarget;
+
+          const rawDept = rowObj['department'] || "Global";
+          const parsedDept = rawDept.includes(';') ? rawDept.split(';').map(s => s.trim()) : rawDept;
 
           const finalTemplate = {
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
             interval: rowObj['interval'] || "Monthly",
-            department: rowObj['department'] || "Facilities",
+            department: parsedDept,
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
             operatorEmail: rowObj['operatorEmail'] || "",
@@ -158,7 +158,6 @@ export default function TemplatesTab({
         window.location.reload(); 
         
       } catch (err) {
-        console.error("Import error:", err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
       }
       e.target.value = null; 
@@ -188,19 +187,18 @@ export default function TemplatesTab({
       alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
     } catch (err) {
-      console.error("Mass delete error:", err);
       alert("An error occurred during mass deletion.");
       window.location.reload();
     }
   };
 
   const openBuildModal = () => {
-    const defaultDept = isDepartmentRestricted ? userDept : "";
+    const defaultDept = isDepartmentRestricted ? [userDept] : [];
     setNewTemplate({
       name: "",
       interval: "Monthly",
       department: defaultDept,
-      targetCategory: "Global",
+      targetCategory: [],
       managerEmail: "",
       operatorEmail: "",
       checklistSteps: [],
@@ -226,15 +224,13 @@ export default function TemplatesTab({
     try {
       await window.fetch(`/api/pmTemplates?id=${id}`, { method: 'DELETE' });
       window.location.reload();
-    } catch (err) {
-      console.error("Failed to delete SOP:", err);
-    }
+    } catch (err) {}
   };
 
   const filteredTemplates = pmTemplates.filter(t => {
-    const matchesSearch = t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || t.department?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (Array.isArray(t.department) ? t.department.join(' ').toLowerCase().includes(searchQuery.toLowerCase()) : t.department?.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    // Safely check arrays during search filtering
     if (Array.isArray(t.targetCategory)) {
       return matchesSearch || t.targetCategory.some(cat => cat.toLowerCase().includes(searchQuery.toLowerCase()));
     }
@@ -260,31 +256,22 @@ export default function TemplatesTab({
               <button 
                 onClick={handleExportCSV}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Export SOPs to CSV"
               >
                 📤 Export CSV
               </button>
               <button 
                 onClick={() => fileInputRef.current.click()}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Import SOPs from CSV"
               >
                 📥 Import CSV
               </button>
               <button 
                 onClick={handleMassDeleteSOPs}
                 className="flex-1 sm:flex-none px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 transition-colors"
-                title="Wipe Current SOP List"
               >
                 🧨 Wipe List
               </button>
-              <input 
-                type="file" 
-                accept=".csv" 
-                ref={fileInputRef} 
-                onChange={handleImportCSV} 
-                className="hidden" 
-              />
+              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
             </div>
           )}
         </div>
@@ -325,25 +312,21 @@ export default function TemplatesTab({
                   
                   <div className="space-y-1.5 mb-5">
                     <div className="flex items-start text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0 mt-0.5">Map:</span>
-                      <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global') ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Map:</span>
+                      <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global' || template.targetCategory.length === 0) ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
                         {Array.isArray(template.targetCategory) ? template.targetCategory.join(', ') : (template.targetCategory || "Global")}
                       </span>
                     </div>
-                    <div className="flex items-center text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Dept:</span>
-                      <span className="text-gray-700 font-bold">{template.department || 'Global'}</span>
+                    <div className="flex items-start text-[10px]">
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Dept:</span>
+                      <span className="text-gray-700 font-bold block leading-tight">
+                        {Array.isArray(template.department) ? template.department.join(', ') : (template.department || 'Global')}
+                      </span>
                     </div>
                     <div className="flex items-center text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Actions:</span>
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0">Actions:</span>
                       <span className="text-gray-700 font-mono font-bold">{template.checklistSteps?.length || 0} Steps Configured</span>
                     </div>
-                    {template.attachedManualName && (
-                      <div className="flex items-center text-[10px] pt-1">
-                        <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Doc:</span>
-                        <span className="text-[#005596] font-bold truncate">📎 {template.attachedManualName}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -389,30 +372,77 @@ export default function TemplatesTab({
                     {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department</label>
-                  <select 
-                    value={newTemplate.department || ""} 
-                    onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
-                    disabled={isDepartmentRestricted}
-                    className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
-                      isDepartmentRestricted 
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                        : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
-                    }`}
-                  >
-                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
-                    {isDepartmentRestricted ? (
-                      <option value={userDept}>{userDept}</option>
-                    ) : (
-                      CORPORATE_DEPARTMENTS.map(dept => (
-                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
 
-                {/* --- NEW MULTI-SELECT CATEGORY MAPPING --- */}
+                {/* --- DEPARTMENT MULTI-SELECT --- */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department (Multi-Select)</label>
+                  <div className="flex flex-col space-y-2">
+                    <select 
+                      value="" 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        
+                        let current = newTemplate.department;
+                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
+                        
+                        if (val === "Global") {
+                          setNewTemplate({...newTemplate, department: "Global"});
+                        } else {
+                          if (!selectedArray.includes(val)) {
+                            setNewTemplate({...newTemplate, department: [...selectedArray, val]});
+                          }
+                        }
+                      }} 
+                      disabled={isDepartmentRestricted}
+                      className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
+                        isDepartmentRestricted ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
+                      }`}
+                    >
+                      <option value="">-- Add Department Target --</option>
+                      {(!Array.isArray(newTemplate.department) || newTemplate.department.length === 0) && !isDepartmentRestricted && <option value="Global">Global (All Departments)</option>}
+                      
+                      {isDepartmentRestricted ? (
+                        !(Array.isArray(newTemplate.department) ? newTemplate.department : []).includes(userDept) && <option value={userDept}>{userDept}</option>
+                      ) : (
+                        CORPORATE_DEPARTMENTS.filter(dept => {
+                            let current = newTemplate.department;
+                            let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
+                            return !selectedArray.includes(dept);
+                        }).map(dept => (
+                          <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                        ))
+                      )}
+                    </select>
+                    
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(!newTemplate.department || newTemplate.department === "Global" || (Array.isArray(newTemplate.department) && newTemplate.department.length === 0)) ? (
+                         <span className="bg-[#005596] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            Global (All Departments)
+                         </span>
+                      ) : (Array.isArray(newTemplate.department) ? newTemplate.department : [newTemplate.department]).map(dept => (
+                         <span key={dept} className="bg-blue-100 text-[#005596] border border-blue-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            {dept}
+                            {!isDepartmentRestricted && (
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    const arr = Array.isArray(newTemplate.department) ? newTemplate.department : [newTemplate.department];
+                                    const filtered = arr.filter(c => c !== dept);
+                                    setNewTemplate({...newTemplate, department: filtered.length > 0 ? filtered : "Global"});
+                                  }} 
+                                  className="ml-1.5 text-blue-500 hover:text-[#005596] font-bold text-sm leading-none"
+                                >
+                                  &times;
+                                </button>
+                            )}
+                         </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* --- CATEGORY MULTI-SELECT --- */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
                   <div className="flex flex-col space-y-2">
@@ -436,11 +466,14 @@ export default function TemplatesTab({
                       className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
                     >
                       <option value="">-- Add Category Target --</option>
-                      <option value="Global">Global (All Assets)</option>
-                      {(uniqueCategories || []).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                      {(!Array.isArray(newTemplate.targetCategory) || newTemplate.targetCategory.length === 0) && <option value="Global">Global (All Assets)</option>}
+                      {(uniqueCategories || []).filter(cat => {
+                        let current = newTemplate.targetCategory;
+                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
+                        return !selectedArray.includes(cat);
+                      }).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
                     </select>
                     
-                    {/* Selected Category Chips */}
                     <div className="flex flex-wrap gap-2 mt-2">
                       {(!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) ? (
                          <span className="bg-[#00A1E4] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
@@ -465,7 +498,6 @@ export default function TemplatesTab({
                     </div>
                   </div>
                 </div>
-                {/* ------------------------------------------- */}
                 
                 {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
                 <div className="md:col-span-2 mt-2">
@@ -531,7 +563,6 @@ export default function TemplatesTab({
                     )}
                   </div>
 
-                  {/* Add Row Controls */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
                     <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
@@ -549,7 +580,6 @@ export default function TemplatesTab({
                     }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row to Grid</button>
                   </div>
                 </div>
-                {/* ------------------------------------------- */}
 
                 <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
@@ -573,7 +603,6 @@ export default function TemplatesTab({
                         <option key={manual.id || idx} value={manual.fileName}>{manual.fileName}</option>
                       ))}
                     </select>
-
                     {newTemplate.attachedManualName && (
                       <span className="text-xs text-[#005596] font-bold flex items-center bg-blue-50 px-3 py-2 rounded border border-blue-200 w-fit">
                         ✅ Manual Linked: {newTemplate.attachedManualName}

@@ -62,7 +62,6 @@ const toTitleCase = (str) => {
   return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 };
 
-// --- MULTI-CATEGORY MATCHER ---
 const checkCategoryMatch = (templateCat, assetCat) => {
   if (!templateCat) return false;
   if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
@@ -130,13 +129,14 @@ export default function AssetsTab({
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.serial?.toLowerCase().includes(assetSearch.toLowerCase()) ||
     a.category?.toLowerCase().includes(assetSearch.toLowerCase()) ||
-    a.department?.toLowerCase().includes(assetSearch.toLowerCase())
+    (Array.isArray(a.department) ? a.department.join(' ').toLowerCase().includes(assetSearch.toLowerCase()) : a.department?.toLowerCase().includes(assetSearch.toLowerCase()))
   );
 
   const groupedAssets = filteredAssets.reduce((acc, asset) => {
+    // If grouping by department, we use the primary (first) department
     const key = groupBy === "category" 
         ? (asset.category || "Uncategorized") 
-        : (asset.department || "Unassigned");
+        : (Array.isArray(asset.department) ? asset.department[0] : (asset.department || "Unassigned"));
         
     if (!acc[key]) acc[key] = [];
     acc[key].push(asset);
@@ -161,9 +161,9 @@ export default function AssetsTab({
 
     if (setAssets) {
         const updatedAssetsList = assets.map(a => {
-          const match = isCat ? (a.category || "Uncategorized") === oldGroupName : (a.department || "Unassigned") === oldGroupName;
+          const match = isCat ? (a.category || "Uncategorized") === oldGroupName : (Array.isArray(a.department) ? a.department[0] : (a.department || "Unassigned")) === oldGroupName;
           if (match) {
-            return isCat ? { ...a, category: trimmedNewName } : { ...a, department: trimmedNewName };
+            return isCat ? { ...a, category: trimmedNewName } : { ...a, department: [trimmedNewName] };
           }
           return a;
         });
@@ -173,7 +173,7 @@ export default function AssetsTab({
 
     try {
       await Promise.all(assetsInGroup.map(asset => {
-        const updatedAsset = isCat ? { ...asset, category: trimmedNewName } : { ...asset, department: trimmedNewName };
+        const updatedAsset = isCat ? { ...asset, category: trimmedNewName } : { ...asset, department: [trimmedNewName] };
         return window.fetch('/api/assets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -189,7 +189,12 @@ export default function AssetsTab({
 
     assets.forEach(asset => {
       const row = headers.map(header => {
-        let val = asset[header] || "";
+        let val = "";
+        if (header === "department") {
+           val = Array.isArray(asset[header]) ? asset[header].join(';') : (asset[header] || "Unassigned");
+        } else {
+           val = asset[header] || "";
+        }
         val = val.toString().replace(/"/g, '""'); 
         if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; 
         return val;
@@ -251,7 +256,9 @@ export default function AssetsTab({
           const model = rowObj['Model Number'] || rowObj['model'] || '';
           const serial = rowObj['Serial Number'] || rowObj['SERIALNUM'] || rowObj['serial'] || 'N/A';
           const glAccount = rowObj['GL Account'] || rowObj['GLACCOUNT'] || rowObj['glAccount'] || '';
-          const department = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
+          
+          const rawDept = rowObj['Assigned Department'] || rowObj['department'] || "Facilities";
+          const parsedDept = rawDept.includes(';') ? rawDept.split(';').map(s => s.trim()) : [rawDept];
           
           let operatorEmail = "Unassigned";
           let rawOperator = rowObj['operatorEmail'] || rowObj['Asset Owner'] || rowObj['Named Owner'] || "";
@@ -292,7 +299,7 @@ export default function AssetsTab({
             category: category,
             location: location,
             glAccount: glAccount,
-            department: department,
+            department: parsedDept,
             operatorEmail: operatorEmail,
             status: status,
             pmDates: {}, 
@@ -349,7 +356,7 @@ export default function AssetsTab({
   };
 
   const openRegisterForNew = () => {
-    const defaultDept = isDepartmentRestricted ? userDept : "";
+    const defaultDept = isDepartmentRestricted ? [userDept] : [];
     setNewAsset({ name: "", manufacturer: "", model: "", serial: "", category: "", location: "", glAccount: "", parentId: "", department: defaultDept, operatorEmail: "", pmDates: {} });
     setIsAddingNewCategory(false);
     setOverrideFreq("");
@@ -372,13 +379,13 @@ export default function AssetsTab({
   };
 
   const handleQuickBuildTemplate = (asset) => {
-    const defaultDept = isDepartmentRestricted ? userDept : (asset.department || "");
+    const defaultDept = isDepartmentRestricted ? [userDept] : (asset.department || []);
     
     setNewTemplate({
       name: `${asset.name} Maintenance Protocol`,
       interval: "Monthly",
       department: defaultDept,
-      targetCategory: [asset.category || "Global"], // Array logic applied
+      targetCategory: [asset.category || "Global"],
       managerEmail: "",
       operatorEmail: asset.operatorEmail || "",
       checklistSteps: [],
@@ -437,31 +444,22 @@ export default function AssetsTab({
               <button 
                 onClick={handleExportCSV}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Export Database to CSV (Excel)"
               >
                 📤 Export CSV
               </button>
               <button 
                 onClick={() => fileInputRef.current.click()}
                 className="flex-1 sm:flex-none px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
-                title="Import Database from CSV (Excel)"
               >
                 📥 Import CSV
               </button>
               <button 
                 onClick={handleMassDelete}
                 className="flex-1 sm:flex-none px-4 py-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 transition-colors"
-                title="Wipe Current Asset List"
               >
                 🧨 Wipe List
               </button>
-              <input 
-                type="file" 
-                accept=".csv" 
-                ref={fileInputRef} 
-                onChange={handleImportCSV} 
-                className="hidden" 
-              />
+              <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
             </div>
           )}
         </div>
@@ -578,7 +576,8 @@ export default function AssetsTab({
                           )}
 
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${asset.department}`}>DEPT: {asset.department}</span>}
+                            {/* --- DISPLAY ARRAY DEPARTMENTS FIX --- */}
+                            {asset.department && <span className="text-[8px] bg-blue-100 text-[#005596] px-1.5 py-0.5 rounded font-bold uppercase" title={`Department: ${Array.isArray(asset.department) ? asset.department.join(', ') : asset.department}`}>DEPT: {Array.isArray(asset.department) ? asset.department.join(', ') : asset.department}</span>}
                             {asset.operatorEmail && <span className="text-[8px] bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded font-bold uppercase" title={`Operator: ${asset.operatorEmail}`}>OPR Assigned</span>}
                           </div>
                         </td>
@@ -702,7 +701,6 @@ export default function AssetsTab({
             <form onSubmit={handleLocalAssetSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* ROW 1: Name and Category */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Equipment Name</label>
                   <input type="text" value={newAsset.name || ""} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} placeholder="e.g. sCMOS Chamber" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
@@ -750,7 +748,6 @@ export default function AssetsTab({
                   )}
                 </div>
 
-                {/* ROW 2: Manufacturer and Model */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Manufacturer</label>
                   <input type="text" value={newAsset.manufacturer || ""} onChange={(e) => setNewAsset({...newAsset, manufacturer: e.target.value})} placeholder="e.g. NORDSON" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
@@ -760,7 +757,6 @@ export default function AssetsTab({
                   <input type="text" value={newAsset.model || ""} onChange={(e) => setNewAsset({...newAsset, model: e.target.value})} placeholder="e.g. VCC-2020-X" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
 
-                {/* ROW 3: Serial Number and GL Account */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Serial Number</label>
                   <input type="text" value={newAsset.serial || ""} onChange={(e) => setNewAsset({...newAsset, serial: e.target.value})} placeholder="e.g. FC-90812-C" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
@@ -770,7 +766,6 @@ export default function AssetsTab({
                   <input type="text" value={newAsset.glAccount || ""} onChange={(e) => setNewAsset({...newAsset, glAccount: e.target.value})} placeholder="e.g. DD-23000-2030" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
 
-                {/* ROW 4: Location and Link */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Location / Bay</label>
                   <input type="text" value={newAsset.location || ""} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} placeholder="e.g. Cleanroom Bay 3" className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
@@ -789,29 +784,71 @@ export default function AssetsTab({
                   </select>
                 </div>
 
-                {/* ROW 5: Dept and Operator */}
+                {/* --- DEPARTMENT MULTI-SELECT UPGRADE (ASSET REGISTRATION) --- */}
                 <div>
-                  <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-2">Assign Department</label>
-                  <select 
-                    value={newAsset.department || ""} 
-                    onChange={(e) => setNewAsset({...newAsset, department: e.target.value})} 
-                    disabled={isDepartmentRestricted}
-                    className={`w-full text-xs rounded border-[#005596]/30 shadow-sm p-2.5 border outline-none transition-colors ${
-                      isDepartmentRestricted 
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                        : 'bg-blue-50/30 focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
-                    }`}
-                  >
-                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
-                    {isDepartmentRestricted ? (
-                      <option value={userDept}>{userDept}</option>
-                    ) : (
-                      CORPORATE_DEPARTMENTS.map(dept => (
-                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                      ))
-                    )}
-                  </select>
+                  <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-2">Assign Department (Multi-Select)</label>
+                  <div className="flex flex-col space-y-2">
+                    <select 
+                      value="" 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        
+                        let current = newAsset.department;
+                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Unassigned" ? [current] : []);
+                        
+                        if (!selectedArray.includes(val)) {
+                          setNewAsset({...newAsset, department: [...selectedArray, val]});
+                        }
+                      }} 
+                      disabled={isDepartmentRestricted}
+                      className={`w-full text-xs rounded border-[#005596]/30 shadow-sm p-2.5 border outline-none transition-colors ${
+                        isDepartmentRestricted 
+                          ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                          : 'bg-blue-50/30 focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
+                      }`}
+                    >
+                      <option value="">-- Add Department --</option>
+                      {isDepartmentRestricted ? (
+                        !(Array.isArray(newAsset.department) ? newAsset.department : []).includes(userDept) && <option value={userDept}>{userDept}</option>
+                      ) : (
+                        CORPORATE_DEPARTMENTS.filter(dept => {
+                            let current = newAsset.department;
+                            let selectedArray = Array.isArray(current) ? current : (current && current !== "Unassigned" ? [current] : []);
+                            return !selectedArray.includes(dept);
+                        }).map(dept => (
+                          <option key={`dept-${dept}`} value={dept}>{dept}</option>
+                        ))
+                      )}
+                    </select>
+                    
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(!newAsset.department || (Array.isArray(newAsset.department) && newAsset.department.length === 0)) ? (
+                         <span className="bg-gray-100 text-gray-600 border border-gray-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            Unassigned
+                         </span>
+                      ) : (Array.isArray(newAsset.department) ? newAsset.department : [newAsset.department]).map(dept => (
+                         <span key={dept} className="bg-blue-100 text-[#005596] border border-blue-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            {dept}
+                            {!isDepartmentRestricted && (
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    const arr = Array.isArray(newAsset.department) ? newAsset.department : [newAsset.department];
+                                    const filtered = arr.filter(c => c !== dept);
+                                    setNewAsset({...newAsset, department: filtered.length > 0 ? filtered : "Unassigned"});
+                                  }} 
+                                  className="ml-1.5 text-blue-500 hover:text-[#005596] font-bold text-sm leading-none"
+                                >
+                                  &times;
+                                </button>
+                            )}
+                         </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-[#00A1E4] uppercase tracking-wider mb-2">Assign Operator (Optional)</label>
                   <select 
@@ -826,7 +863,6 @@ export default function AssetsTab({
                   </select>
                 </div>
 
-                {/* --- REFRESHED: PM HISTORY & BASELINE SECTION --- */}
                 <div className="md:col-span-2 mt-4 p-5 bg-slate-50 border border-slate-200 rounded-lg shadow-sm">
                   <label className="block text-xs font-bold text-[#005596] uppercase tracking-wider mb-1">
                     🗓️ Maintenance Baseline & Schedule
@@ -895,244 +931,12 @@ export default function AssetsTab({
                     </button>
                   </div>
                 </div>
-                {/* -------------------------------------- */}
               </div>
               
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsRegisterModalOpen(false)} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
                 <button type="submit" disabled={isAddingAsset} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingAsset ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   {isAddingAsset ? 'Processing...' : (newAsset.id ? 'Update Asset' : 'Commit Asset')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* --- QUICK TEMPLATE BUILDER MODAL (WITH MULTI-SELECT) --- */}
-      {showTemplateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
-            
-            <button onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
-            
-            <div className="bg-[#005596] text-white px-6 py-4">
-              <h3 className="font-bold text-sm tracking-wide uppercase">
-                {newTemplate.id ? 'Edit Custom SOP Protocol' : 'Construct Custom SOP Protocol'}
-              </h3>
-              {targetAssetContext && <p className="text-xs text-blue-200 mt-1">Pre-configured for {targetAssetContext.name} ({targetAssetContext.serial})</p>}
-            </div>
-            
-            <form onSubmit={handleLocalTemplateSubmit} className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
-                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
-                  <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department</label>
-                  <select 
-                    value={newTemplate.department || ""} 
-                    onChange={(e) => setNewTemplate({...newTemplate, department: e.target.value})} 
-                    disabled={isDepartmentRestricted}
-                    className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
-                      isDepartmentRestricted 
-                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
-                        : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
-                    }`}
-                  >
-                    {!isDepartmentRestricted && <option value="">-- Unassigned (Global View) --</option>}
-                    {isDepartmentRestricted ? (
-                      <option value={userDept}>{userDept}</option>
-                    ) : (
-                      CORPORATE_DEPARTMENTS.map(dept => (
-                        <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                
-                {/* --- NEW MULTI-SELECT CATEGORY MAPPING --- */}
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
-                  <div className="flex flex-col space-y-2">
-                    <select 
-                      value="" 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val) return;
-                        
-                        let current = newTemplate.targetCategory;
-                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
-                        
-                        if (val === "Global") {
-                          setNewTemplate({...newTemplate, targetCategory: "Global"});
-                        } else {
-                          if (!selectedArray.includes(val)) {
-                            setNewTemplate({...newTemplate, targetCategory: [...selectedArray, val]});
-                          }
-                        }
-                      }} 
-                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
-                    >
-                      <option value="">-- Add Category Target --</option>
-                      <option value="Global">Global (All Assets)</option>
-                      {(uniqueCategories || []).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                    </select>
-                    
-                    {/* Selected Category Chips */}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {(!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) ? (
-                         <span className="bg-[#00A1E4] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            Global (All Assets)
-                         </span>
-                      ) : (Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory]).map(cat => (
-                         <span key={cat} className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            {cat}
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                const arr = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
-                                const filtered = arr.filter(c => c !== cat);
-                                setNewTemplate({...newTemplate, targetCategory: filtered.length > 0 ? filtered : "Global"});
-                              }} 
-                              className="ml-1.5 text-purple-500 hover:text-purple-900 font-bold text-sm leading-none"
-                            >
-                              &times;
-                            </button>
-                         </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {/* ------------------------------------------- */}
-                
-                {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
-                <div className="md:col-span-2 mt-2">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
-                  
-                  <div className="mb-4 max-h-64 overflow-y-auto border border-gray-200 rounded shadow-inner bg-white">
-                    <table className="min-w-full divide-y divide-gray-200 text-left">
-                      <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
-                        <tr>
-                          <th className="px-4 py-3 w-16 text-center border-r border-gray-200">Item #</th>
-                          <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
-                          <th className="px-4 py-3 w-40 border-r border-gray-200">Input Type</th>
-                          <th className="px-4 py-3 w-16 text-center">Del</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 text-xs">
-                        {newTemplate.checklistSteps?.map((step, idx) => (
-                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
-                            <td className="px-4 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50">{idx + 1}</td>
-                            <td className="px-2 py-2 border-r border-gray-100">
-                              <input 
-                                type="text" 
-                                value={step.label} 
-                                onChange={(e) => {
-                                  const newSteps = [...newTemplate.checklistSteps];
-                                  newSteps[idx].label = e.target.value;
-                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
-                                }}
-                                placeholder="Enter action description..."
-                                className="w-full text-xs font-medium text-gray-800 bg-transparent border border-transparent hover:border-gray-200 focus:bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] px-2 py-1.5 rounded outline-none transition-all"
-                              />
-                            </td>
-                            <td className="px-2 py-2 border-r border-gray-100">
-                              <select 
-                                value={step.type} 
-                                onChange={(e) => {
-                                  const newSteps = [...newTemplate.checklistSteps];
-                                  newSteps[idx].type = e.target.value;
-                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
-                                }}
-                                className="w-full uppercase text-[9px] font-bold text-[#00A1E4] bg-sky-50 px-1.5 py-1.5 rounded border border-transparent hover:border-sky-200 focus:bg-white focus:border-sky-400 focus:outline-none cursor-pointer transition-all outline-none"
-                              >
-                                <option value="checkbox">CHECKBOX</option>
-                                <option value="text">SHORT TEXT</option>
-                                <option value="number">NUMERIC</option>
-                                <option value="passfail">PASS/FAIL</option>
-                              </select>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <button type="button" onClick={() => {
-                                const newSteps = [...newTemplate.checklistSteps];
-                                newSteps.splice(idx, 1);
-                                setNewTemplate({...newTemplate, checklistSteps: newSteps});
-                              }} className="text-gray-300 hover:text-red-600 font-bold text-lg leading-none transition-colors" title="Remove Step">&times;</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    
-                    {(!newTemplate.checklistSteps || newTemplate.checklistSteps.length === 0) && (
-                      <div className="text-xs text-gray-400 italic p-8 text-center bg-gray-50/50">No action steps added yet. Use the builder below to construct the grid.</div>
-                    )}
-                  </div>
-
-                  {/* Add Row Controls */}
-                  <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
-                    <select id="builderTypeAssetModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
-                        <option value="checkbox">Checkbox (Done/Not Done)</option>
-                        <option value="text">Short Text (Serial, Note)</option>
-                        <option value="number">Numeric (PSI, Temp)</option>
-                        <option value="passfail">Pass/Fail Dropdown</option>
-                    </select>
-                    <input type="text" id="builderLabelAssetModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepAssetModal').click(); }}} />
-                    <button type="button" id="btnAddStepAssetModal" onClick={() => {
-                        const type = document.getElementById('builderTypeAssetModal').value;
-                        const label = document.getElementById('builderLabelAssetModal').value.trim();
-                        if(!label) return;
-                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
-                        document.getElementById('builderLabelAssetModal').value = '';
-                    }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row to Grid</button>
-                  </div>
-                </div>
-                {/* ------------------------------------------- */}
-
-                <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
-                    Attach Existing Equipment Manual (From Document Library)
-                  </label>
-                  <div className="flex flex-col space-y-3">
-                    <select 
-                      value={newTemplate.attachedManualName || ""} 
-                      onChange={(e) => {
-                        const selected = manuals.find(m => m.fileName === e.target.value);
-                        if (selected) {
-                          setNewTemplate({ ...newTemplate, attachedManualName: selected.fileName, attachedManualData: selected.fileData });
-                        } else {
-                          setNewTemplate({ ...newTemplate, attachedManualName: null, attachedManualData: null });
-                        }
-                      }} 
-                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer shadow-sm focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
-                    >
-                      <option value="">-- Select a Manual (Optional) --</option>
-                      {manuals.map((manual, idx) => (
-                        <option key={manual.id || idx} value={manual.fileName}>{manual.fileName}</option>
-                      ))}
-                    </select>
-
-                    {newTemplate.attachedManualName && (
-                      <span className="text-xs text-[#005596] font-bold flex items-center bg-blue-50 px-3 py-2 rounded border border-blue-200 w-fit">
-                        ✅ Manual Linked: {newTemplate.attachedManualName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-              </div> 
-              <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => { setShowTemplateModal(false); setTargetAssetContext(null); }} className="px-5 py-2.5 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
-                <button type="submit" disabled={isAddingTemplate} className={`bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all ${isAddingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  {isAddingTemplate ? 'Saving...' : (newTemplate.id ? 'Update Protocol' : 'Lock & Save Protocol')}
                 </button>
               </div>
             </form>
