@@ -37,7 +37,13 @@ async function processRoute(request, containerId) {
     try {
         const db = getDatabase(); 
         const method = request.method;
-        const container = db.container(containerId);
+        
+        // --- THE FIX: Auto-create missing containers so the app stops throwing 500 errors ---
+        const { container } = await db.containers.createIfNotExists({
+            id: containerId,
+            partitionKey: { paths: ["/id"] }
+        });
+        // -----------------------------------------------------------------------------------
         
         if (method === 'GET') {
             const { resources } = await container.items.readAll().fetchAll();
@@ -47,7 +53,7 @@ async function processRoute(request, containerId) {
         if (method === 'POST') {
             const payload = await request.json();
 
-            // --- THE HARD DOMAIN LOCK FOR REGISTRATION ---
+            // Hard Domain Lock for Users
             if (containerId === 'users') {
                 const userEmail = payload.email || "";
                 if (!userEmail.toLowerCase().endsWith('@fcimg.com')) {
@@ -56,7 +62,6 @@ async function processRoute(request, containerId) {
                     });
                 }
             }
-            // ---------------------------------------------
 
             const { resource } = await container.items.upsert(payload);
             return createResponse(201, resource);
@@ -103,7 +108,7 @@ app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', 
 app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
 app.http('manuals', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'manuals') });
 
-// --- NEW HARDWIRED ENDPOINTS ---
+// --- HARDWARE, VENDORS, & KEYS ENDPOINTS ---
 app.http('parts', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'parts') });
 app.http('vendors', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'vendors') });
 app.http('keys', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'keys') });

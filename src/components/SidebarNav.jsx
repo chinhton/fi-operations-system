@@ -1,36 +1,40 @@
 import React from 'react';
 
 export default function SidebarNav({ 
-  navOrder, 
-  navData, 
   activeTab, 
   changeTab, 
   isSystemAdmin, 
-  pendingApprovalsCount 
+  currentUser,
+  pendingApprovalsCount,
+  keysCount 
 }) {
 
-  // --- AUTO-INJECT THE NEW TAB SAFELY ---
-  const safeNavOrder = [...(navOrder || [])];
-  if (!safeNavOrder.includes('hardware')) {
-     const insertIdx = safeNavOrder.indexOf('assets') + 1;
-     safeNavOrder.splice(insertIdx, 0, 'hardware');
-  }
+  // --- SECURITY SILO FOR KEYS ---
+  const isFacilities = currentUser?.department === 'Facilities';
+  const canSeeKeys = isSystemAdmin || isFacilities;
 
-  const safeNavData = {
-     ...navData,
-     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: 0 } // New badge mapping
+  // Master definition of all sidebar buttons
+  const navData = {
+    dashboard: { icon: "📊", label: "Operations Dashboard" },
+    assets: { icon: "🏢", label: "Facility Assets" },
+    hardware: { icon: "🔩", label: "Hardware & Vendors" },
+    keys: { icon: "🔑", label: "Hard Key Tracking", badge: keysCount || 0 },
+    manuals: { icon: "📖", label: "Equipment Manuals" },
+    templates: { icon: "⚙️", label: "Established SOPs" },
+    history: { icon: "📜", label: "Executed Audits" }
   };
+
+  // Master Order
+  const navOrder = ['dashboard', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history'];
 
   return (
     <aside className="w-full md:w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 space-y-2">
-      {safeNavOrder.map((tabId) => {
-        const info = safeNavData?.[tabId];
-        if (!info) return null;
+      {navOrder.map((tabId) => {
+        // Hide the Keys tab if they don't have clearance
+        if (tabId === 'keys' && !canSeeKeys) return null; 
 
-        let displayLabel = info.label;
-        if (tabId === 'templates' || displayLabel === "PM Task Configurations") {
-            displayLabel = "Established SOPs";
-        }
+        const info = navData[tabId];
+        if (!info) return null;
 
         return (
           <button 
@@ -39,7 +43,7 @@ export default function SidebarNav({
             className={`w-full flex items-center justify-between px-3 py-3 text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === tabId ? "bg-[#005596]/10 text-[#005596]" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
           >
             <div className="flex items-center space-x-3">
-              <span>{info.icon}</span> <span>{displayLabel}</span>
+              <span className="text-lg">{info.icon}</span> <span>{info.label}</span>
             </div>
             {info.badge !== undefined && info.badge !== 0 && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${activeTab === tabId ? "bg-[#005596] text-white" : "bg-gray-100 text-gray-600"}`}>
@@ -56,7 +60,7 @@ export default function SidebarNav({
           className={`w-full flex items-center justify-between px-3 py-3 mt-4 border-t text-xs font-bold tracking-wide rounded-lg transition-all text-left ${activeTab === "approvals" ? "bg-red-50 text-red-700" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"}`}
         >
           <div className="flex items-center space-x-3">
-            <span>🔑</span> <span>Account Approvals</span>
+            <span className="text-lg">🛡️</span> <span>Account Approvals</span>
           </div>
           <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ${activeTab === "approvals" ? "bg-red-600 text-white" : "bg-red-100 text-red-700"}`}>
             {pendingApprovalsCount}
