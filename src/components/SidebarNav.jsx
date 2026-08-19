@@ -8,19 +8,29 @@ export default function SidebarNav({
   isSystemAdmin, 
   pendingApprovalsCount 
 }) {
+
+  // --- AUTO-INJECT THE NEW TAB SAFELY ---
+  const safeNavOrder = [...(navOrder || [])];
+  if (!safeNavOrder.includes('hardware')) {
+     const insertIdx = safeNavOrder.indexOf('assets') + 1;
+     safeNavOrder.splice(insertIdx, 0, 'hardware');
+  }
+
+  const safeNavData = {
+     ...navData,
+     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: 0 } // New badge mapping
+  };
+
   return (
-    // Added flex-shrink-0 to prevent the massive data tables from squishing the sidebar
     <aside className="w-full md:w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 space-y-2">
-      {navOrder.map((tabId) => {
-        const info = navData?.[tabId];
+      {safeNavOrder.map((tabId) => {
+        const info = safeNavData?.[tabId];
         if (!info) return null;
 
-        // --- THE FIX: Intercept the legacy label and dynamically update it ---
         let displayLabel = info.label;
         if (tabId === 'templates' || displayLabel === "PM Task Configurations") {
             displayLabel = "Established SOPs";
         }
-        // ---------------------------------------------------------------------
 
         return (
           <button 
