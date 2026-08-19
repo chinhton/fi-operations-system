@@ -81,6 +81,7 @@ export default function App() {
     if (currentUser && users.length > 0) {
       const liveAccount = users.find(u => u.email === currentUser.email);
       if (!liveAccount || liveAccount.status !== 'Active') {
+        console.warn("FI-OMS Security: Account revoked or pending. Forcing session termination.");
         setCurrentUser(null);
         localStorage.removeItem('fi_oms_session');
       }
@@ -236,7 +237,6 @@ export default function App() {
   const visibleUsers = users.filter(u => { if (isGodMode) return true; return u.department === userDept; });
   const visibleAssets = assets.filter(filterHierarchy);
 
-  // --- RESTORED STATS ENGINE FOR THE SIDEBAR ---
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
 
   const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
@@ -309,7 +309,6 @@ export default function App() {
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
-          
           triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`);
           return response;
       }
@@ -383,7 +382,13 @@ export default function App() {
     users: visibleUsers, setUsers,
     manuals, setManuals, 
     calculateDaysRemaining, calculateNextPmDate,
-    activeCount, overdueCount, calibrationCount, correctiveCount
+    activeCount, overdueCount, calibrationCount, correctiveCount,
+    
+    // THE FIX: Adding the explicit counts back for the SidebarNav
+    assetsCount: visibleAssets.length,
+    templatesCount: visibleTemplates.length,
+    historyCount: history.length,
+    manualsCount: manuals.length
   };
 
   return (

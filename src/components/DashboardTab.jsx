@@ -2,9 +2,7 @@ import React from 'react';
 
 export default function DashboardTab({
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
-  assets, pmTemplates, calculateDaysRemaining, complianceRate,
-  activeCount = 0, overdueCount = 0, calibrationCount = 0, correctiveCount = 0,
-  users = []
+  assets, pmTemplates, calculateDaysRemaining, users = []
 }) {
   
   const adminGlobalQueue = [];
@@ -37,7 +35,6 @@ export default function DashboardTab({
   if (assets && calculateDaysRemaining) {
     assets.forEach(asset => {
       
-      // Ignore inactive assets completely
       if (asset.status === "Inactive") return;
 
       let taskCategory = null; 
@@ -127,39 +124,7 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-8 animate-entrance w-full">
-      
-      {/* THE COMPLIANCE HEADER (SAFELY INSIDE THE TAB) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col xl:flex-row">
-        <div className="bg-[#1A2530] text-white p-8 xl:w-1/3 flex flex-col justify-center items-center text-center border-b xl:border-b-0 xl:border-r border-gray-700">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-blue-200 mb-2">System Compliance Factor</h2>
-          <div className="text-7xl font-black mb-2">{complianceRate || 100}%</div>
-          <p className="text-[10px] text-gray-400 uppercase tracking-wider">Optimal Health Ratio</p>
-        </div>
-        
-        <div className="p-8 xl:w-2/3 flex flex-col justify-center bg-gray-50/50">
-          <h3 className="text-sm font-black text-[#005596] mb-5 uppercase tracking-wider">Operations Health Overview</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-emerald-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
-              <span className="text-[9px] uppercase font-extrabold text-emerald-700 tracking-wider">Active</span>
-              <div className="text-3xl font-black mt-2 text-emerald-600 drop-shadow-sm">{activeCount}</div>
-            </div>
-            <div className="bg-white border border-yellow-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
-              <span className="text-[9px] uppercase font-extrabold text-yellow-700 tracking-wider">Overdue PM</span>
-              <div className="text-3xl font-black mt-2 text-yellow-600 drop-shadow-sm">{overdueCount}</div>
-            </div>
-            <div className="bg-white border border-red-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
-              <span className="text-[9px] uppercase font-extrabold text-red-700 tracking-wider">Calibration</span>
-              <div className="text-3xl font-black mt-2 text-red-600 drop-shadow-sm">{calibrationCount}</div>
-            </div>
-            <div className="bg-white border border-orange-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
-              <span className="text-[9px] uppercase font-extrabold text-orange-700 tracking-wider">Corrective</span>
-              <div className="text-3xl font-black mt-2 text-orange-600 drop-shadow-sm">{correctiveCount}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-2">
         <div className="lg:col-span-8 space-y-6">
           
           {/* --- GOD VIEW: ONLY RENDERS FOR ADMINS --- */}
@@ -416,7 +381,7 @@ export default function DashboardTab({
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                ✉️ Remind Operator
+                                ✉️ Notify Manager ({getManagerForDepartment(item.department)})
                               </button>
                               {item.type === 'asset' && (
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
