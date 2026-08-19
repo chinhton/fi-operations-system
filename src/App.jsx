@@ -250,7 +250,9 @@ export default function App() {
     ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) 
     : 100;
 
+  // --- UPDATED STATS ENGINE ---
   const activeCount = visibleAssets.filter(a => a.status === "Active").length;
+  const inactiveCount = visibleAssets.filter(a => a.status === "Inactive").length;
   const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
   const calibrationCount = visibleAssets.filter(a => a.status === "Out of Calibration").length;
   const correctiveCount = visibleAssets.filter(a => a.status === "Corrective Maintenance").length;
@@ -382,9 +384,9 @@ export default function App() {
     users: visibleUsers, setUsers,
     manuals, setManuals, 
     calculateDaysRemaining, calculateNextPmDate,
-    activeCount, overdueCount, calibrationCount, correctiveCount,
     
-    // THE FIX: Adding the explicit counts back for the SidebarNav
+    // --- UPDATED STATS EXPORT ---
+    activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
     templatesCount: visibleTemplates.length,
     historyCount: history.length,
