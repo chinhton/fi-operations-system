@@ -36,7 +36,6 @@ const customStyles = `
     background-size: 400% 400%;
     animation: movingGradient 15s ease infinite;
   }
-
   @media print {
     @page { margin: 0; }
     body { padding: 1.5cm; }
@@ -62,6 +61,10 @@ export default function App() {
   const [workOrders, setWorkOrders] = useState([]); 
   const [users, setUsers] = useState([]);
   const [manuals, setManuals] = useState([]); 
+  
+  // --- NEW: Hardware & Vendors State ---
+  const [parts, setParts] = useState([]);
+  const [vendors, setVendors] = useState([]);
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -76,6 +79,14 @@ export default function App() {
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
+
+  // --- NEW: Fetch Parts and Vendors on Load ---
+  useEffect(() => {
+    if (currentUser) {
+      window.fetch('/api/parts').then(r => r.ok ? r.json() : []).then(setParts).catch(console.error);
+      window.fetch('/api/vendors').then(r => r.ok ? r.json() : []).then(setVendors).catch(console.error);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && users.length > 0) {
@@ -135,6 +146,7 @@ export default function App() {
 
   const filterHierarchy = (item) => {
     if (isGodMode) return true; 
+    if (Array.isArray(item.department)) return item.department.includes(userDept);
     return item.department === userDept; 
   };
 
@@ -184,7 +196,6 @@ export default function App() {
     }
   };
 
-  // --- MULTI-CATEGORY MATCHER ---
   const isCategoryMatch = (templateCat, assetCat) => {
     if (!templateCat) return false;
     if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
@@ -357,6 +368,10 @@ export default function App() {
                 }
             }).catch(console.error);
         }
+        
+        // --- NEW: Intercept Parts and Vendors to update UI instantly ---
+        if (url.includes('/api/parts')) { originalFetch('/api/parts').then(r => r.json()).then(setParts).catch(console.error); }
+        if (url.includes('/api/vendors')) { originalFetch('/api/vendors').then(r => r.json()).then(setVendors).catch(console.error); }
       }
 
       return response;
@@ -390,6 +405,8 @@ export default function App() {
     workOrders: visibleWorkOrders, setWorkOrders, 
     users: visibleUsers, setUsers,
     manuals, setManuals, 
+    parts, setParts,      // --- NEW PROP PASSED TO ROUTER ---
+    vendors, setVendors,  // --- NEW PROP PASSED TO ROUTER ---
     calculateDaysRemaining, calculateNextPmDate,
     activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
