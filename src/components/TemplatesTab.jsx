@@ -25,21 +25,23 @@ const parseCSV = (str) => {
   return arr;
 };
 
+// --- UPGRADED: Encodes Section Tags using {Brackets} for Excel ---
 const encodeSteps = (steps) => {
   if (!steps || !Array.isArray(steps)) return "";
-  return steps.map(s => `[${s.type}] ${s.label}`).join(' | ');
+  return steps.map(s => `[${s.type}] ${s.section ? `{${s.section}} ` : ''}${s.label}`).join(' | ');
 };
 
 const decodeSteps = (stepString) => {
   if (!stepString) return [];
   return stepString.split(/\s*\|\s*/).filter(Boolean).map(s => {
-    const match = s.match(/^\[(.*?)\]\s*(.*)$/);
+    // Regex looks for [type] {optional section} label
+    const match = s.match(/^\[(.*?)\]\s*(?:\{(.*?)\}\s*)?(.*)$/);
     if (match) {
       let t = match[1].toLowerCase().trim();
       if (!['checkbox', 'text', 'number', 'passfail'].includes(t)) t = 'checkbox';
-      return { type: t, label: match[2].trim() };
+      return { type: t, section: match[2] ? match[2].trim() : "", label: match[3].trim() };
     }
-    return { type: 'checkbox', label: s.trim() }; 
+    return { type: 'checkbox', section: "", label: s.trim() }; 
   });
 };
 
@@ -196,7 +198,7 @@ export default function TemplatesTab({
     const defaultDept = isDepartmentRestricted ? [userDept] : [];
     setNewTemplate({
       name: "",
-      interval: "Monthly",
+      interval: "Daily",
       department: defaultDept,
       targetCategory: [],
       managerEmail: "",
@@ -467,11 +469,13 @@ export default function TemplatesTab({
                     >
                       <option value="">-- Add Category Target --</option>
                       {(!Array.isArray(newTemplate.targetCategory) || newTemplate.targetCategory.length === 0) && <option value="Global">Global (All Assets)</option>}
+                      
                       {(uniqueCategories || []).filter(cat => {
                         let current = newTemplate.targetCategory;
                         let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
                         return !selectedArray.includes(cat);
                       }).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                      
                     </select>
                     
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -499,24 +503,41 @@ export default function TemplatesTab({
                   </div>
                 </div>
                 
-                {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
+                {/* --- UPGRADED: GRID PROTOCOL ACTIONS WITH ASSET TAGS --- */}
                 <div className="md:col-span-2 mt-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
                   
-                  <div className="mb-4 max-h-64 overflow-y-auto border border-gray-200 rounded shadow-inner bg-white">
+                  <div className="mb-4 max-h-96 overflow-y-auto border border-gray-200 rounded shadow-inner bg-white">
                     <table className="min-w-full divide-y divide-gray-200 text-left">
                       <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
                         <tr>
-                          <th className="px-4 py-3 w-16 text-center border-r border-gray-200">Item #</th>
+                          <th className="px-4 py-3 w-12 text-center border-r border-gray-200">#</th>
+                          <th className="px-4 py-3 w-48 border-r border-gray-200">Asset / Section Tag</th>
                           <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
-                          <th className="px-4 py-3 w-40 border-r border-gray-200">Input Type</th>
-                          <th className="px-4 py-3 w-16 text-center">Del</th>
+                          <th className="px-4 py-3 w-32 border-r border-gray-200">Input Type</th>
+                          <th className="px-4 py-3 w-12 text-center">Del</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
                         {newTemplate.checklistSteps?.map((step, idx) => (
                           <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
                             <td className="px-4 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50">{idx + 1}</td>
+                            
+                            {/* NEW: SECTION / ASSET TAG INPUT */}
+                            <td className="px-2 py-2 border-r border-gray-100">
+                              <input 
+                                type="text" 
+                                value={step.section || ""} 
+                                onChange={(e) => {
+                                  const newSteps = [...newTemplate.checklistSteps];
+                                  newSteps[idx].section = e.target.value;
+                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                                }}
+                                placeholder="e.g. Air Compressor"
+                                className="w-full text-[10px] font-bold text-indigo-700 bg-transparent border border-transparent hover:border-gray-200 focus:bg-indigo-50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 px-2 py-1.5 rounded outline-none transition-all uppercase tracking-wider placeholder-gray-300"
+                              />
+                            </td>
+
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
                                 type="text" 
@@ -563,23 +584,33 @@ export default function TemplatesTab({
                     )}
                   </div>
 
+                  {/* Add Row Controls */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
-                    <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-56 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
+                    <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-40 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
                         <option value="text">Short Text (Serial, Note)</option>
                         <option value="number">Numeric (PSI, Temp)</option>
                         <option value="passfail">Pass/Fail Dropdown</option>
                     </select>
+                    
+                    <input type="text" id="builderSectionSOPModal" placeholder="Asset / Section Tag (Optional)" className="w-full md:w-48 text-[11px] font-bold text-indigo-700 uppercase tracking-wider border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" />
+                    
                     <input type="text" id="builderLabelSOPModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepSOPModal').click(); }}} />
+                    
                     <button type="button" id="btnAddStepSOPModal" onClick={() => {
                         const type = document.getElementById('builderTypeSOPModal').value;
+                        const section = document.getElementById('builderSectionSOPModal').value.trim();
                         const label = document.getElementById('builderLabelSOPModal').value.trim();
                         if(!label) return;
-                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, label }]});
+                        
+                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, section, label }]});
+                        
+                        // Clear the action, but intentionally leave the 'section' tag intact for rapid consecutive entry!
                         document.getElementById('builderLabelSOPModal').value = '';
-                    }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row to Grid</button>
+                    }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row</button>
                   </div>
                 </div>
+                {/* ------------------------------------------- */}
 
                 <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
@@ -603,6 +634,7 @@ export default function TemplatesTab({
                         <option key={manual.id || idx} value={manual.fileName}>{manual.fileName}</option>
                       ))}
                     </select>
+
                     {newTemplate.attachedManualName && (
                       <span className="text-xs text-[#005596] font-bold flex items-center bg-blue-50 px-3 py-2 rounded border border-blue-200 w-fit">
                         ✅ Manual Linked: {newTemplate.attachedManualName}
