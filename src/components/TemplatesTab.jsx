@@ -25,7 +25,6 @@ const parseCSV = (str) => {
   return arr;
 };
 
-// --- UPGRADED: Encodes Section Tags using {Brackets} for Excel ---
 const encodeSteps = (steps) => {
   if (!steps || !Array.isArray(steps)) return "";
   return steps.map(s => `[${s.type}] ${s.section ? `{${s.section}} ` : ''}${s.label}`).join(' | ');
@@ -34,7 +33,6 @@ const encodeSteps = (steps) => {
 const decodeSteps = (stepString) => {
   if (!stepString) return [];
   return stepString.split(/\s*\|\s*/).filter(Boolean).map(s => {
-    // Regex looks for [type] {optional section} label
     const match = s.match(/^\[(.*?)\]\s*(?:\{(.*?)\}\s*)?(.*)$/);
     if (match) {
       let t = match[1].toLowerCase().trim();
@@ -239,6 +237,17 @@ export default function TemplatesTab({
     return matchesSearch || t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // --- DYNAMIC DATALIST ENGINE ---
+  // Calculates the active targets to display in the section dropdown
+  let availableTags = [];
+  if (showTemplateModal) {
+    if (!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) {
+        availableTags = uniqueCategories || [];
+    } else {
+        availableTags = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
+    }
+  }
+
   return (
     <div className="space-y-8 animate-entrance w-full">
       
@@ -353,6 +362,11 @@ export default function TemplatesTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
             
+            {/* The Invisible Datalist for mapping assets strictly */}
+            <datalist id="available-asset-tags">
+              {availableTags.map((tag, i) => <option key={`dl-${i}`} value={tag} />)}
+            </datalist>
+
             <button onClick={() => setShowTemplateModal(false)} className="absolute top-4 right-5 text-white hover:text-gray-200 font-bold text-xl z-10">&times;</button>
             
             <div className="bg-[#005596] text-white px-6 py-4">
@@ -503,7 +517,7 @@ export default function TemplatesTab({
                   </div>
                 </div>
                 
-                {/* --- UPGRADED: GRID PROTOCOL ACTIONS WITH ASSET TAGS --- */}
+                {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
                 <div className="md:col-span-2 mt-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
                   
@@ -523,18 +537,19 @@ export default function TemplatesTab({
                           <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
                             <td className="px-4 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50">{idx + 1}</td>
                             
-                            {/* NEW: SECTION / ASSET TAG INPUT */}
+                            {/* --- THE FIX: DYNAMIC DATALIST INPUT --- */}
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
                                 type="text" 
+                                list="available-asset-tags"
                                 value={step.section || ""} 
                                 onChange={(e) => {
                                   const newSteps = [...newTemplate.checklistSteps];
                                   newSteps[idx].section = e.target.value;
                                   setNewTemplate({...newTemplate, checklistSteps: newSteps});
                                 }}
-                                placeholder="e.g. Air Compressor"
-                                className="w-full text-[10px] font-bold text-indigo-700 bg-transparent border border-transparent hover:border-gray-200 focus:bg-indigo-50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 px-2 py-1.5 rounded outline-none transition-all uppercase tracking-wider placeholder-gray-300"
+                                placeholder="-- No Tag --"
+                                className="w-full text-[10px] font-bold text-indigo-700 bg-transparent border border-transparent hover:border-gray-200 focus:bg-indigo-50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 px-2 py-1.5 rounded outline-none transition-all uppercase tracking-wider placeholder-gray-400 cursor-text"
                               />
                             </td>
 
@@ -593,7 +608,14 @@ export default function TemplatesTab({
                         <option value="passfail">Pass/Fail Dropdown</option>
                     </select>
                     
-                    <input type="text" id="builderSectionSOPModal" placeholder="Asset / Section Tag (Optional)" className="w-full md:w-48 text-[11px] font-bold text-indigo-700 uppercase tracking-wider border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" />
+                    {/* --- THE FIX: DYNAMIC DATALIST INPUT --- */}
+                    <input 
+                      type="text" 
+                      id="builderSectionSOPModal" 
+                      list="available-asset-tags"
+                      placeholder="Asset / Section Tag" 
+                      className="w-full md:w-48 text-[11px] font-bold text-indigo-700 uppercase tracking-wider border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" 
+                    />
                     
                     <input type="text" id="builderLabelSOPModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepSOPModal').click(); }}} />
                     

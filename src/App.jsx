@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Layout Components
 import TopHeader from './components/TopHeader';
 import AuthScreen from './components/AuthScreen';
 import KpiBanner from './components/KpiBanner';
@@ -8,7 +7,6 @@ import SidebarNav from './components/SidebarNav';
 import ContentRouter from './components/ContentRouter';
 import GlobalModals from './components/GlobalModals';
 
-// Hook Imports
 import useModals from './hooks/useModals';
 import useAuth from './hooks/useAuth';
 import useWorkOrders from './hooks/useWorkOrders';
@@ -21,25 +19,10 @@ import usePmExecution from './hooks/usePmExecution';
 import useDashboardStats from './hooks/useDashboardStats';
 
 const customStyles = `
-  body {
-    font-family: 'Verdana', Geneva, sans-serif !important;
-    background-color: #F4F6F8;
-    color: #1A2530;
-  }
-  @keyframes movingGradient {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
-  .animated-gradient-bg {
-    background: linear-gradient(-45deg, #005596, #1A2530, #003058, #00A1E4);
-    background-size: 400% 400%;
-    animation: movingGradient 15s ease infinite;
-  }
-  @media print {
-    @page { margin: 0; }
-    body { padding: 1.5cm; }
-  }
+  body { font-family: 'Verdana', Geneva, sans-serif !important; background-color: #F4F6F8; color: #1A2530; }
+  @keyframes movingGradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+  .animated-gradient-bg { background: linear-gradient(-45deg, #005596, #1A2530, #003058, #00A1E4); background-size: 400% 400%; animation: movingGradient 15s ease infinite; }
+  @media print { @page { margin: 0; } body { padding: 1.5cm; } }
 `;
 
 const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
@@ -51,8 +34,7 @@ export default function App() {
     return saved ? saved : "dashboard";
   });
   
-  const [navOrder] = useState(['dashboard', 'assets', 'manuals', 'templates', 'history']);
-
+  const [navOrder] = useState(['dashboard', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [history, setHistory] = useState([]);
@@ -62,9 +44,9 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [manuals, setManuals] = useState([]); 
   
-  // --- NEW: Hardware & Vendors State ---
   const [parts, setParts] = useState([]);
   const [vendors, setVendors] = useState([]);
+  const [keys, setKeys] = useState([]);
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -80,11 +62,11 @@ export default function App() {
 
   useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
 
-  // --- NEW: Fetch Parts and Vendors on Load ---
   useEffect(() => {
     if (currentUser) {
       window.fetch('/api/parts').then(r => r.ok ? r.json() : []).then(setParts).catch(console.error);
       window.fetch('/api/vendors').then(r => r.ok ? r.json() : []).then(setVendors).catch(console.error);
+      window.fetch('/api/keys').then(r => r.ok ? r.json() : []).then(setKeys).catch(console.error);
     }
   }, [currentUser]);
 
@@ -92,7 +74,6 @@ export default function App() {
     if (currentUser && users.length > 0) {
       const liveAccount = users.find(u => u.email === currentUser.email);
       if (!liveAccount || liveAccount.status !== 'Active') {
-        console.warn("FI-OMS Security: Account revoked or pending. Forcing session termination.");
         setCurrentUser(null);
         localStorage.removeItem('fi_oms_session');
       }
@@ -110,7 +91,6 @@ export default function App() {
     if (!lastDateStr || !freq) return null;
     const lastDate = new Date(lastDateStr);
     let nextDate = new Date(lastDate);
-
     switch (freq) {
       case "Daily": nextDate.setDate(lastDate.getDate() + 1); break;
       case "Weekly": nextDate.setDate(lastDate.getDate() + 7); break;
@@ -133,13 +113,10 @@ export default function App() {
     if (!lastDateStr || !freq) return null;
     const nextDateStr = calculateNextPmDate(lastDateStr, freq);
     if (!nextDateStr) return null;
-    
     const nextDate = new Date(nextDateStr);
     const today = new Date();
-    
     nextDate.setHours(0,0,0,0);
     today.setHours(0,0,0,0);
-    
     const diffTime = nextDate - today;
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
@@ -152,48 +129,34 @@ export default function App() {
 
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
     try {
-      const emailPayload = { to: toAddress || "admin@fcimg.com", subject: subjectLine, body: bodyText };
-      await fetch('/api/sendEmail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(emailPayload) });
+      await fetch('/api/sendEmail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: toAddress || "admin@fcimg.com", subject: subjectLine, body: bodyText }) });
       return true;
-    } catch (err) {
-      return false;
-    }
+    } catch (err) { return false; }
   };
 
   const triggerTeamsAlert = async (toAddress, subjectLine, bodyText) => {
     const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
-
     try {
       const isTargeted = toAddress && toAddress !== "admin@fcimg.com";
       const mentionTag = isTargeted ? `<at>${toAddress}</at>` : "";
       const formattedBody = isTargeted ? `**Attention:** ${mentionTag}\n\n${bodyText}` : bodyText;
-
       const payload = {
         type: "message",
-        attachments: [
-          {
+        attachments: [{
             contentType: "application/vnd.microsoft.card.adaptive",
             content: {
-              type: "AdaptiveCard",
-              $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-              version: "1.4",
+              type: "AdaptiveCard", $schema: "http://adaptivecards.io/schemas/adaptive-card.json", version: "1.4",
               body: [
                 { type: "TextBlock", text: `🚨 ${subjectLine}`, weight: "Bolder", size: "Medium", color: "Accent" },
                 { type: "TextBlock", text: formattedBody, wrap: true, spacing: "Medium" }
               ],
-              msteams: isTargeted ? {
-                entities: [{ type: "mention", text: mentionTag, mentioned: { id: toAddress, name: toAddress } }]
-              } : undefined
+              msteams: isTargeted ? { entities: [{ type: "mention", text: mentionTag, mentioned: { id: toAddress, name: toAddress } }] } : undefined
             }
-          }
-        ]
+        }]
       };
-
       await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       return true;
-    } catch (err) {
-      return false;
-    }
+    } catch (err) { return false; }
   };
 
   const isCategoryMatch = (templateCat, assetCat) => {
@@ -207,47 +170,31 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser || assets.length === 0 || pmTemplates.length === 0 || hasSwept.current) return;
-
     const runDailySweep = async () => {
       hasSwept.current = true; 
       let sweptCount = 0;
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
       for (const asset of assets) {
         if (asset.status !== "Active") continue;
-
         let isOverdue = false;
         const assetTemplates = pmTemplates.filter(t => isCategoryMatch(t.targetCategory, asset.category));
         const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-
         freqs.forEach(freq => {
           const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
           if (targetDate && targetDate !== todayStr) {
             const daysLeft = calculateDaysRemaining(targetDate, freq);
-            if (daysLeft !== null && daysLeft < 0) {
-              isOverdue = true;
-            }
+            if (daysLeft !== null && daysLeft < 0) isOverdue = true;
           }
         });
-
         if (isOverdue) {
-          const updatedAsset = { ...asset, status: "Maintenance Due" };
           try {
-            await window.fetch('/api/assets', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(updatedAsset)
-            });
+            await window.fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...asset, status: "Maintenance Due" }) });
             sweptCount++;
           } catch (err) {}
         }
       }
-
-      if (sweptCount > 0) {
-        window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
-      }
+      if (sweptCount > 0) window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
     };
-
     runDailySweep();
   }, [assets, pmTemplates, currentUser]);
 
@@ -265,10 +212,7 @@ export default function App() {
   const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
-  const dynamicComplianceRate = scorableAssets.length > 0 
-    ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) 
-    : 100;
-
+  const dynamicComplianceRate = scorableAssets.length > 0 ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) : 100;
   const activeCount = visibleAssets.filter(a => a.status === "Active").length;
   const inactiveCount = visibleAssets.filter(a => a.status === "Inactive").length;
   const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
@@ -286,10 +230,9 @@ export default function App() {
   const handleApproveUser = async (email) => {
     const targetUser = users.find(u => u.email === email && u.status !== "Active");
     if (!targetUser) return;
-    const updatedUser = { ...targetUser, status: "Active" };
     try {
-      await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedUser) });
-      setUsers(users.map(u => (u.email === email && u.status !== "Active") ? updatedUser : u));
+      await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...targetUser, status: "Active" }) });
+      setUsers(users.map(u => (u.email === email && u.status !== "Active") ? { ...targetUser, status: "Active" } : u));
     } catch (err) {}
   };
 
@@ -320,7 +263,6 @@ export default function App() {
 
   useEffect(() => {
     const originalFetch = window.fetch;
-
     window.fetch = async (...args) => {
       const [url, config] = args;
       const response = await originalFetch(url, config);
@@ -336,18 +278,10 @@ export default function App() {
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
           if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
-          
           const commentText = logDetails.comments || logDetails.notes || "";
           const templateName = logDetails.templateName || "";
           
-          const isSystemLog = 
-            !templateName ||
-            logDetails.assetId === "SYS-AUTO" ||
-            templateName.includes("System Action") ||
-            templateName.includes("Asset Profile Update") ||
-            commentText.includes("Registered new facility asset") ||
-            commentText.includes("Updated facility asset") ||
-            commentText.includes("Automated Tracker");
+          const isSystemLog = !templateName || logDetails.assetId === "SYS-AUTO" || templateName.includes("System Action") || templateName.includes("Asset Profile Update") || commentText.includes("Registered new facility asset") || commentText.includes("Updated facility asset") || commentText.includes("Automated Tracker");
 
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
@@ -355,28 +289,32 @@ export default function App() {
           }
       }
 
+      // --- THE FIX: BULK INTERCEPTOR BYPASS ---
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
-        if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
-        if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
-        if (url.includes('/api/users') && !url.includes('/api/history')) {
-            originalFetch('/api/users').then(r => r.json()).then(data => {
-                setUsers(data);
-                const updatedMe = data.find(u => u.email === activeUser.email);
-                if (updatedMe) {
-                    setCurrentUser(updatedMe);
-                    localStorage.setItem('fi_oms_session', JSON.stringify(updatedMe));
-                }
-            }).catch(console.error);
-        }
         
-        // --- NEW: Intercept Parts and Vendors to update UI instantly ---
-        if (url.includes('/api/parts')) { originalFetch('/api/parts').then(r => r.json()).then(setParts).catch(console.error); }
-        if (url.includes('/api/vendors')) { originalFetch('/api/vendors').then(r => r.json()).then(setVendors).catch(console.error); }
-      }
+        // If it's a bulk operation, DO NOT trigger a GET refresh avalanche!
+        const isBulk = url.includes('bulk=true');
 
+        if (!isBulk) {
+          if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
+          if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
+          if (url.includes('/api/users') && !url.includes('/api/history')) {
+              originalFetch('/api/users').then(r => r.json()).then(data => {
+                  setUsers(data);
+                  const updatedMe = data.find(u => u.email === activeUser.email);
+                  if (updatedMe) {
+                      setCurrentUser(updatedMe);
+                      localStorage.setItem('fi_oms_session', JSON.stringify(updatedMe));
+                  }
+              }).catch(console.error);
+          }
+          if (url.includes('/api/parts')) { originalFetch('/api/parts').then(r => r.json()).then(setParts).catch(console.error); }
+          if (url.includes('/api/vendors')) { originalFetch('/api/vendors').then(r => r.json()).then(setVendors).catch(console.error); }
+          if (url.includes('/api/keys')) { originalFetch('/api/keys').then(r => r.json()).then(setKeys).catch(console.error); }
+        }
+      }
       return response;
     };
-
     return () => { window.fetch = originalFetch; };
   }, []); 
 
@@ -405,28 +343,27 @@ export default function App() {
     workOrders: visibleWorkOrders, setWorkOrders, 
     users: visibleUsers, setUsers,
     manuals, setManuals, 
-    parts, setParts,      // --- NEW PROP PASSED TO ROUTER ---
-    vendors, setVendors,  // --- NEW PROP PASSED TO ROUTER ---
+    parts, setParts,      
+    vendors, setVendors,  
+    keys, setKeys, 
     calculateDaysRemaining, calculateNextPmDate,
     activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
     templatesCount: visibleTemplates.length,
     historyCount: history.length,
-    manualsCount: manuals.length
+    manualsCount: manuals.length,
+    keysCount: keys.length
   };
 
   return (
     <div className="min-h-screen bg-[#F4F6F8] flex flex-col antialiased">
       <style>{customStyles}</style>
       <TopHeader {...masterProps} />
-      
       <KpiBanner {...masterProps} />
-
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
         <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? pendingApprovals.length : 0} {...masterProps} />
         <ContentRouter {...masterProps} />
       </div>
-
       <GlobalModals {...masterProps} />
     </div>
   );

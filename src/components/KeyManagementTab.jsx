@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 
-// --- BULLETPROOF CSV PARSER ---
 const parseCSV = (str) => {
   const arr = [];
   let quote = false;
@@ -12,7 +11,6 @@ const parseCSV = (str) => {
       if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
       if (cc === '"') { quote = !quote; continue; }
       if (cc === ',' && !quote) { ++col; continue; }
-      // Safely handle Windows (\r\n) and Mac (\n) line endings
       if (cc === '\r' && nc === '\n' && !quote) { ++row; col = 0; ++c; continue; } 
       if (cc === '\n' && !quote) { ++row; col = 0; continue; }
       if (cc !== '\r') arr[row][col] += cc;
@@ -43,7 +41,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
     k.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // --- CRUD OPERATIONS ---
   const handleSaveKey = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -87,7 +84,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
     setIsModalOpen(true);
   };
 
-  // --- CSV BULK OPERATIONS ---
   const handleExportCSV = () => {
     const headers = ["id", "keyTag", "roomNumber", "roomName", "keyLocation", "assignedTo", "lastVerified"];
     const csvRows = [headers.join(",")];
@@ -128,7 +124,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           return;
         }
 
-        // AGGRESSIVE STRIPPER: Removes all spaces, #, -, and special chars so Excel headers easily map
         const headers = parsedData[0].map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
         const importedKeys = [];
 
@@ -141,14 +136,16 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
              rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
           });
 
-          // HYPER-TOLERANT MAPPING: Will catch almost any variation of your Excel columns
-          const keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['item'] || rowObj['id'] || '';
-          if (!keyTag) continue; 
+          // Aggressive Fallback: If headers are completely unmatched, strictly grab the first column as Key Tag
+          let keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['item'] || rowObj['id'] || '';
+          if (!keyTag) {
+              keyTag = rowData[0] ? rowData[0].trim() : `UNKNOWN-TAG-${i}`;
+          }
 
-          const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['rm'] || '';
-          const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['areadoor'] || rowObj['description'] || '';
-          const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storagelocation'] || 'Master Key Box';
-          const assignedTo = rowObj['assignedto'] || rowObj['possession'] || rowObj['owner'] || rowObj['assignee'] || '';
+          const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['rm'] || rowObj['roomno'] || '';
+          const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['areadoor'] || rowObj['description'] || rowObj['door'] || '';
+          const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storagelocation'] || rowObj['storage'] || 'Master Key Box';
+          const assignedTo = rowObj['assignedto'] || rowObj['possession'] || rowObj['owner'] || rowObj['assignee'] || rowObj['person'] || '';
           
           let lastVerified = rowObj['lastverified'] || rowObj['date'] || rowObj['verified'] || '';
           if (lastVerified && lastVerified.includes('/')) {
@@ -174,12 +171,15 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           return;
         }
 
+        // --- THE FIX: BULK FLAG & THROTTLE ---
         for (const key of importedKeys) {
-          await window.fetch('/api/keys', {
+          await window.fetch('/api/keys?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(key)
           });
+          // 50ms buffer to keep Cosmos DB from throwing a 429 Too Many Requests Error
+          await new Promise(resolve => setTimeout(resolve, 50)); 
         }
         
         alert("Import complete! Refreshing page to sync database.");
@@ -210,8 +210,10 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
     }
 
     try {
+      // --- THE FIX: BULK FLAG ---
       for (const key of filteredKeys) {
-        await window.fetch(`/api/keys?id=${key.id}`, { method: 'DELETE' });
+        await window.fetch(`/api/keys?id=${key.id}&bulk=true`, { method: 'DELETE' });
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
       alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
@@ -392,7 +394,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
                   <input type="text" value={newKey.keyLocation} onChange={e => setNewKey({...newKey, keyLocation: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-amber-500 outline-none" placeholder="e.g. Facilities Lockbox 1" />
                 </div>
                 
-                {/* THE FIX: Changed from <select> user list to an open text input */}
                 <div>
                   <label className="block text-[10px] font-bold text-red-600 uppercase tracking-wider mb-1.5">Assigned To / Checked Out By</label>
                   <input 

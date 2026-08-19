@@ -9,8 +9,9 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
   const [isVendorModalOpen, setIsVendorModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [newPart, setNewPart] = useState({ id: '', name: '', partNumber: '', stockLevel: 0, targetCategory: '', vendorId: '', cost: '' });
-  const [newVendor, setNewVendor] = useState({ id: '', name: '', contactName: '', email: '', phone: '', serviceType: '', accountNumber: '' });
+  // --- ADDED URL FIELDS TO STATE ---
+  const [newPart, setNewPart] = useState({ id: '', name: '', partNumber: '', stockLevel: 0, targetCategory: 'Global', vendorId: '', cost: '', partUrl: '' });
+  const [newVendor, setNewVendor] = useState({ id: '', name: '', contactName: '', email: '', phone: '', serviceType: '', accountNumber: '', website: '' });
 
   // Compute unique asset categories for the Part mapping dropdown
   const uniqueCategories = [...new Set(assets.map(a => a.category).filter(Boolean))];
@@ -89,6 +90,12 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
     setIsVendorModalOpen(true);
   };
 
+  // Safe URL formatter
+  const formatUrl = (url) => {
+    if (!url) return "#";
+    return url.startsWith('http') ? url : `https://${url}`;
+  };
+
   return (
     <div className="space-y-6 animate-entrance w-full relative">
       
@@ -115,14 +122,14 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
           {activeView === 'parts' ? (
             <button 
-              onClick={() => { setNewPart({ id: '', name: '', partNumber: '', stockLevel: 0, targetCategory: 'Global', vendorId: '', cost: '' }); setIsPartModalOpen(true); }}
+              onClick={() => { setNewPart({ id: '', name: '', partNumber: '', stockLevel: 0, targetCategory: 'Global', vendorId: '', cost: '', partUrl: '' }); setIsPartModalOpen(true); }}
               className="w-full sm:w-auto bg-[#00A1E4] hover:bg-[#0081b8] text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
             >
               ➕ Add Part
             </button>
           ) : (
             <button 
-              onClick={() => { setNewVendor({ id: '', name: '', contactName: '', email: '', phone: '', serviceType: '', accountNumber: '' }); setIsVendorModalOpen(true); }}
+              onClick={() => { setNewVendor({ id: '', name: '', contactName: '', email: '', phone: '', serviceType: '', accountNumber: '', website: '' }); setIsVendorModalOpen(true); }}
               className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-800 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
             >
               ➕ Add Vendor
@@ -181,7 +188,12 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
                       <tr key={part.id} className="hover:bg-gray-50/50 transition">
                         <td className="px-6 py-4">
                           <span className="font-bold text-gray-900 block">{part.name}</span>
-                          <span className="text-[10px] text-gray-500 font-mono">P/N: {part.partNumber || 'N/A'}</span>
+                          <span className="text-[10px] text-gray-500 font-mono block mb-1">P/N: {part.partNumber || 'N/A'}</span>
+                          {part.partUrl && (
+                            <a href={formatUrl(part.partUrl)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-[#00A1E4] hover:text-[#005596] hover:underline flex items-center gap-1 w-max">
+                              🔗 Order / View Part
+                            </a>
+                          )}
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 rounded text-[10px] font-black tracking-wider ${part.stockLevel <= 2 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
@@ -243,7 +255,12 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
                   filteredVendors.map(vendor => (
                     <tr key={vendor.id} className="hover:bg-indigo-50/30 transition">
                       <td className="px-6 py-4">
-                        <span className="font-bold text-indigo-900 block text-sm">{vendor.name}</span>
+                        <span className="font-bold text-indigo-900 block text-sm mb-1">{vendor.name}</span>
+                        {vendor.website && (
+                          <a href={formatUrl(vendor.website)} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-indigo-600 hover:text-indigo-900 hover:underline flex items-center gap-1 w-max">
+                            🌐 Visit Website
+                          </a>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className="block font-bold text-gray-800">{vendor.contactName || 'N/A'}</span>
@@ -304,6 +321,13 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
                     {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
+                
+                {/* --- ADDED URL FIELD FOR PARTS --- */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Part / Purchase URL (Optional)</label>
+                  <input type="text" value={newPart.partUrl || ''} onChange={e => setNewPart({...newPart, partUrl: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-[#005596] outline-none text-[#005596]" placeholder="e.g. www.mcmaster.com/part/..." />
+                </div>
+
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1.5">Link Approved Vendor</label>
                   <select value={newPart.vendorId} onChange={e => setNewPart({...newPart, vendorId: e.target.value})} className="w-full text-xs rounded border-indigo-200 p-2.5 border focus:ring-1 focus:ring-indigo-600 outline-none bg-indigo-50/30">
@@ -353,10 +377,17 @@ export default function HardwareVendorsTab({ assets = [], parts = [], vendors = 
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Phone Number</label>
                   <input type="text" value={newVendor.phone} onChange={e => setNewVendor({...newVendor, phone: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-indigo-600 outline-none" placeholder="e.g. (800) 555-1234" />
                 </div>
-                <div className="sm:col-span-2">
+                
+                {/* --- ADDED URL FIELD FOR VENDORS --- */}
+                <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Account / SLA Number</label>
                   <input type="text" value={newVendor.accountNumber} onChange={e => setNewVendor({...newVendor, accountNumber: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-indigo-600 outline-none font-mono" placeholder="e.g. ACC-889021" />
                 </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Website URL (Optional)</label>
+                  <input type="text" value={newVendor.website || ''} onChange={e => setNewVendor({...newVendor, website: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-indigo-600 outline-none text-indigo-600" placeholder="e.g. www.trane.com" />
+                </div>
+
               </div>
               <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
                 <button type="button" onClick={() => setIsVendorModalOpen(false)} className="px-5 py-2 border border-gray-300 rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-50 transition">Cancel</button>
