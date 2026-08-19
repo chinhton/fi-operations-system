@@ -103,6 +103,11 @@ app.http('users', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', 
 app.http('workorders', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'workorders') });
 app.http('manuals', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'manuals') });
 
+// --- NEW HARDWIRED ENDPOINTS ---
+app.http('parts', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'parts') });
+app.http('vendors', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'vendors') });
+app.http('keys', { methods: ['GET', 'POST', 'DELETE'], authLevel: 'anonymous', handler: (req) => processRoute(req, 'keys') });
+
 // --- BLOB STORAGE UPLOAD ENDPOINT ---
 app.http('upload', {
     methods: ['POST'],
