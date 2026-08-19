@@ -184,6 +184,14 @@ export default function App() {
     }
   };
 
+  // --- MULTI-CATEGORY MATCHER ---
+  const isCategoryMatch = (templateCat, assetCat) => {
+    if (!templateCat) return false;
+    if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
+    if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
+    return templateCat === assetCat;
+  };
+
   const hasSwept = useRef(false);
 
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function App() {
         if (asset.status !== "Active") continue;
 
         let isOverdue = false;
-        const assetTemplates = pmTemplates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+        const assetTemplates = pmTemplates.filter(t => isCategoryMatch(t.targetCategory, asset.category));
         const freqs = [...new Set(assetTemplates.map(t => t.interval))];
 
         freqs.forEach(freq => {
@@ -250,7 +258,6 @@ export default function App() {
     ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) 
     : 100;
 
-  // --- UPDATED STATS ENGINE ---
   const activeCount = visibleAssets.filter(a => a.status === "Active").length;
   const inactiveCount = visibleAssets.filter(a => a.status === "Inactive").length;
   const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
@@ -384,8 +391,6 @@ export default function App() {
     users: visibleUsers, setUsers,
     manuals, setManuals, 
     calculateDaysRemaining, calculateNextPmDate,
-    
-    // --- UPDATED STATS EXPORT ---
     activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
     templatesCount: visibleTemplates.length,

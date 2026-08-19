@@ -62,6 +62,14 @@ const toTitleCase = (str) => {
   return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 };
 
+// --- MULTI-CATEGORY MATCHER ---
+const checkCategoryMatch = (templateCat, assetCat) => {
+  if (!templateCat) return false;
+  if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
+  if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
+  return templateCat === assetCat;
+};
+
 export default function AssetsTab({
   assets = [], setAssets, users = [], manuals = [], pmTemplates = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
@@ -263,7 +271,7 @@ export default function AssetsTab({
              }
           }
 
-          let status = "Active"; // Default to Active instead of Operational
+          let status = "Active"; 
           const rawStatus = (rowObj['Status'] || rowObj['STATUS'] || rowObj['status'] || '').toUpperCase();
           if (rawStatus.includes('NOT WORKING') || rawStatus.includes('OFF')) {
               status = "Maintenance Due";
@@ -370,7 +378,7 @@ export default function AssetsTab({
       name: `${asset.name} Maintenance Protocol`,
       interval: "Monthly",
       department: defaultDept,
-      targetCategory: asset.category || "Global",
+      targetCategory: [asset.category || "Global"], // Array logic applied
       managerEmail: "",
       operatorEmail: asset.operatorEmail || "",
       checklistSteps: [],
@@ -385,9 +393,9 @@ export default function AssetsTab({
     let templateToEdit = null;
     
     if (specificFreq) {
-       templateToEdit = (pmTemplates || []).find(t => (t.targetCategory === "Global" || t.targetCategory === asset.category) && t.interval === specificFreq);
+       templateToEdit = (pmTemplates || []).find(t => checkCategoryMatch(t.targetCategory, asset.category) && t.interval === specificFreq);
     } else {
-       const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === asset.category);
+       const assetTemplates = (pmTemplates || []).filter(t => checkCategoryMatch(t.targetCategory, asset.category));
        templateToEdit = assetTemplates.length > 0 ? assetTemplates[0] : (pmTemplates || []).find(t => t.targetCategory === "Global");
     }
     
@@ -553,9 +561,11 @@ export default function AssetsTab({
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {(groupedAssets[activeCategoryModal] || []).map((asset) => {
-                    const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+                    const assetTemplates = (pmTemplates || []).filter(t => checkCategoryMatch(t.targetCategory, asset.category));
                     const freqs = [...new Set(assetTemplates.map(t => t.interval))];
                     
+                    const checkStatus = (asset.status || "").toUpperCase();
+
                     return (
                       <tr key={asset.serial} className="hover:bg-gray-50/55 transition">
                         <td className="px-6 py-4">
@@ -579,17 +589,19 @@ export default function AssetsTab({
                         </td>
                         <td className="px-6 py-4">
                           <select
-                            value={asset.status}
+                            value={checkStatus === 'ACTIVE' ? 'Active' : checkStatus === 'INACTIVE' ? 'Inactive' : asset.status}
                             onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
                             className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                              asset.status === "Active" ? "bg-emerald-100 text-emerald-800" :
-                              asset.status === "Inactive" ? "bg-gray-200 text-gray-600" :
-                              asset.status === "Maintenance Due" ? "bg-yellow-100 text-yellow-800" :
-                              asset.status === "Out of Calibration" ? "bg-red-100 text-red-800" :
-                              asset.status === "Corrective Maintenance" ? "bg-orange-100 text-orange-800" :
+                              checkStatus === "OPERATIONAL" ? "bg-green-100 text-green-800" :
+                              checkStatus === "ACTIVE" ? "bg-emerald-100 text-emerald-800" :
+                              checkStatus === "INACTIVE" ? "bg-gray-200 text-gray-600" :
+                              checkStatus === "MAINTENANCE DUE" ? "bg-yellow-100 text-yellow-800" :
+                              checkStatus === "OUT OF CALIBRATION" ? "bg-red-100 text-red-800" :
+                              (checkStatus === "CORRECTIVE MAINTENANCE" || checkStatus === "CORRECTIVE ACTION") ? "bg-orange-100 text-orange-800" :
                               "bg-gray-100 text-gray-800"
                             }`}
                           >
+                            <option value="Operational">Operational</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Maintenance Due">Maintenance Due</option>
@@ -897,7 +909,7 @@ export default function AssetsTab({
         </div>
       )}
 
-      {/* --- QUICK TEMPLATE BUILDER MODAL --- */}
+      {/* --- QUICK TEMPLATE BUILDER MODAL (WITH MULTI-SELECT) --- */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
@@ -945,13 +957,61 @@ export default function AssetsTab({
                     )}
                   </select>
                 </div>
+                
+                {/* --- NEW MULTI-SELECT CATEGORY MAPPING --- */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
-                  <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    <option value="Global">Global (All Assets)</option>
-                    {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                  </select>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
+                  <div className="flex flex-col space-y-2">
+                    <select 
+                      value="" 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        
+                        let current = newTemplate.targetCategory;
+                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
+                        
+                        if (val === "Global") {
+                          setNewTemplate({...newTemplate, targetCategory: "Global"});
+                        } else {
+                          if (!selectedArray.includes(val)) {
+                            setNewTemplate({...newTemplate, targetCategory: [...selectedArray, val]});
+                          }
+                        }
+                      }} 
+                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                    >
+                      <option value="">-- Add Category Target --</option>
+                      <option value="Global">Global (All Assets)</option>
+                      {(uniqueCategories || []).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                    </select>
+                    
+                    {/* Selected Category Chips */}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) ? (
+                         <span className="bg-[#00A1E4] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            Global (All Assets)
+                         </span>
+                      ) : (Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory]).map(cat => (
+                         <span key={cat} className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            {cat}
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const arr = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
+                                const filtered = arr.filter(c => c !== cat);
+                                setNewTemplate({...newTemplate, targetCategory: filtered.length > 0 ? filtered : "Global"});
+                              }} 
+                              className="ml-1.5 text-purple-500 hover:text-purple-900 font-bold text-sm leading-none"
+                            >
+                              &times;
+                            </button>
+                         </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+                {/* ------------------------------------------- */}
                 
                 {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
                 <div className="md:col-span-2 mt-2">

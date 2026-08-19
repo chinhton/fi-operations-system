@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 
-// --- Aligned departments strictly with AuthScreen ---
 const CORPORATE_DEPARTMENTS = [
   "System Administration",
   "Facilities", 
@@ -9,7 +8,6 @@ const CORPORATE_DEPARTMENTS = [
   "Production: Engineering"
 ];
 
-// --- NATIVE CSV PARSER ---
 const parseCSV = (str) => {
   const arr = [];
   let quote = false;
@@ -27,7 +25,6 @@ const parseCSV = (str) => {
   return arr;
 };
 
-// --- CHECKLIST TRANSLATORS FOR EXCEL ---
 const encodeSteps = (steps) => {
   if (!steps || !Array.isArray(steps)) return "";
   return steps.map(s => `[${s.type}] ${s.label}`).join(' | ');
@@ -35,16 +32,13 @@ const encodeSteps = (steps) => {
 
 const decodeSteps = (stepString) => {
   if (!stepString) return [];
-  // Split by the pipe character, allowing for spaces around it
   return stepString.split(/\s*\|\s*/).filter(Boolean).map(s => {
-    // Looks for "[type] The action description"
     const match = s.match(/^\[(.*?)\]\s*(.*)$/);
     if (match) {
       let t = match[1].toLowerCase().trim();
       if (!['checkbox', 'text', 'number', 'passfail'].includes(t)) t = 'checkbox';
       return { type: t, label: match[2].trim() };
     }
-    // Fallback if they forgot the brackets
     return { type: 'checkbox', label: s.trim() }; 
   });
 };
@@ -63,13 +57,7 @@ export default function TemplatesTab({
   const userDept = currentUser?.department || "";
   const isDepartmentRestricted = !isSystemAdmin;
 
-  const filteredTemplates = pmTemplates.filter(t => 
-    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.department?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // --- CSV EXPORT / IMPORT ENGINE FOR SOPs ---
+  // --- MULTI-CATEGORY EXPORT/IMPORT UPGRADE ---
   const handleExportCSV = () => {
     const headers = ["id", "name", "interval", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
@@ -79,12 +67,15 @@ export default function TemplatesTab({
         let val = "";
         if (header === "checklistSteps") {
           val = encodeSteps(template[header]);
+        } else if (header === "targetCategory") {
+          // Flatten array into semicolon-separated string for Excel
+          val = Array.isArray(template[header]) ? template[header].join(';') : (template[header] || "Global");
         } else {
           val = template[header] || "";
         }
         
-        val = val.toString().replace(/"/g, '""'); // Escape double quotes
-        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; // Wrap in quotes if it contains comma
+        val = val.toString().replace(/"/g, '""'); 
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; 
         return val;
       });
       csvRows.push(row.join(","));
@@ -130,13 +121,17 @@ export default function TemplatesTab({
 
           const name = rowObj['name'] || rowObj['Title'] || rowObj['SOP Name'] || '';
           if (!name) continue; 
+          
+          // Decode semicolon-separated array back into JSON array
+          const rawTarget = rowObj['targetCategory'] || "Global";
+          const parsedTarget = rawTarget.includes(';') ? rawTarget.split(';').map(s => s.trim()) : rawTarget;
 
           const finalTemplate = {
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
             interval: rowObj['interval'] || "Monthly",
             department: rowObj['department'] || "Facilities",
-            targetCategory: rowObj['targetCategory'] || "Global",
+            targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
             operatorEmail: rowObj['operatorEmail'] || "",
             attachedManualName: rowObj['attachedManualName'] || "",
@@ -199,7 +194,6 @@ export default function TemplatesTab({
     }
   };
 
-  // --- MODAL CONTROLS ---
   const openBuildModal = () => {
     const defaultDept = isDepartmentRestricted ? userDept : "";
     setNewTemplate({
@@ -236,6 +230,16 @@ export default function TemplatesTab({
       console.error("Failed to delete SOP:", err);
     }
   };
+
+  const filteredTemplates = pmTemplates.filter(t => {
+    const matchesSearch = t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || t.department?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    // Safely check arrays during search filtering
+    if (Array.isArray(t.targetCategory)) {
+      return matchesSearch || t.targetCategory.some(cat => cat.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    return matchesSearch || t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div className="space-y-8 animate-entrance w-full">
@@ -309,7 +313,6 @@ export default function TemplatesTab({
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 bg-gray-50/50">
             {filteredTemplates.map(template => (
               <div key={template.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between group relative overflow-hidden">
-                {/* Decorative top border */}
                 <div className={`absolute top-0 left-0 w-full h-1.5 ${template.targetCategory === 'Global' ? 'bg-[#00A1E4]' : 'bg-purple-500'}`}></div>
                 
                 <div>
@@ -321,10 +324,10 @@ export default function TemplatesTab({
                   </div>
                   
                   <div className="space-y-1.5 mb-5">
-                    <div className="flex items-center text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0">Map:</span>
-                      <span className={`font-bold uppercase tracking-wider ${template.targetCategory === 'Global' ? 'text-[#00A1E4]' : 'text-purple-600'}`}>
-                        {template.targetCategory}
+                    <div className="flex items-start text-[10px]">
+                      <span className="font-bold text-gray-500 uppercase tracking-wider w-20 shrink-0 mt-0.5">Map:</span>
+                      <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global') ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
+                        {Array.isArray(template.targetCategory) ? template.targetCategory.join(', ') : (template.targetCategory || "Global")}
                       </span>
                     </div>
                     <div className="flex items-center text-[10px]">
@@ -408,13 +411,61 @@ export default function TemplatesTab({
                     )}
                   </select>
                 </div>
+
+                {/* --- NEW MULTI-SELECT CATEGORY MAPPING --- */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Category Lock)</label>
-                  <select value={newTemplate.targetCategory} onChange={(e) => setNewTemplate({...newTemplate, targetCategory: e.target.value})} className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    <option value="Global">Global (All Assets)</option>
-                    {uniqueCategories.map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                  </select>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
+                  <div className="flex flex-col space-y-2">
+                    <select 
+                      value="" 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        
+                        let current = newTemplate.targetCategory;
+                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
+                        
+                        if (val === "Global") {
+                          setNewTemplate({...newTemplate, targetCategory: "Global"});
+                        } else {
+                          if (!selectedArray.includes(val)) {
+                            setNewTemplate({...newTemplate, targetCategory: [...selectedArray, val]});
+                          }
+                        }
+                      }} 
+                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                    >
+                      <option value="">-- Add Category Target --</option>
+                      <option value="Global">Global (All Assets)</option>
+                      {(uniqueCategories || []).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
+                    </select>
+                    
+                    {/* Selected Category Chips */}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) ? (
+                         <span className="bg-[#00A1E4] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            Global (All Assets)
+                         </span>
+                      ) : (Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory]).map(cat => (
+                         <span key={cat} className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
+                            {cat}
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                const arr = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
+                                const filtered = arr.filter(c => c !== cat);
+                                setNewTemplate({...newTemplate, targetCategory: filtered.length > 0 ? filtered : "Global"});
+                              }} 
+                              className="ml-1.5 text-purple-500 hover:text-purple-900 font-bold text-sm leading-none"
+                            >
+                              &times;
+                            </button>
+                         </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+                {/* ------------------------------------------- */}
                 
                 {/* --- FULLY EDITABLE GRID PROTOCOL ACTIONS --- */}
                 <div className="md:col-span-2 mt-2">

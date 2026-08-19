@@ -2,7 +2,9 @@ import React from 'react';
 
 export default function DashboardTab({
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
-  assets, pmTemplates, calculateDaysRemaining, users = []
+  assets, pmTemplates, calculateDaysRemaining, complianceRate,
+  activeCount = 0, overdueCount = 0, calibrationCount = 0, correctiveCount = 0,
+  users = []
 }) {
   
   const adminGlobalQueue = [];
@@ -32,6 +34,14 @@ export default function DashboardTab({
 
   const todayStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+  // --- MULTI-CATEGORY MATCHER ---
+  const isCategoryMatch = (templateCat, assetCat) => {
+    if (!templateCat) return false;
+    if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
+    if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
+    return templateCat === assetCat;
+  };
+
   if (assets && calculateDaysRemaining) {
     assets.forEach(asset => {
       
@@ -41,7 +51,7 @@ export default function DashboardTab({
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
       
-      const assetTemplates = (pmTemplates || []).filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
+      const assetTemplates = (pmTemplates || []).filter(t => isCategoryMatch(t.targetCategory, asset.category));
       const freqs = [...new Set(assetTemplates.map(t => t.interval))];
       
       let lowestDays = null;
