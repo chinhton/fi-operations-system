@@ -44,7 +44,7 @@ const decodeSteps = (stepString) => {
 };
 
 export default function TemplatesTab({
-  pmTemplates = [], manuals = [], assets = [], // --- ADDED ASSETS HERE ---
+  pmTemplates = [], manuals = [], assets = [],
   newTemplate, setNewTemplate, handleAddTemplateSubmit,
   PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
   isAddingTemplate, currentUser
@@ -237,8 +237,6 @@ export default function TemplatesTab({
     return matchesSearch || t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // --- DYNAMIC CATEGORY FILTER ENGINE ---
-  // Calculates which categories actually belong to the selected department(s)
   const isDeptMatch = (assetDept, selectedDepts) => {
     if (!selectedDepts || selectedDepts === "Global" || selectedDepts.length === 0) return true;
     const aDepts = Array.isArray(assetDept) ? assetDept : [assetDept || "Unassigned"];
@@ -253,12 +251,10 @@ export default function TemplatesTab({
       .filter(Boolean)
   )];
 
-  // --- DYNAMIC DATALIST ENGINE ---
-  // Calculates the active targets to display in the section dropdown
   let availableTags = [];
   if (showTemplateModal) {
     if (!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) {
-        availableTags = dynamicCategories || []; // Falls back to filtered departments
+        availableTags = dynamicCategories || []; 
     } else {
         availableTags = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
     }
@@ -378,7 +374,6 @@ export default function TemplatesTab({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
             
-            {/* The Invisible Datalist for mapping assets strictly */}
             <datalist id="available-asset-tags">
               {availableTags.map((tag, i) => <option key={`dl-${i}`} value={tag} />)}
             </datalist>
@@ -405,7 +400,6 @@ export default function TemplatesTab({
                   </select>
                 </div>
 
-                {/* --- DEPARTMENT MULTI-SELECT --- */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department (Multi-Select)</label>
                   <div className="flex flex-col space-y-2">
@@ -419,7 +413,7 @@ export default function TemplatesTab({
                         let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
                         
                         if (val === "Global") {
-                          setNewTemplate({...newTemplate, department: "Global", targetCategory: "Global"}); // Reset target map when dept resets
+                          setNewTemplate({...newTemplate, department: "Global", targetCategory: "Global"}); 
                         } else {
                           if (!selectedArray.includes(val)) {
                             setNewTemplate({...newTemplate, department: [...selectedArray, val], targetCategory: "Global"});
@@ -474,7 +468,6 @@ export default function TemplatesTab({
                   </div>
                 </div>
                 
-                {/* --- TARGET ASSET MULTI-SELECT (NOW FILTERED BY DEPARTMENT) --- */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
                   <div className="flex flex-col space-y-2">
@@ -500,7 +493,6 @@ export default function TemplatesTab({
                       <option value="">-- Add Category Target --</option>
                       {(!Array.isArray(newTemplate.targetCategory) || newTemplate.targetCategory.length === 0) && <option value="Global">Global (All Assets)</option>}
                       
-                      {/* Uses the newly mapped dynamicCategories which are restricted by department */}
                       {(dynamicCategories || []).filter(cat => {
                         let current = newTemplate.targetCategory;
                         let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
@@ -546,7 +538,8 @@ export default function TemplatesTab({
                           <th className="px-4 py-3 w-48 border-r border-gray-200">Asset / Section Tag</th>
                           <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
                           <th className="px-4 py-3 w-32 border-r border-gray-200">Input Type</th>
-                          <th className="px-4 py-3 w-12 text-center">Del</th>
+                          {/* --- THE FIX: WIDENED ACTIONS COLUMN --- */}
+                          <th className="px-4 py-3 w-20 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
@@ -554,7 +547,6 @@ export default function TemplatesTab({
                           <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
                             <td className="px-4 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50">{idx + 1}</td>
                             
-                            {/* --- THE FIX: DYNAMIC DATALIST INPUT --- */}
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
                                 type="text" 
@@ -599,12 +591,34 @@ export default function TemplatesTab({
                                 <option value="passfail">PASS/FAIL</option>
                               </select>
                             </td>
-                            <td className="px-4 py-3 text-center">
-                              <button type="button" onClick={() => {
-                                const newSteps = [...newTemplate.checklistSteps];
-                                newSteps.splice(idx, 1);
-                                setNewTemplate({...newTemplate, checklistSteps: newSteps});
-                              }} className="text-gray-300 hover:text-red-600 font-bold text-lg leading-none transition-colors" title="Remove Step">&times;</button>
+
+                            {/* --- THE FIX: DUPLICATE AND DELETE BUTTONS --- */}
+                            <td className="px-4 py-3 text-center flex justify-center items-center space-x-3 mt-1">
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const newSteps = [...newTemplate.checklistSteps];
+                                  newSteps.splice(idx + 1, 0, { ...step }); // Duplicate exactly below
+                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                                }} 
+                                className="text-blue-400 hover:text-blue-600 transition-colors" 
+                                title="Duplicate Row"
+                              >
+                                📋
+                              </button>
+
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const newSteps = [...newTemplate.checklistSteps];
+                                  newSteps.splice(idx, 1);
+                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                                }} 
+                                className="text-gray-300 hover:text-red-600 font-bold text-lg leading-none transition-colors" 
+                                title="Remove Step"
+                              >
+                                &times;
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -616,7 +630,6 @@ export default function TemplatesTab({
                     )}
                   </div>
 
-                  {/* Add Row Controls */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
                     <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-40 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
@@ -625,7 +638,6 @@ export default function TemplatesTab({
                         <option value="passfail">Pass/Fail Dropdown</option>
                     </select>
                     
-                    {/* --- THE FIX: DYNAMIC DATALIST INPUT --- */}
                     <input 
                       type="text" 
                       id="builderSectionSOPModal" 
@@ -644,12 +656,10 @@ export default function TemplatesTab({
                         
                         setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, section, label }]});
                         
-                        // Clear the action, but intentionally leave the 'section' tag intact for rapid consecutive entry!
                         document.getElementById('builderLabelSOPModal').value = '';
                     }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row</button>
                   </div>
                 </div>
-                {/* ------------------------------------------- */}
 
                 <div className="md:col-span-2 p-4 bg-slate-50 border border-gray-200 rounded-lg">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
