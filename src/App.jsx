@@ -289,15 +289,16 @@ export default function App() {
           }
       }
 
-      // --- THE FIX: BULK INTERCEPTOR BYPASS ---
       if (activeUser && response.ok && config && config.method && ['POST', 'PUT', 'DELETE'].includes(config.method.toUpperCase()) && typeof url === 'string' && url.startsWith('/api/')) {
         
-        // If it's a bulk operation, DO NOT trigger a GET refresh avalanche!
         const isBulk = url.includes('bulk=true');
 
         if (!isBulk) {
           if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
-          if (url.includes('/api/pmTemplates')) { originalFetch('/api/pmTemplates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
+          
+          // --- THE FIX: Pointed interceptor correctly to '/api/templates' ---
+          if (url.includes('/api/templates')) { originalFetch('/api/templates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
+          
           if (url.includes('/api/users') && !url.includes('/api/history')) {
               originalFetch('/api/users').then(r => r.json()).then(data => {
                   setUsers(data);
