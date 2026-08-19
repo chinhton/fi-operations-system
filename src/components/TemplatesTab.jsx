@@ -45,14 +45,28 @@ const decodeSteps = (stepString) => {
 
 export default function TemplatesTab({
   pmTemplates = [], manuals = [], assets = [],
-  newTemplate, setNewTemplate, handleAddTemplateSubmit, // Still accepted but we will safely bypass it
   PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
   currentUser
 }) {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false); // --- THE FIX: Local saving state ---
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // --- THE FIX: Localized state for the modal to make it bulletproof ---
+  const [newTemplate, setNewTemplate] = useState({
+    id: '',
+    name: "",
+    interval: "Daily",
+    department: [],
+    targetCategory: [],
+    managerEmail: "",
+    operatorEmail: "",
+    checklistSteps: [],
+    attachedManualName: "",
+    attachedManualData: null
+  });
+
   const fileInputRef = useRef(null);
 
   const userDept = currentUser?.department || "";
@@ -148,7 +162,7 @@ export default function TemplatesTab({
         }
 
         for (const template of importedTemplates) {
-          await window.fetch('/api/pmTemplates?bulk=true', {
+          await window.fetch('/api/templates?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(template)
@@ -184,7 +198,7 @@ export default function TemplatesTab({
 
     try {
       for (const t of filteredTemplates) {
-        await window.fetch(`/api/pmTemplates?id=${t.id}&bulk=true`, { method: 'DELETE' });
+        await window.fetch(`/api/templates?id=${t.id}&bulk=true`, { method: 'DELETE' });
         await new Promise(resolve => setTimeout(resolve, 30));
       }
       alert("Mass deletion complete! Refreshing database.");
@@ -198,6 +212,7 @@ export default function TemplatesTab({
   const openBuildModal = () => {
     const defaultDept = isDepartmentRestricted ? [userDept] : [];
     setNewTemplate({
+      id: '',
       name: "",
       interval: "Daily",
       department: defaultDept,
@@ -216,7 +231,6 @@ export default function TemplatesTab({
     setShowTemplateModal(true);
   };
 
-  // --- THE FIX: Bypass the buggy background hook and save array data securely here ---
   const handleLocalSubmit = async (e) => {
     e.preventDefault();
     
@@ -233,11 +247,15 @@ export default function TemplatesTab({
         id: newTemplate.id || `sop-${Date.now()}`
       };
       
-      await window.fetch('/api/pmTemplates', {
+      const response = await window.fetch('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
+      if (!response.ok) {
+        throw new Error("Database rejected the save request.");
+      }
       
       setShowTemplateModal(false);
     } catch (error) {
@@ -251,7 +269,7 @@ export default function TemplatesTab({
   const handleDeleteTemplate = async (id) => {
     if (!window.confirm("Are you sure you want to permanently delete this SOP? Active assets relying on it will lose their PM framework.")) return;
     try {
-      await window.fetch(`/api/pmTemplates?id=${id}`, { method: 'DELETE' });
+      await window.fetch(`/api/templates?id=${id}`, { method: 'DELETE' });
     } catch (err) {}
   };
 
