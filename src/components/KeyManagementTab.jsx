@@ -1,9 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+
+const parseCSV = (str) => {
+  const arr = [];
+  let quote = false;
+  let row = 0, col = 0;
+  for (let c = 0; c < str.length; c++) {
+      let cc = str[c], nc = str[c+1];
+      arr[row] = arr[row] || [];
+      arr[row][col] = arr[row][col] || '';
+      if (cc === '"' && quote && nc === '"') { arr[row][col] += cc; ++c; continue; }
+      if (cc === '"') { quote = !quote; continue; }
+      if (cc === ',' && !quote) { ++col; continue; }
+      if (cc === '\n' && !quote) { ++row; col = 0; continue; }
+      if (cc !== '\r') arr[row][col] += cc;
+  }
+  return arr;
+};
 
 export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef(null);
 
   const [newKey, setNewKey] = useState({
     id: '',
@@ -22,6 +40,7 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
     k.assignedTo?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // --- CRUD OPERATIONS ---
   const handleSaveKey = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -58,20 +77,155 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
       keyTag: '',
       roomNumber: '',
       roomName: '',
-      keyLocation: 'Master Key Box', // Default location
+      keyLocation: 'Master Key Box',
       assignedTo: '',
-      lastVerified: new Date().toISOString().split('T')[0] // Defaults to today
+      lastVerified: new Date().toISOString().split('T')[0] 
     });
     setIsModalOpen(true);
+  };
+
+  // --- CSV BULK OPERATIONS ---
+  const handleExportCSV = () => {
+    const headers = ["id", "keyTag", "roomNumber", "roomName", "keyLocation", "assignedTo", "lastVerified"];
+    const csvRows = [headers.join(",")];
+
+    keys.forEach(k => {
+      const row = headers.map(header => {
+        let val = k[header] || "";
+        val = val.toString().replace(/"/g, '""'); 
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; 
+        return val;
+      });
+      csvRows.push(row.join(","));
+    });
+
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `FI-OMS_Key_Log_Export_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const textData = event.target.result;
+        const parsedData = parseCSV(textData);
+        
+        if (parsedData.length < 2) {
+          alert("Invalid CSV format or file is empty.");
+          return;
+        }
+
+        const headers = parsedData[0].map(h => h.trim().toLowerCase());
+        const importedKeys = [];
+
+        for (let i = 1; i < parsedData.length; i++) {
+          const rowData = parsedData[i];
+          if (!rowData || rowData.length === 0 || !rowData[0]) continue; 
+
+          const rowObj = {};
+          headers.forEach((h, idx) => {
+             rowObj[h] = rowData[idx] ? rowData[idx].trim() : '';
+          });
+
+          // Intelligent Mapping
+          const keyTag = rowObj['keytag'] || rowObj['tag'] || rowObj['key'] || rowObj['key tag #'] || rowObj['id'] || '';
+          if (!keyTag) continue; 
+
+          const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['room #'] || '';
+          const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['description'] || '';
+          const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storage location'] || 'Master Key Box';
+          const assignedTo = rowObj['assignedto'] || rowObj['possession'] || rowObj['owner'] || '';
+          
+          let lastVerified = rowObj['lastverified'] || rowObj['date'] || rowObj['verified'] || '';
+          if (lastVerified && lastVerified.includes('/')) {
+              // Convert MM/DD/YYYY to YYYY-MM-DD for standard HTML inputs
+              const parts = lastVerified.split('/');
+              if(parts.length === 3) {
+                  lastVerified = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+              }
+          }
+
+          importedKeys.push({
+            id: `key-import-${Date.now()}-${i}`,
+            keyTag,
+            roomNumber,
+            roomName,
+            keyLocation,
+            assignedTo,
+            lastVerified
+          });
+        }
+
+        if (!window.confirm(`Found ${importedKeys.length} Keys in CSV. Import them now?`)) {
+          e.target.value = null; 
+          return;
+        }
+
+        for (const key of importedKeys) {
+          await window.fetch('/api/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(key)
+          });
+        }
+        
+        alert("Import complete! Refreshing page to sync database.");
+        window.location.reload(); 
+        
+      } catch (err) {
+        console.error("Import error:", err);
+        alert("Failed to parse CSV file. Ensure it is formatted correctly.");
+      }
+      e.target.value = null; 
+    };
+    reader.readAsText(file);
+  };
+
+  const handleMassDelete = async () => {
+    if (filteredKeys.length === 0) {
+      alert("No keys found to delete.");
+      return;
+    }
+
+    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${filteredKeys.length} keys.\n\nThis will wipe them from the Azure database completely. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(`To confirm mass deletion of ${filteredKeys.length} keys, please type DELETE in all caps:`);
+    if (confirm2 !== "DELETE") {
+      alert("Mass deletion cancelled.");
+      return;
+    }
+
+    try {
+      for (const key of filteredKeys) {
+        await window.fetch(`/api/keys?id=${key.id}`, { method: 'DELETE' });
+      }
+      alert("Mass deletion complete! Refreshing database.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Mass delete error:", err);
+      alert("An error occurred during mass deletion.");
+      window.location.reload();
+    }
   };
 
   return (
     <div className="space-y-6 animate-entrance w-full">
       
       {/* HEADER & CONTROLS */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col xl:flex-row justify-between items-center gap-4">
         
-        <div className="flex items-center space-x-3 w-full md:w-auto">
+        <div className="flex items-center space-x-3 w-full xl:w-auto">
           <span className="bg-amber-100 text-amber-800 p-2.5 rounded-lg text-lg shadow-sm border border-amber-200">🔑</span>
           <div>
             <h2 className="text-sm font-black text-gray-800 uppercase tracking-wider">Hard Key Tracking Log</h2>
@@ -79,19 +233,44 @@ export default function KeyManagementTab({ keys = [], users = [], isSystemAdmin 
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 w-full md:w-auto">
-          <button 
-            onClick={openNewModal}
-            className="w-full md:w-auto bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
-          >
-            ➕ Register Key
-          </button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <button 
+              onClick={openNewModal}
+              className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all whitespace-nowrap"
+            >
+              ➕ Register Key
+            </button>
+            {isSystemAdmin && (
+              <>
+                <button 
+                  onClick={handleExportCSV}
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                >
+                  📤 Export
+                </button>
+                <button 
+                  onClick={() => fileInputRef.current.click()}
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-slate-300 transition-colors"
+                >
+                  📥 Import
+                </button>
+                <button 
+                  onClick={handleMassDelete}
+                  className="flex-1 sm:flex-none px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg border border-red-200 transition-colors"
+                >
+                  🧨 Wipe List
+                </button>
+                <input type="file" accept=".csv" ref={fileInputRef} onChange={handleImportCSV} className="hidden" />
+              </>
+            )}
+          </div>
           <input 
             type="text" 
             placeholder="Search Tag #, Room, or Person..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full md:w-64 text-xs rounded-lg border border-gray-300 p-2.5 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+            className="w-full sm:w-64 text-xs rounded-lg border border-gray-300 p-2.5 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
           />
         </div>
       </div>
