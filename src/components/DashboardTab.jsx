@@ -11,6 +11,8 @@ export default function DashboardTab({
   
   const [activeRoute, setActiveRoute] = useState(null);
   const [isSavingRoute, setIsSavingRoute] = useState(false);
+  
+  const [routeAnswers, setRouteAnswers] = useState({});
 
   const criticalStatuses = ["Maintenance Due", "Out of Calibration", "Corrective Maintenance"];
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
@@ -42,28 +44,32 @@ export default function DashboardTab({
     return templateCat === assetCat;
   };
 
+  const openRouteModal = (task) => {
+    setActiveRoute(task);
+    setRouteAnswers({}); 
+  };
+
   if (assets && pmTemplates && calculateDaysRemaining) {
     
-    // =========================================================================
-    // HYBRID PIPELINE 1: GROUPED ROUTES (The Avalanche Interceptor)
-    // =========================================================================
+    // ==========================================
+    // GROUPED ROUTES
+    // ==========================================
     const routeTemplates = pmTemplates.filter(t => t.executionMode === 'route');
-    
     routeTemplates.forEach(template => {
-        // Find ALL assets mapped to this single route
         const mappedAssets = assets.filter(a => a.status !== "Inactive" && isCategoryMatch(template.targetCategory, a.category));
         if (mappedAssets.length === 0) return;
 
         let lowestDays = null;
         let isCriticalStatus = false;
         
-        // Find the most overdue asset in the route
         mappedAssets.forEach(asset => {
             const explicitLastDone = asset.pmDates?.[template.interval];
             if (isToday(explicitLastDone)) return; 
 
-            const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
-            const daysLeft = calculateDaysRemaining(baselineDate, template.interval);
+            let daysLeft = 0; 
+            if (explicitLastDone) {
+                daysLeft = calculateDaysRemaining(explicitLastDone, template.interval);
+            }
             
             if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                 lowestDays = daysLeft;
@@ -71,7 +77,7 @@ export default function DashboardTab({
             if (criticalStatuses.includes(asset.status)) isCriticalStatus = true;
         });
 
-        if (lowestDays === null && !isCriticalStatus) return; // Route is fully complete for today
+        if (lowestDays === null && !isCriticalStatus) return; 
 
         let taskCategory = null;
         let dueMessage = "";
@@ -82,7 +88,7 @@ export default function DashboardTab({
             isCriticalStatus = true;
         } else if (lowestDays <= 5) {
             taskCategory = 'Upcoming';
-            dueMessage = `Due in ${lowestDays} days`;
+            dueMessage = lowestDays === 0 ? "Due Today" : `Due in ${lowestDays} days`;
         } else if (lowestDays <= 30) {
             taskCategory = 'Pending';
             dueMessage = `Due in ${lowestDays} days`;
@@ -98,7 +104,7 @@ export default function DashboardTab({
                 displayStatus: isCriticalStatus ? "Route Overdue" : "Route Pending",
                 displayDate: dueMessage,
                 assignedTo: Array.isArray(template.department) ? template.department.join(', ') : "Global Route",
-                rawItem: mappedAssets, // Contains ALL 10 assets
+                rawItem: mappedAssets, 
                 type: 'route',
                 isCritical: isCriticalStatus,
                 taskCategory: taskCategory,
@@ -120,9 +126,9 @@ export default function DashboardTab({
         }
     });
 
-    // =========================================================================
-    // HYBRID PIPELINE 2: INDIVIDUAL ASSET PMs (Standard Ticket Generation)
-    // =========================================================================
+    // ==========================================
+    // INDIVIDUAL ASSET PMs
+    // ==========================================
     assets.forEach(asset => {
       if (asset.status === "Inactive") return;
 
@@ -130,7 +136,6 @@ export default function DashboardTab({
       let dueMessage = "";
       let isCriticalStatus = criticalStatuses.includes(asset.status);
       
-      // ONLY pull templates that are NOT routes
       const assetTemplates = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
       const freqs = [...new Set(assetTemplates.map(t => t.interval))];
       
@@ -141,8 +146,12 @@ export default function DashboardTab({
           const explicitLastDone = asset.pmDates?.[freq];
           if (isToday(explicitLastDone)) return;
 
-          const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
-          const daysLeft = calculateDaysRemaining(baselineDate, freq);
+          let daysLeft = 0;
+          if (explicitLastDone) {
+              daysLeft = calculateDaysRemaining(explicitLastDone, freq);
+          } else if (asset.lastPmDate) {
+              daysLeft = calculateDaysRemaining(asset.lastPmDate, freq);
+          }
           
           if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
               lowestDays = daysLeft;
@@ -160,7 +169,7 @@ export default function DashboardTab({
               isCriticalStatus = true;
           } else if (lowestDays <= 5) {
               taskCategory = 'Upcoming';
-              dueMessage = `Due in ${lowestDays} days`;
+              dueMessage = lowestDays === 0 ? "Due Today" : `Due in ${lowestDays} days`;
           } else if (lowestDays <= 30) {
               taskCategory = 'Pending';
               dueMessage = `Due in ${lowestDays} days`;
@@ -200,7 +209,6 @@ export default function DashboardTab({
     });
   }
 
-  // --- QUEUE SORTING ---
   const adminCritical = adminGlobalQueue.filter(item => item.taskCategory === 'Critical');
   const adminUpcoming = adminGlobalQueue.filter(item => item.taskCategory === 'Upcoming');
   const adminPending = adminGlobalQueue.filter(item => item.taskCategory === 'Pending');
@@ -213,55 +221,53 @@ export default function DashboardTab({
   const myUpcoming = userAssignedTasks.filter(item => item.taskCategory === 'Upcoming');
   const myPending = userAssignedTasks.filter(item => item.taskCategory === 'Pending');
 
-  // =========================================================================
-  // ROUTE EXECUTION ENGINE (The Avalanche Save)
-  // =========================================================================
   const handleSubmitMasterRoute = async (e) => {
     e.preventDefault();
     setIsSavingRoute(true);
 
     const { rawItem: mappedAssets, targetTemplate } = activeRoute;
+    const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const exactTimestamp = new Date().toLocaleString('en-US');
 
     try {
-        // Loop through all mapped assets simultaneously 
         for (const asset of mappedAssets) {
-            
-            // 1. Update Asset Object PM Dates
             const updatedAsset = {
                 ...asset,
                 pmDates: { ...(asset.pmDates || {}), [targetTemplate.interval]: todayStr }
             };
-
             await window.fetch('/api/assets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedAsset)
             });
-
-            // 2. Generate Audit History for Each Individual Asset
-            const historyLog = {
-                id: `hist-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-                assetId: asset.id,
-                assetName: asset.name,
-                assetSerial: asset.serial,
-                actionType: 'Preventative Maintenance',
-                templateName: targetTemplate.name,
-                interval: targetTemplate.interval,
-                performedBy: currentUser.name,
-                performedByEmail: currentUser.email,
-                date: todayStr,
-                status: 'Completed (Grouped Route)',
-                comments: 'System executed via Master Facility Route checklist.'
-            };
-
-            await window.fetch('/api/history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(historyLog)
-            });
         }
 
-        alert("Route complete! All embedded assets have been updated successfully.");
+        const historyPayload = {
+            id: `AUDIT-${Date.now().toString().slice(-4)}-${Math.floor(Math.random()*1000)}`,
+            executionMode: 'route',
+            assetsIncluded: mappedAssets.map(a => a.name),
+            assetId: `ROUTE-${targetTemplate.id}`,
+            assetName: `Grouped Route: ${targetTemplate.name}`,
+            assetSerial: `${mappedAssets.length} Systems Inspected`,
+            actionType: 'Facility Route Execution',
+            templateName: targetTemplate.name,
+            interval: targetTemplate.interval,
+            performedBy: currentUser?.name || "System Operator",
+            performedByEmail: currentUser?.email || "",
+            date: todayStr,
+            timestamp: exactTimestamp,
+            status: 'Completed (Grouped Route)',
+            comments: 'Facility walk completed and submitted as a single master record.',
+            responses: routeAnswers 
+        };
+
+        await window.fetch('/api/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(historyPayload)
+        });
+
+        alert("Route complete! Master Log generated and all individual asset trackers updated.");
         setActiveRoute(null);
         window.location.reload(); 
 
@@ -272,13 +278,11 @@ export default function DashboardTab({
     setIsSavingRoute(false);
   };
 
-
   return (
     <div className="space-y-8 animate-entrance w-full relative">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-2">
         <div className="lg:col-span-8 space-y-6">
           
-          {/* --- GOD VIEW: ONLY RENDERS FOR ADMINS --- */}
           {isSystemAdmin && (
             <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-6">
               <div className="bg-gradient-to-r from-slate-700 to-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-900">
@@ -306,7 +310,6 @@ export default function DashboardTab({
                         <div key={item.queueId} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : '#eab308' }}>
                           <div className="flex-1">
                             <div className="flex items-center space-x-3">
-                              {/* --- HYBRID ROUTE ICON INDICATOR --- */}
                               <span className="font-bold text-gray-900 text-sm block">
                                 {item.type === 'route' ? <span className="text-purple-600 mr-2">🚶‍♂️</span> : ''} 
                                 {item.name}
@@ -340,13 +343,11 @@ export default function DashboardTab({
                               >
                                 🔔 Alert Manager
                               </button>
-                              
-                              {/* --- ROUTING LOGIC FOR MODALS --- */}
                               {item.type === 'asset' && (
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                               {item.type === 'route' && (
-                                <button onClick={() => setActiveRoute(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -402,7 +403,7 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                               {item.type === 'route' && (
-                                <button onClick={() => setActiveRoute(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -446,7 +447,151 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
                             )}
                             {item.type === 'route' && (
-                                <button onClick={() => setActiveRoute(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview Route &rarr;</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isManager && (
+            <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-6">
+              <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-6 py-4 flex items-center justify-between border-b border-indigo-900">
+                <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">Department Action Queue (Manager)</h3>
+                {managerDepartmentQueue.length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{managerDepartmentQueue.length} Total</span>
+                )}
+              </div>
+              
+              <div className="max-h-[400px] overflow-y-auto bg-gray-50/30">
+                {managerDepartmentQueue.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
+                    No pending actions for your department. All systems nominal.
+                  </div>
+                ) : (
+                  <>
+                    {managerCritical.length > 0 && (
+                      <div className="bg-red-50 text-red-800 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-red-200 shadow-sm flex justify-between">
+                        <span>🚨 Critical & Overdue Action Required</span>
+                        <span>{managerCritical.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white">
+                      {managerCritical.map(item => (
+                        <div key={`mgr-${item.queueId}`} className="p-5 hover:bg-red-50/30 transition flex justify-between items-center border-l-4" style={{ borderLeftColor: item.badgeColor.includes('red') ? '#ef4444' : '#eab308' }}>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-900 text-sm block">
+                                {item.type === 'route' ? <span className="text-purple-600 mr-2">🚶‍♂️</span> : ''} {item.name}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
+                              </span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
+                            {item.type === 'asset' && (
+                              <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                            )}
+                            {item.type === 'route' && (
+                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {managerUpcoming.length > 0 && (
+                      <div className="bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-indigo-200 shadow-sm flex justify-between">
+                        <span>📅 Upcoming Tasks (0 - 5 Days)</span>
+                        <span>{managerUpcoming.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white">
+                      {managerUpcoming.map(item => (
+                        <div key={`mgr-${item.queueId}`} className="p-5 hover:bg-indigo-50/30 transition flex justify-between items-center border-l-4 border-indigo-400">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-900 text-sm block">
+                                {item.type === 'route' ? <span className="text-purple-600 mr-2">🚶‍♂️</span> : ''} {item.name}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                              {item.targetTemplate && (
+                                <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm">
+                                  {item.targetTemplate.interval}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
+                              </span>
+                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            <div className="mb-2 text-[10px] text-indigo-600 font-mono font-bold">{item.displayDate}</div>
+                            {item.type === 'asset' && (
+                              <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                            )}
+                            {item.type === 'route' && (
+                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {managerPending.length > 0 && (
+                      <div className="bg-slate-100 text-slate-700 text-[10px] font-black uppercase tracking-widest px-5 py-2 sticky top-0 z-10 border-y border-slate-300 shadow-sm flex justify-between">
+                        <span>🗓️ Pending Tasks (6 - 30 Days)</span>
+                        <span>{managerPending.length} Items</span>
+                      </div>
+                    )}
+                    <div className="divide-y divide-gray-100 bg-white opacity-80 hover:opacity-100 transition-opacity">
+                      {managerPending.map(item => (
+                        <div key={`mgr-${item.queueId}`} className="p-5 hover:bg-slate-50 transition flex justify-between items-center border-l-4 border-slate-300">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <span className="font-bold text-gray-700 text-sm block">
+                                {item.type === 'route' ? <span className="text-purple-600 mr-2">🚶‍♂️</span> : ''} {item.name}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${item.badgeColor}`}>
+                                {item.displayStatus}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
+                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4 flex flex-col items-end">
+                            <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
+                            {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
+                            )}
+                            {item.type === 'route' && (
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview Route &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -458,7 +603,6 @@ export default function DashboardTab({
             </div>
           )}
           
-          {/* DAY-TO-DAY VIEW: RENDERS FOR EVERYONE */}
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="bg-gradient-to-r from-[#005596] to-[#00407a] text-white px-6 py-4 flex items-center justify-between border-b border-[#003058]">
               <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">My Assigned Tasks</h3>
@@ -512,7 +656,7 @@ export default function DashboardTab({
                             </button>
                           ) : (
                             <button 
-                              onClick={() => { setActiveRoute(task); }}
+                              onClick={() => { openRouteModal(task); }}
                               className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
                               Execute Master Route
@@ -561,7 +705,7 @@ export default function DashboardTab({
                             </button>
                           ) : (
                             <button 
-                              onClick={() => { setActiveRoute(task); }}
+                              onClick={() => { openRouteModal(task); }}
                               className="bg-purple-600 hover:bg-purple-800 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
                               Open Route Assignment
@@ -610,7 +754,7 @@ export default function DashboardTab({
                             </button>
                           ) : (
                             <button 
-                              onClick={() => { setActiveRoute(task); }}
+                              onClick={() => { openRouteModal(task); }}
                               className="text-purple-600 hover:text-purple-900 border border-purple-300 bg-white hover:bg-purple-50 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
                               Preview Route
@@ -626,7 +770,6 @@ export default function DashboardTab({
           </div>
         </div>
 
-        {/* Right Column: Operator Info & Secondary Data */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
             <h4 className="font-bold text-xs text-[#005596] uppercase tracking-wider mb-4 border-b border-gray-100 pb-2">Operator Duty Board</h4>
@@ -644,9 +787,6 @@ export default function DashboardTab({
 
       </div>
 
-      {/* ========================================================================= */}
-      {/* THE MASTER ROUTE EXECUTION MODAL */}
-      {/* ========================================================================= */}
       {activeRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden animate-entrance relative flex flex-col">
@@ -661,9 +801,10 @@ export default function DashboardTab({
               <button onClick={() => setActiveRoute(null)} className="text-purple-200 hover:text-white font-bold text-2xl transition-colors">&times;</button>
             </div>
             
-            <form onSubmit={handleSubmitMasterRoute} className="flex-1 overflow-y-auto bg-gray-50/50 p-6 flex flex-col gap-6">
+            {/* THE FIX: Added min-h-0 so the form can properly overflow and scroll! */}
+            <form onSubmit={handleSubmitMasterRoute} className="flex-1 overflow-y-auto min-h-0 bg-gray-50/50 p-6 flex flex-col gap-6">
               
-              <div className="bg-white p-5 rounded-lg border border-purple-200 shadow-sm">
+              <div className="bg-white p-5 rounded-lg border border-purple-200 shadow-sm shrink-0">
                 <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
                   <div>
                     <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-2 border-b border-gray-100 pb-1">Route Instructions</h4>
@@ -676,16 +817,18 @@ export default function DashboardTab({
                 </div>
               </div>
 
-              {/* The Master Checklist Form */}
-              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+              <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden shrink-0">
                 <div className="bg-slate-100 px-4 py-3 border-b border-gray-200">
                   <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">Dynamic Protocol Checklist</h4>
                 </div>
                 
                 <div className="divide-y divide-gray-100">
-                  {activeRoute.targetTemplate.checklistSteps.map((step, idx) => (
+                  {activeRoute.targetTemplate.checklistSteps.map((step, idx) => {
+                    const stepType = typeof step === 'string' ? 'checkbox' : step.type;
+                    const stepLabel = typeof step === 'string' ? step : step.label;
+
+                    return (
                     <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-colors">
-                      
                       <div className="w-full md:w-1/3 shrink-0">
                         {step.section ? (
                           <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm">
@@ -697,35 +840,32 @@ export default function DashboardTab({
                           </span>
                         )}
                       </div>
-                      
                       <div className="w-full md:w-1/3">
-                        <span className="text-sm font-bold text-gray-800">{step.label}</span>
+                        <span className="text-sm font-bold text-gray-800">{stepLabel}</span>
                       </div>
-                      
                       <div className="w-full md:w-1/3 flex justify-end">
-                        {step.type === 'checkbox' && (
+                        {stepType === 'checkbox' && (
                           <label className="flex items-center space-x-2 cursor-pointer bg-white border border-gray-300 rounded px-3 py-2 shadow-inner hover:bg-gray-50 w-full md:w-auto">
-                            <input type="checkbox" required className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                            <input type="checkbox" required checked={!!routeAnswers[idx]} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
                             <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Confirm</span>
                           </label>
                         )}
-                        {step.type === 'text' && (
-                          <input type="text" required placeholder="Enter value..." className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
+                        {stepType === 'text' && (
+                          <input type="text" required placeholder="Enter value..." value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
                         )}
-                        {step.type === 'number' && (
-                          <input type="number" required placeholder="0.0" className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
+                        {stepType === 'number' && (
+                          <input type="number" required placeholder="0.0" value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
                         )}
-                        {step.type === 'passfail' && (
-                          <select required className="w-full md:w-auto text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none bg-white font-bold cursor-pointer">
+                        {stepType === 'passfail' && (
+                          <select required value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full md:w-auto text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none bg-white font-bold cursor-pointer">
                             <option value="">-- Result --</option>
                             <option value="pass">PASS (In Spec)</option>
                             <option value="fail">FAIL (Out of Spec)</option>
                           </select>
                         )}
                       </div>
-
                     </div>
-                  ))}
+                  )})}
                   
                   {(!activeRoute.targetTemplate.checklistSteps || activeRoute.targetTemplate.checklistSteps.length === 0) && (
                     <div className="p-8 text-center text-gray-400 text-xs italic">
@@ -734,12 +874,10 @@ export default function DashboardTab({
                   )}
                 </div>
               </div>
-
             </form>
 
             <div className="bg-gray-50 px-6 py-4 flex justify-end space-x-3 shrink-0 border-t border-gray-200">
               <button type="button" onClick={() => setActiveRoute(null)} className="px-5 py-2.5 border border-gray-300 bg-white rounded text-gray-700 text-xs font-bold uppercase tracking-wider hover:bg-gray-100 transition shadow-sm">Cancel</button>
-              
               <button 
                 type="button" 
                 onClick={handleSubmitMasterRoute} 
