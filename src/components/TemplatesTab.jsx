@@ -53,7 +53,6 @@ export default function TemplatesTab({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // --- NEW: Visual Progress State for Imports & Wipes ---
   const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
   
   const [newTemplate, setNewTemplate] = useState({
@@ -165,7 +164,6 @@ export default function TemplatesTab({
           return;
         }
 
-        // --- NEW: Trigger the Import Progress UI ---
         setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedTemplates.length });
 
         for (let i = 0; i < importedTemplates.length; i++) {
@@ -206,7 +204,6 @@ export default function TemplatesTab({
       return;
     }
 
-    // --- NEW: Trigger the Delete Progress UI ---
     setSyncProgress({ active: true, action: 'Deleting', current: 0, total: filteredTemplates.length });
 
     try {
@@ -675,6 +672,7 @@ export default function TemplatesTab({
                               />
                             </td>
                             <td className="px-2 py-2 border-r border-gray-100">
+                              {/* --- UPDATED: Dynamic Color Coding for Input Types --- */}
                               <select 
                                 value={step.type} 
                                 onChange={(e) => {
@@ -682,7 +680,13 @@ export default function TemplatesTab({
                                   newSteps[idx].type = e.target.value;
                                   setNewTemplate({...newTemplate, checklistSteps: newSteps});
                                 }}
-                                className="w-full uppercase text-[9px] font-bold text-[#00A1E4] bg-sky-50 px-1.5 py-1.5 rounded border border-transparent hover:border-sky-200 focus:bg-white focus:border-sky-400 focus:outline-none cursor-pointer transition-all outline-none"
+                                className={`w-full uppercase text-[9px] font-bold px-1.5 py-1.5 rounded border border-transparent focus:bg-white focus:outline-none cursor-pointer transition-all outline-none ${
+                                  step.type === 'checkbox' ? 'text-slate-600 bg-slate-100 hover:border-slate-300 focus:border-slate-400' :
+                                  step.type === 'text' ? 'text-blue-600 bg-blue-50 hover:border-blue-300 focus:border-blue-400' :
+                                  step.type === 'number' ? 'text-indigo-600 bg-indigo-50 hover:border-indigo-300 focus:border-indigo-400' :
+                                  step.type === 'passfail' ? 'text-emerald-700 bg-emerald-50 hover:border-emerald-300 focus:border-emerald-400' :
+                                  'text-gray-600 bg-gray-50 hover:border-gray-200'
+                                }`}
                               >
                                 <option value="checkbox">CHECKBOX</option>
                                 <option value="text">SHORT TEXT</option>
