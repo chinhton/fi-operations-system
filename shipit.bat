@@ -20,6 +20,15 @@ git commit -m "%msg%"
 echo [3/3] Pushing to Azure...
 git push origin main
 
-echo.
-echo ✅ ZOOMING!
+:: Check if the push was successful and trigger the correct pop-up
+if %errorlevel% equ 0 (
+    echo.
+    echo ✅ ZOOMING!
+    powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Push to Azure successful. ZOOMING!', 'ShipIt Success', 'OK', 'Information')"
+) else (
+    echo.
+    echo ❌ Push failed! Check your terminal.
+    powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Push failed! Check your terminal for merge conflicts or errors.', 'ShipIt Error', 'OK', 'Error')"
+)
+
 endlocal
