@@ -104,12 +104,43 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     }
   };
 
-  // --- THE FIX: Helper to safely check if responses exist ---
   const getResponsesToRender = () => {
     if (!selectedLog) return null;
     const responsesList = selectedLog.responses || selectedLog.checklist || {};
     if (Object.keys(responsesList).length > 0) return responsesList;
     return null;
+  };
+
+  // --- NEW FIX: Group responses by Asset Tag for the PDF ---
+  const getGroupedResponses = () => {
+    const responses = getResponsesToRender();
+    if (!responses) return null;
+
+    const template = pmTemplates.find(t => t.name === selectedLog.templateName);
+    const grouped = {};
+
+    Object.entries(responses).forEach(([key, result]) => {
+      let taskLabel = key;
+      let assetGroup = "General Protocol Tasks"; // Default fallback group
+
+      if (!isNaN(key)) {
+        if (template && template.checklistSteps && template.checklistSteps[key]) {
+          const step = template.checklistSteps[key];
+          taskLabel = step.section ? `[${step.section}] ${step.label}` : step.label;
+          // If the step has an assetTag mapped, use it for the group header
+          if (step.assetTag) {
+            assetGroup = step.assetTag;
+          }
+        } else {
+          taskLabel = `Protocol Step ${parseInt(key) + 1}`;
+        }
+      }
+
+      if (!grouped[assetGroup]) grouped[assetGroup] = [];
+      grouped[assetGroup].push({ label: taskLabel, result: result });
+    });
+
+    return grouped;
   };
 
   return (
@@ -203,14 +234,20 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                   <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">No audit logs found.</td></tr>
                 ) : (
                   processedHistory.map((item, idx) => {
-                    const isRoute = (item.status || "").includes("Grouped Route");
+                    const isRoute = (item.status || "").includes("Grouped Route") || item.executionMode === 'route';
                     
                     return (
                     <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-mono text-[11px] text-gray-600">
                         {formatDate(item.timestamp || item.date)}
                       </td>
-                      <td className="px-6 py-4 font-bold text-gray-900">{item.assetName || 'N/A'}</td>
+                      <td className="px-6 py-4 font-bold text-gray-900">
+                        {isRoute ? (
+                           <span className="text-purple-600">Route: {item.assetsIncluded?.length || 'Multiple'} Assets</span>
+                        ) : (
+                           item.assetName || 'N/A'
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-gray-800 font-medium">
                         {isRoute ? <span className="text-purple-600 mr-2" title="Grouped Route">🚶‍♂️</span> : <span className="text-blue-500 mr-2" title="Individual Asset PM">⚙️</span>}
                         {item.templateName || 'System Action'}
@@ -270,7 +307,11 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
               <div className="space-y-4">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target System</span>
-                  <span className="text-sm font-bold text-gray-900 block">{selectedLog.assetName || 'N/A'}</span>
+                  <span className="text-sm font-bold text-gray-900 block">
+                    {(selectedLog.status || "").includes("Grouped Route") || selectedLog.executionMode === 'route' 
+                      ? "Master Route Execution" 
+                      : (selectedLog.assetName || 'N/A')}
+                  </span>
                   {selectedLog.assetSerial && <span className="text-[10px] text-gray-500 font-mono block mt-0.5">S/N: {selectedLog.assetSerial}</span>}
                 </div>
                 <div>
@@ -304,39 +345,44 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
             <div className="mb-8">
               <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
               
-              {/* THE FIX: Safety Fallback for empty/old logs */}
-              {getResponsesToRender() ? (
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
+              {/* THE NEW FIX: Rendering Grouped Responses */}
+              {getGroupedResponses() ? (
+                <div className="bg-gray-50 rounded-lg border border-gray-200 shadow-inner overflow-hidden">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-500 font-bold">
-                        <th className="pb-3">Task Description</th>
-                        <th className="pb-3 w-32 text-center">Result</th>
+                      <tr className="bg-gray-200/50 border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-600 font-bold">
+                        <th className="py-3 px-4">Task Description</th>
+                        <th className="py-3 px-4 w-32 text-center">Result</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(getResponsesToRender()).map(([key, result], i) => {
-                        let taskLabel = key;
-                        if (!isNaN(key)) {
-                            const template = pmTemplates.find(t => t.name === selectedLog.templateName);
-                            if (template && template.checklistSteps && template.checklistSteps[key]) {
-                                const step = template.checklistSteps[key];
-                                taskLabel = step.section ? `[${step.section}] ${step.label}` : step.label;
-                            } else {
-                                taskLabel = `Protocol Step ${parseInt(key) + 1}`;
-                            }
-                        }
-
-                        return (
-                        <tr key={i} className="border-b border-gray-200 last:border-0 hover:bg-gray-100/50 transition-colors">
-                          <td className="py-3 text-gray-800 font-medium pr-4">{taskLabel}</td>
-                          <td className="py-3 text-center font-bold font-mono">
-                            {result === true || result === "true" || result === "Pass" || result === "PASS" ? <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 shadow-sm">PASS</span> : 
-                             result === false || result === "false" || result === "Fail" || result === "FAIL" ? <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 shadow-sm">FAIL</span> : 
-                             <span className="text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">{result}</span>}
-                          </td>
-                        </tr>
-                      )})}
+                      {Object.entries(getGroupedResponses()).map(([groupName, tasks], groupIdx) => (
+                        <React.Fragment key={groupIdx}>
+                          {/* Sub-header row for the Asset Tag */}
+                          <tr className="bg-gray-100 border-b border-gray-200">
+                            <td colSpan="2" className="py-2 px-4 font-bold text-[#005596] text-[10px] uppercase tracking-wider">
+                              {groupName}
+                            </td>
+                          </tr>
+                          
+                          {/* Loop through the tasks assigned to this specific asset/group */}
+                          {tasks.map((task, taskIdx) => (
+                            <tr key={`${groupIdx}-${taskIdx}`} className="border-b border-gray-200 last:border-0 hover:bg-white transition-colors bg-gray-50/50">
+                              <td className="py-2.5 pl-8 pr-4 text-gray-800 font-medium text-xs">
+                                {task.label}
+                              </td>
+                              <td className="py-2.5 px-4 text-center font-bold font-mono text-xs">
+                                {task.result === true || task.result === "true" || task.result === "Pass" || task.result === "PASS" ? 
+                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 shadow-sm inline-block w-full">PASS</span> : 
+                                 task.result === false || task.result === "false" || task.result === "Fail" || task.result === "FAIL" ? 
+                                  <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 shadow-sm inline-block w-full">FAIL</span> : 
+                                  <span className="text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm inline-block w-full">{task.result}</span>
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      ))}
                     </tbody>
                   </table>
                 </div>
