@@ -13,7 +13,6 @@ import useWorkOrders from './hooks/useWorkOrders';
 import useTemplates from './hooks/useTemplates';
 import useAssets from './hooks/useAssets';
 import useHistory from './hooks/useHistory';
-import useCosmosSync from './hooks/useCosmosSync';
 import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
 import useDashboardStats from './hooks/useDashboardStats';
@@ -36,6 +35,11 @@ export default function App() {
   
   const [navOrder] = useState(['dashboard', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // --- NEW: Loading and Lazy Fetch States ---
+  const [isAppLoading, setIsAppLoading] = useState(false);
+  const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
+  const [hasFetchedManuals, setHasFetchedManuals] = useState(false);
 
   const [history, setHistory] = useState([]);
   const [assets, setAssets] = useState([]);
@@ -60,15 +64,63 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  useCosmosSync(currentUser, setUsers, setAssets, setWorkOrders, setPmTemplates, setHistory, setManuals);
+  // =========================================================================
+  // THE FIX: Parallel Core Fetching Engine
+  // =========================================================================
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    const fetchCoreData = async () => {
+      setIsAppLoading(true);
+      try {
+        // Fire all critical database requests simultaneously
+        const [usersRes, assetsRes, woRes, templatesRes, partsRes, vendorsRes, keysRes] = await Promise.all([
+          window.fetch('/api/users').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/assets').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/workorders').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/templates').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/parts').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/vendors').then(r => r.ok ? r.json() : []),
+          window.fetch('/api/keys').then(r => r.ok ? r.json() : [])
+        ]);
+
+        setUsers(usersRes);
+        setAssets(assetsRes);
+        setWorkOrders(woRes);
+        setPmTemplates(templatesRes);
+        setParts(partsRes);
+        setVendors(vendorsRes);
+        setKeys(keysRes);
+      } catch (err) {
+        console.error("Failed to load core system data:", err);
+      } finally {
+        setIsAppLoading(false);
+      }
+    };
+
+    fetchCoreData();
+  }, [currentUser]);
+
+  // =========================================================================
+  // THE FIX: Lazy Loading Heavy Data (History & Manuals)
+  // =========================================================================
+  useEffect(() => {
+    if (currentUser && activeTab === 'history' && !hasFetchedHistory) {
+      window.fetch('/api/history').then(r => r.ok ? r.json() : []).then(data => {
+        setHistory(data);
+        setHasFetchedHistory(true);
+      }).catch(console.error);
+    }
+  }, [currentUser, activeTab, hasFetchedHistory]);
 
   useEffect(() => {
-    if (currentUser) {
-      window.fetch('/api/parts').then(r => r.ok ? r.json() : []).then(setParts).catch(console.error);
-      window.fetch('/api/vendors').then(r => r.ok ? r.json() : []).then(setVendors).catch(console.error);
-      window.fetch('/api/keys').then(r => r.ok ? r.json() : []).then(setKeys).catch(console.error);
+    if (currentUser && activeTab === 'manuals' && !hasFetchedManuals) {
+      window.fetch('/api/manuals').then(r => r.ok ? r.json() : []).then(data => {
+        setManuals(data);
+        setHasFetchedManuals(true);
+      }).catch(console.error);
     }
-  }, [currentUser]);
+  }, [currentUser, activeTab, hasFetchedManuals]);
 
   useEffect(() => {
     if (currentUser && users.length > 0) {
@@ -157,13 +209,6 @@ export default function App() {
       await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       return true;
     } catch (err) { return false; }
-  };
-
-  const isCategoryMatch = (templateCat, assetCat) => {
-    if (!templateCat) return false;
-    if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
-    if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
-    return templateCat === assetCat;
   };
 
   const hasSwept = useRef(false);
@@ -295,8 +340,6 @@ export default function App() {
 
         if (!isBulk) {
           if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
-          
-          // --- THE FIX: Pointed interceptor correctly to '/api/templates' ---
           if (url.includes('/api/templates')) { originalFetch('/api/templates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
           
           if (url.includes('/api/users') && !url.includes('/api/history')) {
@@ -325,6 +368,22 @@ export default function App() {
         <style>{customStyles}</style>
         <AuthScreen {...auth} triggerEmailAlert={triggerEmailAlert} />
       </>
+    );
+  }
+
+  // =========================================================================
+  // THE FIX: The Global Loading Screen UI
+  // =========================================================================
+  if (isAppLoading) {
+    return (
+      <div className="min-h-screen bg-[#F4F6F8] flex flex-col items-center justify-center">
+        <style>{customStyles}</style>
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="w-16 h-16 border-4 border-[#005596] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <h2 className="text-[#005596] font-black tracking-widest uppercase text-lg">Initializing Operations System...</h2>
+          <p className="text-gray-500 font-mono text-xs mt-2">Syncing with Azure Cloud database</p>
+        </div>
+      </div>
     );
   }
 
