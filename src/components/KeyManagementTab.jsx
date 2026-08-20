@@ -23,7 +23,10 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // --- NEW: Visual Progress State for Imports & Wipes ---
+  // --- NEW: Toggle State for Facility vs Cabinet ---
+  const [keyViewMode, setKeyViewMode] = useState('facility'); // 'facility' or 'cabinet'
+  
+  // Visual Progress State for Imports & Wipes
   const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
   
   const fileInputRef = useRef(null);
@@ -31,6 +34,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   const [newKey, setNewKey] = useState({
     id: '',
     keyTag: '',
+    category: 'Facility/Door', // Added category for the toggle
     roomNumber: '',
     roomName: '',
     keyLocation: '',
@@ -38,7 +42,17 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
     lastVerified: ''
   });
 
-  const filteredKeys = keys.filter(k => 
+  // 1. Filter by Toggle Mode (Treat undefined/old keys as Facility)
+  const viewFilteredKeys = keys.filter(k => {
+    if (keyViewMode === 'facility') {
+      return k.category !== 'Cabinet/Desk';
+    } else {
+      return k.category === 'Cabinet/Desk';
+    }
+  });
+
+  // 2. Filter by Search Query
+  const filteredKeys = viewFilteredKeys.filter(k => 
     k.keyTag?.toLowerCase().includes(searchQuery.toLowerCase()) || 
     k.roomNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     k.roomName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,7 +85,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   };
 
   const openEditModal = (keyData) => {
-    setNewKey(keyData);
+    setNewKey({ ...keyData, category: keyData.category || 'Facility/Door' });
     setIsModalOpen(true);
   };
 
@@ -79,6 +93,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
     setNewKey({
       id: '',
       keyTag: '',
+      category: keyViewMode === 'cabinet' ? 'Cabinet/Desk' : 'Facility/Door', // Default to current view
       roomNumber: '',
       roomName: '',
       keyLocation: 'Master Key Box',
@@ -89,7 +104,8 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
   };
 
   const handleExportCSV = () => {
-    const headers = ["id", "keyTag", "roomNumber", "roomName", "keyLocation", "assignedTo", "lastVerified"];
+    // Added category to export
+    const headers = ["id", "keyTag", "category", "roomNumber", "roomName", "keyLocation", "assignedTo", "lastVerified"];
     const csvRows = [headers.join(",")];
 
     keys.forEach(k => {
@@ -145,6 +161,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
               keyTag = rowData[0] ? rowData[0].trim() : `UNKNOWN-TAG-${i}`;
           }
 
+          const category = rowObj['category'] || rowObj['type'] || 'Facility/Door';
           const roomNumber = rowObj['roomnumber'] || rowObj['room'] || rowObj['rm'] || rowObj['roomno'] || '';
           const roomName = rowObj['roomname'] || rowObj['name'] || rowObj['area'] || rowObj['areadoor'] || rowObj['description'] || rowObj['door'] || '';
           const keyLocation = rowObj['keylocation'] || rowObj['location'] || rowObj['storagelocation'] || rowObj['storage'] || 'Master Key Box';
@@ -161,6 +178,7 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           importedKeys.push({
             id: `key-import-${Date.now()}-${i}`,
             keyTag,
+            category,
             roomNumber,
             roomName,
             keyLocation,
@@ -174,7 +192,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
           return;
         }
 
-        // --- NEW: Trigger the Import Progress UI ---
         setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedKeys.length });
 
         for (let i = 0; i < importedKeys.length; i++) {
@@ -215,7 +232,6 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
       return;
     }
 
-    // --- NEW: Trigger the Delete Progress UI ---
     setSyncProgress({ active: true, action: 'Deleting', current: 0, total: filteredKeys.length });
 
     try {
@@ -287,6 +303,32 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full sm:w-64 text-xs rounded-lg border border-gray-300 p-2.5 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
           />
+        </div>
+      </div>
+
+      {/* --- NEW: KEY VIEW TOGGLE --- */}
+      <div className="flex justify-start">
+        <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner">
+          <button
+            onClick={() => setKeyViewMode('facility')}
+            className={`px-6 py-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${
+              keyViewMode === 'facility'
+                ? 'bg-white shadow-sm text-[#005596] border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+            }`}
+          >
+            🚪 Facility & Doors
+          </button>
+          <button
+            onClick={() => setKeyViewMode('cabinet')}
+            className={`px-6 py-2.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all duration-200 ${
+              keyViewMode === 'cabinet'
+                ? 'bg-white shadow-sm text-[#005596] border border-gray-200'
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+            }`}
+          >
+            🗄️ Cabinets & Desks
+          </button>
         </div>
       </div>
 
@@ -385,9 +427,21 @@ export default function KeyManagementTab({ keys = [], isSystemAdmin }) {
             <form onSubmit={handleSaveKey} className="p-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Key Tag / ID # *</label>
                   <input type="text" required value={newKey.keyTag} onChange={e => setNewKey({...newKey, keyTag: e.target.value})} className="w-full text-xs font-mono rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-amber-500 outline-none" placeholder="e.g. FAC-001" />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Key Category *</label>
+                  <select 
+                    value={newKey.category || 'Facility/Door'} 
+                    onChange={e => setNewKey({...newKey, category: e.target.value})} 
+                    className="w-full text-xs rounded border-gray-300 p-2.5 border focus:ring-1 focus:ring-amber-500 outline-none bg-white"
+                  >
+                    <option value="Facility/Door">🚪 Facility & Door</option>
+                    <option value="Cabinet/Desk">🗄️ Cabinet & Desk</option>
+                  </select>
                 </div>
 
                 <div>
