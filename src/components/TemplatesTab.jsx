@@ -53,11 +53,11 @@ export default function TemplatesTab({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
-  // --- THE FIX: Localized state for the modal to make it bulletproof ---
   const [newTemplate, setNewTemplate] = useState({
     id: '',
     name: "",
     interval: "Daily",
+    executionMode: "asset", // --- NEW: Default execution mode ---
     department: [],
     targetCategory: [],
     managerEmail: "",
@@ -73,7 +73,8 @@ export default function TemplatesTab({
   const isDepartmentRestricted = !isSystemAdmin;
 
   const handleExportCSV = () => {
-    const headers = ["id", "name", "interval", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
+    // --- UPDATED: Added executionMode to headers ---
+    const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
     pmTemplates.forEach(template => {
@@ -145,6 +146,7 @@ export default function TemplatesTab({
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
             interval: rowObj['interval'] || "Monthly",
+            executionMode: rowObj['executionMode'] || "asset", // --- UPDATED ---
             department: parsedDept,
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
@@ -215,6 +217,7 @@ export default function TemplatesTab({
       id: '',
       name: "",
       interval: "Daily",
+      executionMode: "asset",
       department: defaultDept,
       targetCategory: [],
       managerEmail: "",
@@ -227,7 +230,8 @@ export default function TemplatesTab({
   };
 
   const openEditModal = (template) => {
-    setNewTemplate(template);
+    // Ensure older templates without an execution mode default to 'asset'
+    setNewTemplate({ ...template, executionMode: template.executionMode || 'asset' });
     setShowTemplateModal(true);
   };
 
@@ -379,6 +383,19 @@ export default function TemplatesTab({
                     </span>
                   </div>
                   
+                  {/* --- VISUAL INDICATOR FOR EXECUTION MODE --- */}
+                  <div className="mb-4">
+                    {template.executionMode === 'route' ? (
+                      <span className="inline-flex items-center space-x-1.5 bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider">
+                        <span>🚶‍♂️</span> <span>Grouped Route</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1.5 bg-blue-50 text-[#005596] border border-blue-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider">
+                        <span>⚙️</span> <span>Asset PMs</span>
+                      </span>
+                    )}
+                  </div>
+
                   <div className="space-y-1.5 mb-5">
                     <div className="flex items-start text-[10px]">
                       <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Map:</span>
@@ -439,6 +456,33 @@ export default function TemplatesTab({
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
                   <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
                 </div>
+                
+                {/* --- UI ADDITION: The Execution Mode Toggle --- */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Workflow Execution Mode</label>
+                  <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setNewTemplate({...newTemplate, executionMode: 'asset'})}
+                      className={`flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${newTemplate.executionMode !== 'route' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      ⚙️ Asset PMs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewTemplate({...newTemplate, executionMode: 'route'})}
+                      className={`flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${newTemplate.executionMode === 'route' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      🚶‍♂️ Grouped Route
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-1 font-bold">
+                    {newTemplate.executionMode === 'route' 
+                      ? "Creates ONE master checklist for an entire facility walk." 
+                      : "Creates separate, individual tickets for every matched machine."}
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                   <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
