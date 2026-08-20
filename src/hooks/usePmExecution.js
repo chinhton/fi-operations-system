@@ -37,27 +37,36 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
       updatedAsset.pmDates[selectedPmTemplate.interval] = todayStr;
       updatedAsset.status = pmStatusState;
 
-      // --- COSMOS DB CONNECTION ---
-      await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) });
+      // --- EXPLICIT WINDOW.FETCH FOR INTERCEPTOR ---
+      await window.fetch('/api/assets', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(updatedAsset) 
+      });
 
+      // --- UNIFIED AUDIT LOG SCHEMA TO MATCH MASTER ROUTES ---
       const historyPayload = {
         id: `AUDIT-${Date.now().toString().slice(-4)}`,
         assetId: selectedPmAsset.id, 
         assetName: selectedPmAsset.name, 
         assetSerial: selectedPmAsset.serial,
+        actionType: 'Preventative Maintenance', 
         templateName: selectedPmTemplate.name, 
         interval: selectedPmTemplate.interval,
-        technician: currentUser?.name || "System Operator",
-        email: currentUser?.email || "",
-        timestamp: exactTimestamp, 
+        performedBy: currentUser?.name || "System Operator", 
+        performedByEmail: currentUser?.email || "",          
+        date: todayStr,                                      
+        timestamp: exactTimestamp,                           
         status: pmStatusState, 
         comments: pmComments, 
         responses: pmAnswers 
       };
       
-      await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(historyPayload) });
-
-      // --- REDUNDANT FRONTEND WEBHOOK STRIPPED OUT HERE ---
+      await window.fetch('/api/history', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(historyPayload) 
+      });
 
       setAssets(assets.map(a => a.id === selectedPmAsset.id ? updatedAsset : a));
       setHistory([historyPayload, ...history]);
@@ -71,5 +80,9 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
     }
   };
 
-  return { isPmModalOpen, selectedPmAsset, selectedPmTemplate, setSelectedPmTemplate, pmAnswers, setPmAnswers, pmStatusState, setPmStatusState, pmComments, setPmComments, isSubmittingPm, openPmModal, closePmModal, handlePmSubmit };
+  return { 
+      isPmModalOpen, selectedPmAsset, selectedPmTemplate, setSelectedPmTemplate, 
+      pmAnswers, setPmAnswers, pmStatusState, setPmStatusState, pmComments, 
+      setPmComments, isSubmittingPm, openPmModal, closePmModal, handlePmSubmit 
+  };
 }

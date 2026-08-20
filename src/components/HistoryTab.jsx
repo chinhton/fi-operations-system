@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function HistoryTab({ history = [], isSystemAdmin }) {
+export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdmin }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   
@@ -19,8 +19,9 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
   const getStatusColor = (status) => {
     if (!status) return "bg-gray-100 text-gray-800";
     const s = status.toLowerCase();
-    if (s.includes('pass') || s.includes('operational')) return "bg-green-100 text-green-800";
-    if (s.includes('fail') || s.includes('incomplete') || s.includes('due')) return "bg-red-100 text-red-800";
+    // --- UPDATED: Added 'completed' to catch Grouped Routes ---
+    if (s.includes('pass') || s.includes('operational') || s.includes('completed')) return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+    if (s.includes('fail') || s.includes('incomplete') || s.includes('due') || s.includes('lockout')) return "bg-red-100 text-red-800 border border-red-200";
     return "bg-gray-100 text-gray-800 border border-gray-200";
   };
 
@@ -47,7 +48,7 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
     const term = searchTerm.toLowerCase();
     processedHistory = processedHistory.filter(item =>
       (item.assetName || '').toLowerCase().includes(term) ||
-      (item.technician || '').toLowerCase().includes(term) ||
+      (item.technician || item.performedBy || '').toLowerCase().includes(term) ||
       (item.templateName || '').toLowerCase().includes(term) ||
       (item.status || '').toLowerCase().includes(term)
     );
@@ -59,14 +60,24 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
       const timeB = new Date(b.timestamp || b.date).getTime() || 0;
       return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
     }
-    const valA = String(a[sortConfig.key] || '').toLowerCase();
-    const valB = String(b[sortConfig.key] || '').toLowerCase();
+    
+    // Safely map technician vs performedBy for sorting
+    let valA = String(a[sortConfig.key] || '');
+    let valB = String(b[sortConfig.key] || '');
+    
+    if (sortConfig.key === 'technician') {
+        valA = String(a.technician || a.performedBy || '');
+        valB = String(b.technician || b.performedBy || '');
+    }
+
+    valA = valA.toLowerCase();
+    valB = valB.toLowerCase();
+
     if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
     if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
 
-  // --- NEW: MASS DELETE LOGS ENGINE ---
   const handleMassDeleteLogs = async () => {
     if (processedHistory.length === 0) {
       alert("No logs found to delete based on your current search/filters.");
@@ -84,7 +95,7 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
 
     try {
       for (const log of processedHistory) {
-        await window.fetch(`/api/history?id=${log.id}`, { method: 'DELETE' });
+        await window.fetch(`/api/history?id=${log.id}&bulk=true`, { method: 'DELETE' });
       }
       alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
@@ -94,12 +105,10 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
       window.location.reload();
     }
   };
-  // ------------------------------------
 
   return (
     <div className="space-y-6 animate-entrance">
       
-      {/* 8.5x11 SCALING FIX: Strictly enforces Letter size and removes Tailwind bounds on print */}
       <style>{`
         @media print {
           @page { size: letter; margin: 0.5in; }
@@ -128,10 +137,9 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
       {!selectedLog ? (
         <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-100 flex flex-col lg:flex-row justify-between items-start lg:items-center bg-gray-50/50 gap-4">
-            <h2 className="text-lg font-black text-[#005596]">Executed Audit Trail</h2>
+            <h2 className="text-lg font-black text-[#005596] uppercase tracking-wider">Executed Audit Trail</h2>
             <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
               
-              {/* --- MASS WIPE BUTTON --- */}
               {isSystemAdmin && (
                 <button 
                   onClick={handleMassDeleteLogs}
@@ -141,7 +149,6 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
                   🧨 WIPE LOGS
                 </button>
               )}
-              {/* ------------------------ */}
 
               <button 
                 onClick={() => setShowOnlyPMs(!showOnlyPMs)}
@@ -189,16 +196,22 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
                 {processedHistory.length === 0 ? (
                   <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-400">No audit logs found.</td></tr>
                 ) : (
-                  processedHistory.map((item, idx) => (
+                  processedHistory.map((item, idx) => {
+                    const isRoute = (item.status || "").includes("Grouped Route");
+                    
+                    return (
                     <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-mono text-[11px] text-gray-600">
                         {formatDate(item.timestamp || item.date)}
                       </td>
                       <td className="px-6 py-4 font-bold text-gray-900">{item.assetName || 'N/A'}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.templateName || 'N/A'}</td>
-                      <td className="px-6 py-4 text-gray-600">{item.technician || 'N/A'}</td>
+                      <td className="px-6 py-4 text-gray-800 font-medium">
+                        {isRoute ? <span className="text-purple-600 mr-2" title="Grouped Route">🚶‍♂️</span> : <span className="text-blue-500 mr-2" title="Individual Asset PM">⚙️</span>}
+                        {item.templateName || 'System Action'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">{item.technician || item.performedBy || 'System Operator'}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 rounded-[4px] text-[10px] font-bold uppercase tracking-wider ${getStatusColor(item.status)}`}>
+                        <span className={`px-2 py-1 rounded-[4px] text-[9px] font-black uppercase tracking-wider ${getStatusColor(item.status)}`}>
                           {item.status || 'UNKNOWN'}
                         </span>
                       </td>
@@ -211,7 +224,7 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
                         </button>
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>
@@ -247,19 +260,20 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-8 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200">
+            <div className="grid grid-cols-2 gap-8 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-inner">
               <div className="space-y-4">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target System</span>
                   <span className="text-sm font-bold text-gray-900 block">{selectedLog.assetName || 'N/A'}</span>
+                  {selectedLog.assetSerial && <span className="text-[10px] text-gray-500 font-mono block mt-0.5">S/N: {selectedLog.assetSerial}</span>}
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Protocol Executed</span>
-                  <span className="text-sm text-gray-800 block">{selectedLog.templateName || 'N/A'}</span>
+                  <span className="text-sm text-gray-800 font-bold block">{selectedLog.templateName || 'N/A'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Service Interval</span>
-                  <span className="text-sm text-gray-800 block">{selectedLog.interval || 'N/A'}</span>
+                  <span className="text-sm text-gray-800 block">{selectedLog.interval || 'System Action'}</span>
                 </div>
               </div>
               <div className="space-y-4">
@@ -269,12 +283,12 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Authorized Technician</span>
-                  <span className="text-sm text-gray-800 block">{selectedLog.technician || 'N/A'}</span>
-                  {selectedLog.email && <span className="text-xs text-gray-500 font-mono block mt-0.5">{selectedLog.email}</span>}
+                  <span className="text-sm text-gray-800 block">{selectedLog.technician || selectedLog.performedBy || 'System Operator'}</span>
+                  {(selectedLog.email || selectedLog.performedByEmail) && <span className="text-xs text-gray-500 font-mono block mt-0.5">{selectedLog.email || selectedLog.performedByEmail}</span>}
                 </div>
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Final Status</span>
-                  <span className={`inline-block px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border ${getStatusColor(selectedLog.status)}`}>
+                  <span className={`inline-block px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider ${getStatusColor(selectedLog.status)}`}>
                     {selectedLog.status || 'UNKNOWN'}
                   </span>
                 </div>
@@ -284,25 +298,40 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
             {(selectedLog.responses || selectedLog.checklist) && (
               <div className="mb-8">
                 <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-500">
+                      <tr className="border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-500 font-bold">
                         <th className="pb-3">Task Description</th>
                         <th className="pb-3 w-32 text-center">Result</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([task, result], i) => (
-                        <tr key={i} className="border-b border-gray-200 last:border-0">
-                          <td className="py-3 text-gray-800 font-medium">{task}</td>
+                      {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([key, result], i) => {
+                        
+                        // --- THE FIX: DYNAMIC INDEX DECODER ---
+                        let taskLabel = key;
+                        // If the key is a number (0, 1, 2) from the new array builder, decode it
+                        if (!isNaN(key)) {
+                            const template = pmTemplates.find(t => t.name === selectedLog.templateName);
+                            if (template && template.checklistSteps && template.checklistSteps[key]) {
+                                const step = template.checklistSteps[key];
+                                taskLabel = step.section ? `[${step.section}] ${step.label}` : step.label;
+                            } else {
+                                taskLabel = `Protocol Step ${parseInt(key) + 1}`;
+                            }
+                        }
+
+                        return (
+                        <tr key={i} className="border-b border-gray-200 last:border-0 hover:bg-gray-100/50 transition-colors">
+                          <td className="py-3 text-gray-800 font-medium pr-4">{taskLabel}</td>
                           <td className="py-3 text-center font-bold font-mono">
-                            {result === true || result === "true" || result === "PASS" ? <span className="text-green-600">PASS</span> : 
-                             result === false || result === "false" || result === "FAIL" ? <span className="text-red-600">FAIL</span> : 
-                             <span className="text-gray-600">{result}</span>}
+                            {result === true || result === "true" || result === "Pass" || result === "PASS" ? <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 shadow-sm">PASS</span> : 
+                             result === false || result === "false" || result === "Fail" || result === "FAIL" ? <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 shadow-sm">FAIL</span> : 
+                             <span className="text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm">{result}</span>}
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
@@ -311,7 +340,7 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
 
             <div className="mb-12">
               <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Technician Notes & Comments</h3>
-              <div className="p-5 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] text-sm text-gray-700 whitespace-pre-wrap font-mono">
+              <div className="p-5 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] text-sm text-gray-700 whitespace-pre-wrap font-mono shadow-inner">
                 {selectedLog.comments || selectedLog.notes || "No additional comments provided during execution."}
               </div>
             </div>
@@ -319,7 +348,7 @@ export default function HistoryTab({ history = [], isSystemAdmin }) {
             <div className="mt-16 pt-8 border-t border-gray-300">
               <div className="w-72">
                 <div className="border-b-2 border-gray-800 pb-2 mb-2 text-center font-mono text-sm text-gray-800 italic">
-                  Electronically Signed: {selectedLog.technician || 'N/A'}
+                  Electronically Signed: {selectedLog.technician || selectedLog.performedBy || 'N/A'}
                 </div>
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">Technician Digital Signature</div>
               </div>
