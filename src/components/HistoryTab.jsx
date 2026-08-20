@@ -19,7 +19,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
   const getStatusColor = (status) => {
     if (!status) return "bg-gray-100 text-gray-800";
     const s = status.toLowerCase();
-    // --- UPDATED: Added 'completed' to catch Grouped Routes ---
     if (s.includes('pass') || s.includes('operational') || s.includes('completed')) return "bg-emerald-100 text-emerald-800 border border-emerald-200";
     if (s.includes('fail') || s.includes('incomplete') || s.includes('due') || s.includes('lockout')) return "bg-red-100 text-red-800 border border-red-200";
     return "bg-gray-100 text-gray-800 border border-gray-200";
@@ -61,7 +60,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
       return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
     }
     
-    // Safely map technician vs performedBy for sorting
     let valA = String(a[sortConfig.key] || '');
     let valB = String(b[sortConfig.key] || '');
     
@@ -104,6 +102,14 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
       alert("An error occurred during mass deletion. Partial delete may have occurred.");
       window.location.reload();
     }
+  };
+
+  // --- THE FIX: Helper to safely check if responses exist ---
+  const getResponsesToRender = () => {
+    if (!selectedLog) return null;
+    const responsesList = selectedLog.responses || selectedLog.checklist || {};
+    if (Object.keys(responsesList).length > 0) return responsesList;
+    return null;
   };
 
   return (
@@ -295,9 +301,11 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
               </div>
             </div>
 
-            {(selectedLog.responses || selectedLog.checklist) && (
-              <div className="mb-8">
-                <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
+            <div className="mb-8">
+              <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
+              
+              {/* THE FIX: Safety Fallback for empty/old logs */}
+              {getResponsesToRender() ? (
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
@@ -307,11 +315,8 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(selectedLog.responses || selectedLog.checklist || {}).map(([key, result], i) => {
-                        
-                        // --- THE FIX: DYNAMIC INDEX DECODER ---
+                      {Object.entries(getResponsesToRender()).map(([key, result], i) => {
                         let taskLabel = key;
-                        // If the key is a number (0, 1, 2) from the new array builder, decode it
                         if (!isNaN(key)) {
                             const template = pmTemplates.find(t => t.name === selectedLog.templateName);
                             if (template && template.checklistSteps && template.checklistSteps[key]) {
@@ -335,8 +340,12 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                     </tbody>
                   </table>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-sm italic text-gray-500 text-center shadow-inner">
+                  No specific checklist actions or parameters were recorded during this execution.
+                </div>
+              )}
+            </div>
 
             <div className="mb-12">
               <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Technician Notes & Comments</h3>
