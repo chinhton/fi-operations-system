@@ -53,11 +53,14 @@ export default function TemplatesTab({
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // --- NEW: Visual Progress State for Imports & Wipes ---
+  const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
+  
   const [newTemplate, setNewTemplate] = useState({
     id: '',
     name: "",
     interval: "Daily",
-    executionMode: "asset", // --- NEW: Default execution mode ---
+    executionMode: "asset", 
     department: [],
     targetCategory: [],
     managerEmail: "",
@@ -73,7 +76,6 @@ export default function TemplatesTab({
   const isDepartmentRestricted = !isSystemAdmin;
 
   const handleExportCSV = () => {
-    // --- UPDATED: Added executionMode to headers ---
     const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
@@ -146,7 +148,7 @@ export default function TemplatesTab({
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
             interval: rowObj['interval'] || "Monthly",
-            executionMode: rowObj['executionMode'] || "asset", // --- UPDATED ---
+            executionMode: rowObj['executionMode'] || "asset",
             department: parsedDept,
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
@@ -163,20 +165,26 @@ export default function TemplatesTab({
           return;
         }
 
-        for (const template of importedTemplates) {
+        // --- NEW: Trigger the Import Progress UI ---
+        setSyncProgress({ active: true, action: 'Importing', current: 0, total: importedTemplates.length });
+
+        for (let i = 0; i < importedTemplates.length; i++) {
           await window.fetch('/api/templates?bulk=true', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(template)
+            body: JSON.stringify(importedTemplates[i])
           });
+          
+          setSyncProgress(prev => ({ ...prev, current: i + 1 }));
           await new Promise(resolve => setTimeout(resolve, 50));
         }
         
-        alert("SOP Import complete! Refreshing page to sync database.");
         window.location.reload(); 
         
       } catch (err) {
+        console.error(err);
         alert("Failed to parse CSV file. Ensure it is formatted correctly.");
+        setSyncProgress({ active: false, action: '', current: 0, total: 0 });
       }
       e.target.value = null; 
     };
@@ -198,14 +206,19 @@ export default function TemplatesTab({
       return;
     }
 
+    // --- NEW: Trigger the Delete Progress UI ---
+    setSyncProgress({ active: true, action: 'Deleting', current: 0, total: filteredTemplates.length });
+
     try {
-      for (const t of filteredTemplates) {
-        await window.fetch(`/api/templates?id=${t.id}&bulk=true`, { method: 'DELETE' });
+      for (let i = 0; i < filteredTemplates.length; i++) {
+        await window.fetch(`/api/templates?id=${filteredTemplates[i].id}&bulk=true`, { method: 'DELETE' });
+        
+        setSyncProgress(prev => ({ ...prev, current: i + 1 }));
         await new Promise(resolve => setTimeout(resolve, 30));
       }
-      alert("Mass deletion complete! Refreshing database.");
       window.location.reload();
     } catch (err) {
+      console.error(err);
       alert("An error occurred during mass deletion.");
       window.location.reload();
     }
@@ -230,7 +243,6 @@ export default function TemplatesTab({
   };
 
   const openEditModal = (template) => {
-    // Ensure older templates without an execution mode default to 'asset'
     setNewTemplate({ ...template, executionMode: template.executionMode || 'asset' });
     setShowTemplateModal(true);
   };
@@ -457,7 +469,6 @@ export default function TemplatesTab({
                   <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
                 </div>
                 
-                {/* --- UI ADDITION: The Execution Mode Toggle --- */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Workflow Execution Mode</label>
                   <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shadow-inner">
@@ -790,6 +801,32 @@ export default function TemplatesTab({
           </div>
         </div>
       )}
+
+      {/* --- PROGRESS OVERLAY FOR IMPORTS / WIPES --- */}
+      {syncProgress.active && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center animate-entrance">
+            <span className="text-5xl mb-4 block animate-bounce">
+              {syncProgress.action === 'Deleting' ? '🗑️' : '📥'}
+            </span>
+            <h3 className={`font-black text-xl uppercase tracking-wider mb-2 ${syncProgress.action === 'Deleting' ? 'text-red-600' : 'text-[#005596]'}`}>
+              {syncProgress.action === 'Deleting' ? 'Wiping Database...' : 'Importing Protocols...'}
+            </h3>
+            <p className="text-gray-500 font-bold mb-6">Please do not close this window or refresh the page.</p>
+            
+            <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden shadow-inner">
+              <div 
+                className={`${syncProgress.action === 'Deleting' ? 'bg-red-500' : 'bg-[#00A1E4]'} h-4 rounded-full transition-all duration-300`} 
+                style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+              ></div>
+            </div>
+            <p className="text-sm font-mono font-bold text-gray-700">
+              {syncProgress.action === 'Deleting' ? 'Deleted' : 'Imported'} {syncProgress.current} of {syncProgress.total} records
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
