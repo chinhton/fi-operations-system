@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdmin }) {
+export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdmin, assets = [] }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLog, setSelectedLog] = useState(null);
   
@@ -76,16 +76,57 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     return 0;
   });
 
+  // =========================================================================
+  // THE FIX: Strict Audit Compliance Engine (Un-stamps Assets)
+  // =========================================================================
+  const revertAssetDates = async (log) => {
+    if (!assets || assets.length === 0) return;
+
+    let intervalToClear = log.interval;
+    if (!intervalToClear) {
+      const template = pmTemplates.find(t => t.name === log.templateName);
+      if (template) intervalToClear = template.interval;
+    }
+
+    if (!intervalToClear) return; // Cannot revert if the frequency is unknown
+
+    let assetsToUpdate = [];
+
+    // Find targets based on whether it was a master route or an individual PM
+    if ((log.status || "").includes("Grouped Route") || log.executionMode === 'route') {
+      if (log.assetsIncluded && log.assetsIncluded.length > 0) {
+        assetsToUpdate = assets.filter(a => log.assetsIncluded.includes(a.name));
+      }
+    } else {
+      const singleAsset = assets.find(a => a.id === log.assetId) || assets.find(a => a.name === log.assetName);
+      if (singleAsset) assetsToUpdate.push(singleAsset);
+    }
+
+    // Forcefully remove the date stamp from the database
+    for (const asset of assetsToUpdate) {
+      const newPmDates = { ...(asset.pmDates || {}) };
+      delete newPmDates[intervalToClear]; // Un-stamp!
+
+      const updatedAsset = { ...asset, pmDates: newPmDates };
+
+      await window.fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedAsset)
+      });
+    }
+  };
+
   const handleMassDeleteLogs = async () => {
     if (processedHistory.length === 0) {
       alert("No logs found to delete based on your current search/filters.");
       return;
     }
 
-    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${processedHistory.length} audit logs.\n\nThis will wipe them from the Azure database completely. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed?`);
+    const confirm1 = window.confirm(`🚨 DANGER: You are about to permanently delete ${processedHistory.length} audit logs.\n\nDue to strict compliance rules, this will also UN-STAMP the completed dates on all associated assets.\n\nAre you absolutely sure you want to proceed?`);
     if (!confirm1) return;
 
-    const confirm2 = window.prompt(`To confirm mass deletion of ${processedHistory.length} audit logs, please type DELETE in all caps:`);
+    const confirm2 = window.prompt(`To confirm mass deletion and PM reset of ${processedHistory.length} logs, please type DELETE in all caps:`);
     if (confirm2 !== "DELETE") {
       alert("Mass deletion cancelled.");
       return;
@@ -93,9 +134,13 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
 
     try {
       for (const log of processedHistory) {
+        // Un-stamp the asset before destroying the paper trail
+        await revertAssetDates(log);
+        
+        // Destroy the paper trail
         await window.fetch(`/api/history?id=${log.id}&bulk=true`, { method: 'DELETE' });
       }
-      alert("Mass deletion complete! Refreshing database.");
+      alert("Mass deletion complete! Audit logs removed and associated asset PM cycles have been reset.");
       window.location.reload();
     } catch (err) {
       console.error("Mass delete error:", err);
@@ -111,7 +156,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     return null;
   };
 
-  // --- NEW FIX: Group responses by Asset Tag for the PDF ---
   const getGroupedResponses = () => {
     const responses = getResponsesToRender();
     if (!responses) return null;
@@ -121,13 +165,12 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
 
     Object.entries(responses).forEach(([key, result]) => {
       let taskLabel = key;
-      let assetGroup = "General Protocol Tasks"; // Default fallback group
+      let assetGroup = "General Protocol Tasks"; 
 
       if (!isNaN(key)) {
         if (template && template.checklistSteps && template.checklistSteps[key]) {
           const step = template.checklistSteps[key];
           taskLabel = step.section ? `[${step.section}] ${step.label}` : step.label;
-          // If the step has an assetTag mapped, use it for the group header
           if (step.assetTag) {
             assetGroup = step.assetTag;
           }
@@ -181,7 +224,7 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                 <button 
                   onClick={handleMassDeleteLogs}
                   className="text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded transition-colors shadow-sm border bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                  title="Wipe the currently filtered logs"
+                  title="Wipe the currently filtered logs and reset associated assets"
                 >
                   🧨 WIPE LOGS
                 </button>
@@ -345,7 +388,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
             <div className="mb-8">
               <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
               
-              {/* THE NEW FIX: Rendering Grouped Responses */}
               {getGroupedResponses() ? (
                 <div className="bg-gray-50 rounded-lg border border-gray-200 shadow-inner overflow-hidden">
                   <table className="w-full text-left text-sm border-collapse">
@@ -358,14 +400,11 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                     <tbody>
                       {Object.entries(getGroupedResponses()).map(([groupName, tasks], groupIdx) => (
                         <React.Fragment key={groupIdx}>
-                          {/* Sub-header row for the Asset Tag */}
                           <tr className="bg-gray-100 border-b border-gray-200">
                             <td colSpan="2" className="py-2 px-4 font-bold text-[#005596] text-[10px] uppercase tracking-wider">
                               {groupName}
                             </td>
                           </tr>
-                          
-                          {/* Loop through the tasks assigned to this specific asset/group */}
                           {tasks.map((task, taskIdx) => (
                             <tr key={`${groupIdx}-${taskIdx}`} className="border-b border-gray-200 last:border-0 hover:bg-white transition-colors bg-gray-50/50">
                               <td className="py-2.5 pl-8 pr-4 text-gray-800 font-medium text-xs">
