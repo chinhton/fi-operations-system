@@ -652,8 +652,6 @@ export default function AssetsTab({
                         <td className="px-6 py-4 text-right space-x-3">
                           <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>
                           
-                          <button onClick={() => openPmModal(asset)} className="text-xs font-bold text-[#005596] hover:text-[#005596]/80 transition">Execute PM</button>
-                          
                           {isSystemAdmin && (
                             <button onClick={() => deleteAsset(asset.id)} className="text-xs font-bold text-red-600 hover:text-red-800 transition">Delete</button>
                           )}
