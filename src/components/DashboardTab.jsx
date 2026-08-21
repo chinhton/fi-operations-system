@@ -49,6 +49,21 @@ export default function DashboardTab({
     setRouteAnswers({}); 
   };
 
+  // --- ADDED: ADMIN SWEEP TRIGGER ---
+  const handleTestSweep = async () => {
+    if (!window.confirm("Fire the daily sweep right now? This will send live Teams messages to operators with overdue assets.")) return;
+    
+    try {
+      const response = await fetch('/api/dailySweep', { method: 'POST' });
+      const result = await response.text();
+      
+      alert(`Sweep Complete: ${result}`);
+    } catch (err) {
+      console.error("Sweep trigger failed:", err);
+      alert("Failed to trigger the sweep. Check the console.");
+    }
+  };
+
   if (assets && pmTemplates && calculateDaysRemaining) {
     
     // ==========================================
@@ -280,6 +295,19 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-8 animate-entrance w-full relative">
+      
+      {/* --- ADDED: ADMIN TEST BUTTON IN UI --- */}
+      {isSystemAdmin && (
+        <div className="flex justify-end mt-2">
+          <button 
+            onClick={handleTestSweep}
+            className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-bold uppercase tracking-wider rounded-lg border border-purple-300 transition-colors shadow-sm"
+          >
+            🧪 Trigger Daily Sweep
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-2">
         <div className="lg:col-span-8 space-y-6">
           

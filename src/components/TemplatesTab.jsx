@@ -43,6 +43,14 @@ const decodeSteps = (stepString) => {
   });
 };
 
+// --- ADDED HELPER FUNCTION HERE ---
+const isCategoryMatch = (templateCat, assetCat) => {
+  if (!templateCat) return false;
+  if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
+  if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
+  return templateCat === assetCat;
+};
+
 export default function TemplatesTab({
   pmTemplates = [], manuals = [], assets = [],
   PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
