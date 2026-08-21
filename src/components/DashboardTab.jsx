@@ -49,6 +49,33 @@ export default function DashboardTab({
     setRouteAnswers({}); 
   };
 
+  // --- THE FIX: Smart, detailed alert function that notifies both Manager & Operator ---
+  const handleSendAlert = (e, item, isEscalation = false) => {
+    e.target.innerText = isEscalation ? "ESCALATED ✓" : "NOTIFIED ✓"; 
+    e.target.classList.add("text-green-600");
+    e.target.disabled = true; // Prevents clicking twice
+
+    const managerEmails = getManagerForDepartment(item.department);
+    const operatorEmail = item.assignedTo && item.assignedTo.includes('@') ? item.assignedTo : null;
+    
+    // Combine emails and remove duplicates using a Set
+    const emailSet = new Set(managerEmails.split(';').filter(Boolean));
+    if (operatorEmail) emailSet.add(operatorEmail);
+    const targetEmails = Array.from(emailSet).join(';');
+
+    const subject = isEscalation 
+        ? `🚨 CRITICAL ESCALATION: Maintenance Required for ${item.name}`
+        : `📅 UPCOMING PM: Action Required for ${item.name}`;
+
+    const actionText = item.type === 'route' 
+        ? `Execute Master Facility Route` 
+        : `Execute SOP: ${item.targetTemplate?.name || 'General Preventative Maintenance'}`;
+
+    const body = `**FI-OMS Automated Alert**\n\n**Target Asset:** ${item.name}\n**Serial / Details:** ${item.serial}\n**Current Status:** ${item.displayStatus} (${item.displayDate})\n**Required Action:** ${actionText}\n**Assigned Operator:** ${item.assignedTo}\n\nPlease log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
+
+    triggerTeamsAlert(targetEmails, subject, body);
+  };
+
   const handleTestSweep = async () => {
     if (!window.confirm("Fire the daily sweep right now? This will send live Teams messages to operators with overdue assets.")) return;
     
@@ -353,15 +380,14 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
+                              
                               <button 
-                                onClick={(e) => {
-                                  e.target.innerText = "ESCALATED ✓"; e.target.classList.add("text-green-600");
-                                  triggerTeamsAlert(getManagerForDepartment(item.department), `MANAGER ESCALATION: Critical Action Required for ${item.name}`, `Hello,\n\nThe system ${item.name} is ${item.displayStatus.toUpperCase()}.\nAssigned: ${item.assignedTo}`);
-                                }} 
+                                onClick={(e) => handleSendAlert(e, item, true)} 
                                 className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                🔔 Alert Manager
+                                🔔 Alert Team
                               </button>
+
                               {item.type === 'asset' && (
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
@@ -401,14 +427,12 @@ export default function DashboardTab({
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-[#005596] font-mono font-bold">{item.displayDate}</div>
                             <div className="flex items-center space-x-3 mt-1">
+                              
                               <button 
-                                onClick={(e) => {
-                                  e.target.innerText = "NOTIFIED ✓"; e.target.classList.add("text-green-600");
-                                  triggerTeamsAlert(getManagerForDepartment(item.department), `MANAGER NOTICE: Routine Task Pending for ${item.name}`, `Hello,\n\nStatus: ${item.displayStatus}\nAssigned: ${item.assignedTo}`);
-                                }} 
+                                onClick={(e) => handleSendAlert(e, item, false)} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
-                                ✉️ Notify Manager
+                                ✉️ Notify Team
                               </button>
                               
                               {item.type === 'asset' && (
