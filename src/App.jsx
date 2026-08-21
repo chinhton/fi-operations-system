@@ -194,28 +194,39 @@ export default function App() {
   };
 
   const triggerTeamsAlert = async (toAddress, subjectLine, bodyText) => {
-    const TEAMS_WEBHOOK_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/00ae5d02a393435fb76c7dea7d3cb551/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MYYSeuAlrrqTxDXF5os3v3oG5sbcx5r6YHWBUpJOoDw";
+    // Your NEW 1-on-1 Direct Message Power Automate Webhook URL
+    const TEAMS_WORKFLOW_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/4e37b9d1b1384e2bb2185bf5825d2bf7/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=BQdLjB2TG8j6w0oqYYkQeCCnJstPI8MyXL-xqcqsFyg";
+    
     try {
-      const isTargeted = toAddress && toAddress !== "admin@fcimg.com";
-      const mentionTag = isTargeted ? `<at>${toAddress}</at>` : "";
-      const formattedBody = isTargeted ? `**Attention:** ${mentionTag}\n\n${bodyText}` : bodyText;
-      const payload = {
-        type: "message",
-        attachments: [{
-            contentType: "application/vnd.microsoft.card.adaptive",
-            content: {
-              type: "AdaptiveCard", $schema: "http://adaptivecards.io/schemas/adaptive-card.json", version: "1.4",
-              body: [
-                { type: "TextBlock", text: `🚨 ${subjectLine}`, weight: "Bolder", size: "Medium", color: "Accent" },
-                { type: "TextBlock", text: formattedBody, wrap: true, spacing: "Medium" }
-              ],
-              msteams: isTargeted ? { entities: [{ type: "mention", text: mentionTag, mentioned: { id: toAddress, name: toAddress } }] } : undefined
-            }
-        }]
-      };
-      await fetch(TEAMS_WEBHOOK_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      // Ensure we have a valid target (fallback to Admin if undefined)
+      const targetEmails = toAddress && toAddress !== "" ? toAddress : "admin@fcimg.com";
+
+      // Split by semicolon in case a department has multiple managers
+      const emailArray = targetEmails.split(';');
+
+      // Loop through each manager and fire a dedicated 1-on-1 payload
+      for (const email of emailArray) {
+          const cleanEmail = email.trim();
+          if (!cleanEmail) continue;
+
+          const payload = {
+            recipientEmail: cleanEmail,
+            subject: subjectLine,
+            bodyText: bodyText
+          };
+
+          await fetch(TEAMS_WORKFLOW_URL, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(payload) 
+          });
+      }
+      
       return true;
-    } catch (err) { return false; }
+    } catch (err) { 
+      console.error("Teams Workflow Error:", err);
+      return false; 
+    }
   };
 
   const hasSwept = useRef(false);
