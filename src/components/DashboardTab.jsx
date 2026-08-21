@@ -351,13 +351,6 @@ export default function DashboardTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {Array.isArray(item.department) ? item.department.join(', ') : item.department}</span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
@@ -375,7 +368,7 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                               {item.type === 'route' && (
-                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -406,13 +399,6 @@ export default function DashboardTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {Array.isArray(item.department) ? item.department.join(', ') : item.department}</span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-[#005596] font-mono font-bold">{item.displayDate}</div>
@@ -431,7 +417,7 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                               {item.type === 'route' && (
-                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                               )}
                             </div>
                           </div>
@@ -462,12 +448,6 @@ export default function DashboardTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                              <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-bold uppercase tracking-wider">DEPT: {Array.isArray(item.department) ? item.department.join(', ') : item.department}</span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
@@ -475,7 +455,7 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
                             )}
                             {item.type === 'route' && (
-                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview PM &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -526,12 +506,6 @@ export default function DashboardTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
@@ -539,7 +513,7 @@ export default function DashboardTab({
                               <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                             )}
                             {item.type === 'route' && (
-                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -569,12 +543,6 @@ export default function DashboardTab({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                              <span className="bg-sky-100 text-[#00A1E4] px-1.5 py-0.5 rounded border border-sky-200 font-bold uppercase tracking-wider">OP: {item.assignedTo}</span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-indigo-600 font-mono font-bold">{item.displayDate}</div>
@@ -582,7 +550,7 @@ export default function DashboardTab({
                               <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                             )}
                             {item.type === 'route' && (
-                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute Master Route &rarr;</button>
+                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -607,11 +575,6 @@ export default function DashboardTab({
                                 {item.displayStatus}
                               </span>
                             </div>
-                            <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4 block">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                {item.type === 'route' ? 'ASSETS:' : 'S/N:'} {item.serial}
-                              </span>
-                            </div>
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{item.displayDate}</div>
@@ -619,7 +582,7 @@ export default function DashboardTab({
                                 <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">View Details &rarr;</button>
                             )}
                             {item.type === 'route' && (
-                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview Route &rarr;</button>
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-slate-500 font-extrabold uppercase tracking-wider hover:underline transition-all">Preview PM &rarr;</button>
                             )}
                           </div>
                         </div>
@@ -669,12 +632,9 @@ export default function DashboardTab({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
-                            <span><strong>Target:</strong> {task.serial}</span>
-                            <span className="text-red-600 font-bold"><strong>Note:</strong> {task.displayDate}</span>
-                          </div>
                         </div>
-                        <div className="text-right ml-4">
+                        <div className="text-right ml-4 flex flex-col items-end">
+                          <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{task.displayDate}</div>
                           {task.type === 'asset' ? (
                             <button 
                               onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
@@ -687,7 +647,7 @@ export default function DashboardTab({
                               onClick={() => { openRouteModal(task); }}
                               className="bg-purple-700 hover:bg-purple-800 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
-                              Execute Master Route
+                              Execute PM
                             </button>
                           )}
                         </div>
@@ -718,12 +678,9 @@ export default function DashboardTab({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
-                            <span><strong>Target:</strong> {task.serial}</span>
-                            <span className="text-[#005596] font-bold"><strong>Note:</strong> {task.displayDate}</span>
-                          </div>
                         </div>
-                        <div className="text-right ml-4">
+                        <div className="text-right ml-4 flex flex-col items-end">
+                          <div className="mb-2 text-[10px] text-[#005596] font-mono font-bold">{task.displayDate}</div>
                           {task.type === 'asset' ? (
                             <button 
                               onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
@@ -736,7 +693,7 @@ export default function DashboardTab({
                               onClick={() => { openRouteModal(task); }}
                               className="bg-purple-600 hover:bg-purple-800 text-white px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
-                              Open Route Assignment
+                              Open PM
                             </button>
                           )}
                         </div>
@@ -767,12 +724,9 @@ export default function DashboardTab({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-gray-500 font-mono mt-2 flex items-center space-x-4">
-                            <span><strong>Target:</strong> {task.serial}</span>
-                            <span className="text-slate-500 font-bold"><strong>Note:</strong> {task.displayDate}</span>
-                          </div>
                         </div>
-                        <div className="text-right ml-4">
+                        <div className="text-right ml-4 flex flex-col items-end">
+                          <div className="mb-2 text-[10px] text-slate-500 font-mono font-bold">{task.displayDate}</div>
                           {task.type === 'asset' ? (
                             <button 
                               onClick={() => { openPmModal(task.rawItem, task.targetTemplate); }}
@@ -785,7 +739,7 @@ export default function DashboardTab({
                               onClick={() => { openRouteModal(task); }}
                               className="text-purple-600 hover:text-purple-900 border border-purple-300 bg-white hover:bg-purple-50 px-4 py-2 rounded text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm"
                             >
-                              Preview Route
+                              Preview PM
                             </button>
                           )}
                         </div>
