@@ -17,8 +17,6 @@ import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
 import useDashboardStats from './hooks/useDashboardStats';
 
-import { useEffect, useRef } from 'react';
-
 const useIdleTimeout = (onTimeout, idleTime = 300000) => { // 300,000ms = 5 minutes
   const timeoutRef = useRef(null);
 
