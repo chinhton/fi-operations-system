@@ -363,9 +363,7 @@ export default function AssetsTab({
     }
   };
 
-  // --- THE FULLY RESTORED FUNCTION ---
   const openRegisterForNew = () => {
-    // Pre-fills with your department for speed, but remains unlocked for Managers!
     const defaultDept = currentUser?.department && currentUser.department !== "Unassigned" ? [currentUser.department] : [];
     
     setNewAsset({
@@ -398,11 +396,9 @@ export default function AssetsTab({
     setIsRegisterModalOpen(true);
   };
 
-  // --- NEW: AUTO-SYNC CATEGORY LOGIC ---
   const handleFieldChange = (field, value) => {
     const updatedAsset = { ...newAsset, [field]: value };
     
-    // Automatically construct the folder name if they change Manufacturer, Name, or Model
     if (['name', 'manufacturer', 'model'].includes(field)) {
       const mfr = updatedAsset.manufacturer ? updatedAsset.manufacturer.trim() : "";
       const name = updatedAsset.name ? updatedAsset.name.trim() : "";
@@ -418,7 +414,6 @@ export default function AssetsTab({
       
       updatedAsset.category = catString;
       
-      // Automatically switch to "New Category" view so they can see it typing out
       setIsAddingNewCategory(true);
     }
     
@@ -614,7 +609,6 @@ export default function AssetsTab({
                             value={checkStatus === 'ACTIVE' ? 'Active' : checkStatus === 'INACTIVE' ? 'Inactive' : asset.status}
                             onChange={(e) => handleUpdateAssetStatus(asset.id, e.target.value)}
                             className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
-                              checkStatus === "OPERATIONAL" ? "bg-green-100 text-green-800" :
                               checkStatus === "ACTIVE" ? "bg-emerald-100 text-emerald-800" :
                               checkStatus === "INACTIVE" ? "bg-gray-200 text-gray-600" :
                               checkStatus === "MAINTENANCE DUE" ? "bg-yellow-100 text-yellow-800" :
@@ -623,7 +617,6 @@ export default function AssetsTab({
                               "bg-gray-100 text-gray-800"
                             }`}
                           >
-                            <option value="Operational">Operational</option>
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
                             <option value="Maintenance Due">Maintenance Due</option>

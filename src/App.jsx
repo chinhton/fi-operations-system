@@ -128,7 +128,6 @@ export default function App() {
         setVendors(vendorsRes);
         setKeys(keysRes);
 
-        // --- THE FIX: Load Personal Layout Preferences ---
         const me = usersRes.find(u => u.email === currentUser.email);
         if (me && me.preferences && me.preferences.navOrder) {
           setNavOrder(me.preferences.navOrder);
@@ -179,9 +178,8 @@ export default function App() {
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com' || userDept === 'System Administration';
 
-  // --- THE FIX: Function to push Personal UI changes to the Database ---
   const handlePersonalNavChange = async (newOrder) => {
-    setNavOrder(newOrder); // Optimistic UI update
+    setNavOrder(newOrder); 
     
     const updatedUser = {
       ...currentUser,
@@ -315,18 +313,55 @@ export default function App() {
     runDailySweep();
   }, [assets, pmTemplates, currentUser]);
 
+
+  // =========================================================================
+  // THE FIX: STRICT DEPARTMENT SILOS FOR UI RENDERING
+  // =========================================================================
+
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   const visibleUsers = users.filter(u => { if (isGodMode) return true; return u.department === userDept; });
   const visibleAssets = assets.filter(filterHierarchy);
 
-  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, history);
+  // Filters Audit Trail so managers only see logs related to their own department's equipment
+  const visibleHistory = isGodMode ? history : history.filter(h => {
+    if (h.executionMode === 'route' && h.assetsIncluded) {
+        return h.assetsIncluded.some(assetName => visibleAssets.some(va => va.name === assetName));
+    }
+    return visibleAssets.some(va => va.id === h.assetId || va.name === h.assetName);
+  });
 
-  const assetHooks = useAssets(visibleAssets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
-  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, visibleTemplates, setPmTemplates); 
-  const manualHooks = useManuals(manuals, setManuals, visibleAssets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(visibleAssets, setAssets, history, setHistory, currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(currentUser, visibleUsers, visibleAssets, modals.triggerModal, modals.closeModal, setHistory);
+  // Filters Manuals so managers only see PDFs linked to their own department's equipment
+  const visibleManuals = isGodMode ? manuals : manuals.filter(m => {
+    if (!m.linkedAssets || m.linkedAssets.length === 0) return true;
+    return m.linkedAssets.some(assetId => visibleAssets.some(va => va.id === assetId || va.name === assetId));
+  });
+
+  // Filters Hardware Inventory so managers only see spare parts linked to their own department's equipment
+  const visibleParts = isGodMode ? parts : parts.filter(p => {
+    if (!p.targetAssets || p.targetAssets.length === 0) return true;
+    return p.targetAssets.some(assetId => visibleAssets.some(va => va.id === assetId || va.name === assetId));
+  });
+
+  const visibleVendors = isGodMode ? vendors : vendors; // Vendors remain global to avoid duplicate external contacts
+  const visibleKeys = isGodMode || userDept === 'Facilities' ? keys : [];
+
+  // =========================================================================
+  // THE FIX: HOOK INITIALIZATION (SAFE BACKGROUND DATA)
+  // =========================================================================
+  
+  const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, visibleHistory);
+
+  // We intentionally pass the FULL (unfiltered) arrays into these core engine hooks. 
+  // This ensures that if a Production Manager saves an asset edit, the hook maps over the full 
+  // background database and doesn't accidentally delete all the hidden Facilities assets!
+  const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
+  const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
+  const manualHooks = useManuals(manuals, setManuals, assets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
+  const pmHooks = usePmExecution(assets, setAssets, history, setHistory, currentUser, modals.triggerModal);
+  const woHooks = useWorkOrders(currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
+
+  // =========================================================================
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
   const dynamicComplianceRate = scorableAssets.length > 0 ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) : 100;
@@ -467,24 +502,27 @@ export default function App() {
     isSystemAdmin: isGodMode, 
     triggerEmailAlert, triggerTeamsAlert, 
     pendingApprovals, activeAccounts, handleApproveUser, handleDenyUser, handleRevokeUser,
-    history, setHistory, 
+    
+    // OVERRIDE RAW STATE WITH SILOED VISIBLE STATE FOR UI RENDERING
+    history: visibleHistory, setHistory, 
     assets: visibleAssets, setAssets, 
     pmTemplates: visibleTemplates, setPmTemplates, 
     workOrders: visibleWorkOrders, setWorkOrders, 
     users: visibleUsers, setUsers,
-    manuals, setManuals, 
-    parts, setParts,      
-    vendors, setVendors,  
-    keys, setKeys, 
+    manuals: visibleManuals, setManuals, 
+    parts: visibleParts, setParts,      
+    vendors: visibleVendors, setVendors,  
+    keys: visibleKeys, setKeys, 
+    
     calculateDaysRemaining, calculateNextPmDate,
     activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
     templatesCount: visibleTemplates.length,
-    historyCount: history.length,
-    manualsCount: manuals.length,
-    keysCount: keys.length,
-    navOrder,                               // <-- Pass the DB nav order down to sidebar
-    onOrderChange: handlePersonalNavChange  // <-- Pass the PERSONAL save function down
+    historyCount: visibleHistory.length,
+    manualsCount: visibleManuals.length,
+    keysCount: visibleKeys.length,
+    navOrder,
+    onOrderChange: handlePersonalNavChange
   };
 
   return (
