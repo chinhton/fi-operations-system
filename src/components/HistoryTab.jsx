@@ -112,6 +112,21 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     }
   };
 
+  // --- NEW: Single Log Deletion ---
+  const deleteSingleLog = async (log) => {
+    if (!window.confirm("Are you sure you want to permanently delete this specific audit log? The associated PM dates will be un-stamped on the asset.")) return;
+    
+    try {
+      await revertAssetDates(log);
+      await window.fetch(`/api/history?id=${log.id}`, { method: 'DELETE' });
+      alert("Log successfully deleted and asset dates reverted.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Single delete error:", err);
+      alert("An error occurred while attempting to delete the log.");
+    }
+  };
+
   const handleMassDeleteLogs = async () => {
     if (processedHistory.length === 0) {
       alert("No logs found to delete based on your current search/filters.");
@@ -261,7 +276,7 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                   <th className="px-6 py-4 cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => handleSort('status')}>
                     Status {renderSortIcon('status')}
                   </th>
-                  <th className="px-6 py-4 text-center">Actions</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -272,7 +287,7 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                     const isRoute = (item.status || "").includes("Grouped Route") || item.executionMode === 'route';
                     
                     return (
-                    <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                    <tr key={item.id || idx} className="hover:bg-gray-50/50 transition-colors group">
                       <td className="px-6 py-4 font-mono text-[11px] text-gray-600">
                         {formatDate(item.timestamp || item.date)}
                       </td>
@@ -293,7 +308,16 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                           {item.status || 'UNKNOWN'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="px-6 py-4 text-right flex justify-end items-center space-x-2">
+                        {isSystemAdmin && (
+                          <button 
+                            onClick={() => deleteSingleLog(item)}
+                            className="text-gray-300 hover:text-red-500 font-bold transition-colors opacity-0 group-hover:opacity-100 px-2"
+                            title="Delete this log and revert asset dates"
+                          >
+                            🗑️
+                          </button>
+                        )}
                         <button 
                           onClick={() => setSelectedLog(item)}
                           className="text-[#005596] hover:text-[#00A1E4] text-[10px] font-bold uppercase tracking-wider transition-colors border border-[#005596] hover:border-[#00A1E4] px-3 py-1.5 rounded shadow-sm hover:shadow"
@@ -320,7 +344,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
             </button>
             <button 
               onClick={() => {
-                // THE FIX: Change document title before printing to set default PDF filename
                 const originalTitle = document.title;
                 document.title = `Maintenance Management Report - ${selectedLog.id || 'Log'}`;
                 window.print();
@@ -339,7 +362,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                 <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto object-contain mb-1" />
               </div>
               <div className="text-right">
-                {/* THE FIX: Updated visual header text to match */}
                 <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Maintenance Management Report</h2>
                 <p className="text-xs font-mono text-gray-500 mt-1">Log ID: {selectedLog.id || `LOG-SYSTEM`}</p>
               </div>
