@@ -789,7 +789,7 @@ export default function DashboardTab({
 
       {activeRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden animate-entrance relative flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl w-[95%] max-w-5xl max-h-[90dvh] overflow-hidden animate-entrance relative flex flex-col">
             
             <div className="bg-purple-700 text-white px-6 py-4 flex justify-between items-center shrink-0 border-b border-purple-900 shadow-sm">
               <div>
@@ -801,7 +801,6 @@ export default function DashboardTab({
               <button onClick={() => setActiveRoute(null)} className="text-purple-200 hover:text-white font-bold text-2xl transition-colors">&times;</button>
             </div>
             
-            {/* THE FIX: Added min-h-0 so the form can properly overflow and scroll! */}
             <form onSubmit={handleSubmitMasterRoute} className="flex-1 overflow-y-auto min-h-0 bg-gray-50/50 p-6 flex flex-col gap-6">
               
               <div className="bg-white p-5 rounded-lg border border-purple-200 shadow-sm shrink-0">
@@ -829,7 +828,7 @@ export default function DashboardTab({
 
                     return (
                     <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-colors">
-                      <div className="w-full md:w-1/3 shrink-0">
+                      <div className="w-full md:w-1/4 shrink-0">
                         {step.section ? (
                           <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm">
                             {step.section}
@@ -840,30 +839,54 @@ export default function DashboardTab({
                           </span>
                         )}
                       </div>
+                      
                       <div className="w-full md:w-1/3">
                         <span className="text-sm font-bold text-gray-800">{stepLabel}</span>
                       </div>
-                      <div className="w-full md:w-1/3 flex justify-end">
-                        {stepType === 'checkbox' && (
-                          <label className="flex items-center space-x-2 cursor-pointer bg-white border border-gray-300 rounded px-3 py-2 shadow-inner hover:bg-gray-50 w-full md:w-auto">
-                            <input type="checkbox" required checked={!!routeAnswers[idx]} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
-                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Confirm</span>
-                          </label>
+                      
+                      {/* --- THE FIX: Status Override Toggle & Dynamic Inputs --- */}
+                      <div className="w-full md:flex-1 flex flex-col md:flex-row gap-2 justify-end items-stretch md:items-center">
+                        {routeAnswers[idx] === 'OFFLINE' ? (
+                          <div className="flex-1 text-[11px] px-3 py-2 border border-red-200 rounded bg-red-50 text-red-700 font-bold text-center shadow-inner uppercase tracking-wider flex items-center justify-center">
+                            ⚠️ System Offline
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex justify-end">
+                            {stepType === 'checkbox' && (
+                              <label className="flex items-center space-x-2 cursor-pointer bg-white border border-gray-300 rounded px-3 py-2 shadow-inner hover:bg-gray-50 w-full md:w-auto">
+                                <input type="checkbox" required checked={!!routeAnswers[idx]} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Confirm</span>
+                              </label>
+                            )}
+                            {stepType === 'text' && (
+                              <input type="text" required placeholder="Enter value..." value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
+                            )}
+                            {stepType === 'number' && (
+                              <input type="number" required placeholder="0.0" value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
+                            )}
+                            {stepType === 'passfail' && (
+                              <select required value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full md:w-auto text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none bg-white font-bold cursor-pointer">
+                                <option value="">-- Result --</option>
+                                <option value="pass">PASS (In Spec)</option>
+                                <option value="fail">FAIL (Out of Spec)</option>
+                              </select>
+                            )}
+                          </div>
                         )}
-                        {stepType === 'text' && (
-                          <input type="text" required placeholder="Enter value..." value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
-                        )}
-                        {stepType === 'number' && (
-                          <input type="number" required placeholder="0.0" value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none" />
-                        )}
-                        {stepType === 'passfail' && (
-                          <select required value={routeAnswers[idx] || ""} onChange={(e) => setRouteAnswers({...routeAnswers, [idx]: e.target.value})} className="w-full md:w-auto text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-inner outline-none bg-white font-bold cursor-pointer">
-                            <option value="">-- Result --</option>
-                            <option value="pass">PASS (In Spec)</option>
-                            <option value="fail">FAIL (Out of Spec)</option>
-                          </select>
-                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setRouteAnswers({...routeAnswers, [idx]: routeAnswers[idx] === 'OFFLINE' ? '' : 'OFFLINE'})}
+                          className={`shrink-0 px-3 py-2 rounded text-[9px] font-black uppercase tracking-wider transition-all shadow-sm border ${
+                            routeAnswers[idx] === 'OFFLINE'
+                              ? 'bg-red-600 text-white border-red-700 hover:bg-red-700'
+                              : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300'
+                          }`}
+                        >
+                          {routeAnswers[idx] === 'OFFLINE' ? 'Undo Offline' : 'Mark Down'}
+                        </button>
                       </div>
+
                     </div>
                   )})}
                   

@@ -76,9 +76,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     return 0;
   });
 
-  // =========================================================================
-  // THE FIX: Strict Audit Compliance Engine (Un-stamps Assets)
-  // =========================================================================
   const revertAssetDates = async (log) => {
     if (!assets || assets.length === 0) return;
 
@@ -88,11 +85,10 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
       if (template) intervalToClear = template.interval;
     }
 
-    if (!intervalToClear) return; // Cannot revert if the frequency is unknown
+    if (!intervalToClear) return; 
 
     let assetsToUpdate = [];
 
-    // Find targets based on whether it was a master route or an individual PM
     if ((log.status || "").includes("Grouped Route") || log.executionMode === 'route') {
       if (log.assetsIncluded && log.assetsIncluded.length > 0) {
         assetsToUpdate = assets.filter(a => log.assetsIncluded.includes(a.name));
@@ -102,10 +98,9 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
       if (singleAsset) assetsToUpdate.push(singleAsset);
     }
 
-    // Forcefully remove the date stamp from the database
     for (const asset of assetsToUpdate) {
       const newPmDates = { ...(asset.pmDates || {}) };
-      delete newPmDates[intervalToClear]; // Un-stamp!
+      delete newPmDates[intervalToClear]; 
 
       const updatedAsset = { ...asset, pmDates: newPmDates };
 
@@ -134,10 +129,7 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
 
     try {
       for (const log of processedHistory) {
-        // Un-stamp the asset before destroying the paper trail
         await revertAssetDates(log);
-        
-        // Destroy the paper trail
         await window.fetch(`/api/history?id=${log.id}&bulk=true`, { method: 'DELETE' });
       }
       alert("Mass deletion complete! Audit logs removed and associated asset PM cycles have been reset.");
@@ -327,7 +319,13 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
               &larr; Back to Audit Trail
             </button>
             <button 
-              onClick={() => window.print()}
+              onClick={() => {
+                // THE FIX: Change document title before printing to set default PDF filename
+                const originalTitle = document.title;
+                document.title = `Maintenance Management Report - ${selectedLog.id || 'Log'}`;
+                window.print();
+                document.title = originalTitle;
+              }}
               className="bg-[#005596] hover:bg-[#003058] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-md flex items-center space-x-2"
             >
               <span>🖨️ Export to PDF</span>
@@ -341,7 +339,8 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                 <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto object-contain mb-1" />
               </div>
               <div className="text-right">
-                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Operations Management Report</h2>
+                {/* THE FIX: Updated visual header text to match */}
+                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Maintenance Management Report</h2>
                 <p className="text-xs font-mono text-gray-500 mt-1">Log ID: {selectedLog.id || `LOG-SYSTEM`}</p>
               </div>
             </div>
