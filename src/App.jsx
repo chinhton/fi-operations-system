@@ -17,7 +17,7 @@ import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
 import useDashboardStats from './hooks/useDashboardStats';
 
-const useIdleTimeout = (onTimeout, idleTime = 300000) => { // 300,000ms = 5 minutes
+const useIdleTimeout = (onTimeout, idleTime = 300000) => {
   const timeoutRef = useRef(null);
 
   const handleActivity = () => {
@@ -26,16 +26,12 @@ const useIdleTimeout = (onTimeout, idleTime = 300000) => { // 300,000ms = 5 minu
   };
 
   useEffect(() => {
-    // Start the timer when the app loads
     handleActivity();
-
-    // Reset the timer whenever the user does anything
     window.addEventListener('mousemove', handleActivity);
     window.addEventListener('keydown', handleActivity);
     window.addEventListener('click', handleActivity);
     window.addEventListener('scroll', handleActivity);
 
-    // Cleanup listeners if the component unmounts
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       window.removeEventListener('mousemove', handleActivity);
@@ -64,15 +60,11 @@ const isCategoryMatch = (templateCat, assetCat) => {
 
 export default function App() {
 
-  // Fires the timeout function after 5 minutes (300000 ms)
   useIdleTimeout(() => {
-    // Only trigger if someone is actually logged in
     if (currentUser) {
       alert("🔒 For security purposes, you have been logged out due to 5 minutes of inactivity.");
-      
-      // Execute your standard logout logic here
       setCurrentUser(null); 
-      localStorage.removeItem("fi_current_user"); // Adjust if your token name is different
+      localStorage.removeItem("fi_current_user"); 
       window.location.reload();
     }
   }, 300000);
@@ -82,11 +74,9 @@ export default function App() {
     return saved ? saved : "dashboard";
   });
   
-  // THE FIX: Added 'corrective' to the navOrder array
-  const [navOrder] = useState(['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
+  const [navOrder, setNavOrder] = useState(['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // --- NEW: Loading and Lazy Fetch States ---
   const [isAppLoading, setIsAppLoading] = useState(false);
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
   const [hasFetchedManuals, setHasFetchedManuals] = useState(false);
@@ -114,16 +104,12 @@ export default function App() {
   
   const { currentUser, setCurrentUser, isSystemAdmin } = auth;
 
-  // =========================================================================
-  // THE FIX: Parallel Core Fetching Engine
-  // =========================================================================
   useEffect(() => {
     if (!currentUser) return;
     
     const fetchCoreData = async () => {
       setIsAppLoading(true);
       try {
-        // Fire all critical database requests simultaneously
         const [usersRes, assetsRes, woRes, templatesRes, partsRes, vendorsRes, keysRes] = await Promise.all([
           window.fetch('/api/users').then(r => r.ok ? r.json() : []),
           window.fetch('/api/assets').then(r => r.ok ? r.json() : []),
@@ -141,6 +127,13 @@ export default function App() {
         setParts(partsRes);
         setVendors(vendorsRes);
         setKeys(keysRes);
+
+        // --- THE FIX: Load Personal Layout Preferences ---
+        const me = usersRes.find(u => u.email === currentUser.email);
+        if (me && me.preferences && me.preferences.navOrder) {
+          setNavOrder(me.preferences.navOrder);
+        }
+
       } catch (err) {
         console.error("Failed to load core system data:", err);
       } finally {
@@ -151,9 +144,6 @@ export default function App() {
     fetchCoreData();
   }, [currentUser]);
 
-  // =========================================================================
-  // THE FIX: Lazy Loading Heavy Data (History & Manuals)
-  // =========================================================================
   useEffect(() => {
     if (currentUser && activeTab === 'history' && !hasFetchedHistory) {
       window.fetch('/api/history').then(r => r.ok ? r.json() : []).then(data => {
@@ -188,6 +178,33 @@ export default function App() {
   const userDept = currentUser?.department || ""; 
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com' || userDept === 'System Administration';
+
+  // --- THE FIX: Function to push Personal UI changes to the Database ---
+  const handlePersonalNavChange = async (newOrder) => {
+    setNavOrder(newOrder); // Optimistic UI update
+    
+    const updatedUser = {
+      ...currentUser,
+      preferences: {
+        ...(currentUser.preferences || {}),
+        navOrder: newOrder
+      }
+    };
+    
+    try {
+      await window.fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUser)
+      });
+      
+      setCurrentUser(updatedUser);
+      localStorage.setItem('fi_oms_session', JSON.stringify(updatedUser));
+      setUsers(users.map(u => u.email === currentUser.email ? updatedUser : u));
+    } catch (err) {
+      console.error("Failed to save personal nav order to database:", err);
+    }
+  };
 
   const calculateNextPmDate = (lastDateStr, freq) => {
     if (!lastDateStr || !freq) return null;
@@ -237,17 +254,12 @@ export default function App() {
   };
 
   const triggerTeamsAlert = async (toAddress, subjectLine, bodyText) => {
-    // Your NEW 1-on-1 Direct Message Power Automate Webhook URL
     const TEAMS_WORKFLOW_URL = "https://default219b57d412c64e939bb9034df55e5a.7d.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/16/workflows/4e37b9d1b1384e2bb2185bf5825d2bf7/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=BQdLjB2TG8j6w0oqYYkQeCCnJstPI8MyXL-xqcqsFyg";
     
     try {
-      // Ensure we have a valid target (fallback to Admin if undefined)
       const targetEmails = toAddress && toAddress !== "" ? toAddress : "admin@fcimg.com";
-
-      // Split by semicolon in case a department has multiple managers
       const emailArray = targetEmails.split(';');
 
-      // Loop through each manager and fire a dedicated 1-on-1 payload
       for (const email of emailArray) {
           const cleanEmail = email.trim();
           if (!cleanEmail) continue;
@@ -264,7 +276,6 @@ export default function App() {
             body: JSON.stringify(payload) 
           });
       }
-      
       return true;
     } catch (err) { 
       console.error("Teams Workflow Error:", err);
@@ -391,10 +402,7 @@ export default function App() {
 
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
-              
-              // THE FIX: CC's the active operator (you) so you get the completion note in Teams!
               const targetEmails = `admin@fcimg.com;${activeUser.email}`;
-              
               triggerTeamsAlert(targetEmails, `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`);
           }
       }
@@ -436,9 +444,6 @@ export default function App() {
     );
   }
 
-  // =========================================================================
-  // THE FIX: The Global Loading Screen UI
-  // =========================================================================
   if (isAppLoading) {
     return (
       <div className="min-h-screen bg-[#F4F6F8] flex flex-col items-center justify-center">
@@ -477,7 +482,9 @@ export default function App() {
     templatesCount: visibleTemplates.length,
     historyCount: history.length,
     manualsCount: manuals.length,
-    keysCount: keys.length
+    keysCount: keys.length,
+    navOrder,                               // <-- Pass the DB nav order down to sidebar
+    onOrderChange: handlePersonalNavChange  // <-- Pass the PERSONAL save function down
   };
 
   return (
@@ -486,7 +493,7 @@ export default function App() {
       <TopHeader {...masterProps} />
       <KpiBanner {...masterProps} />
       <div className="flex flex-1 flex-col md:flex-row w-full max-w-full mx-auto mt-4">
-        <SidebarNav navOrder={navOrder} pendingApprovalsCount={isGodMode ? pendingApprovals.length : 0} {...masterProps} />
+        <SidebarNav pendingApprovalsCount={isGodMode ? pendingApprovals.length : 0} {...masterProps} />
         <ContentRouter {...masterProps} />
       </div>
       <GlobalModals {...masterProps} />
