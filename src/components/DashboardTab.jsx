@@ -420,7 +420,7 @@ export default function DashboardTab({
                               <button 
                                 onClick={(e) => {
                                   e.target.innerText = "NOTIFIED ✓"; e.target.classList.add("text-green-600");
-                                  triggerTeamsAlert(item.assignedTo.split(',')[0].trim(), `MANAGER NOTICE: Routine Task Pending for ${item.name}`, `Hello,\n\nStatus: ${item.displayStatus}\nAssigned: ${item.assignedTo}`);
+                                  triggerTeamsAlert(getManagerForDepartment(item.department), `MANAGER NOTICE: Routine Task Pending for ${item.name}`, `Hello,\n\nStatus: ${item.displayStatus}\nAssigned: ${item.assignedTo}`);
                                 }} 
                                 className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
                               >
