@@ -11,8 +11,26 @@ export default function CorrectiveActionsTab({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Filter for open corrective tickets
-  const activeCorrectives = workOrders.filter(wo => wo.category === "Corrective" && wo.status !== "Closed");
+  // --- THE FIX: Look directly at the Assets to catch manual status overrides ---
+  const offlineStatuses = ["Corrective Maintenance", "Out of Calibration", "Offline / Lockout"];
+  const downAssets = assets.filter(a => offlineStatuses.includes(a.status));
+
+  // Map the down assets into Action Queue tickets
+  const activeCorrectives = downAssets.map(asset => {
+    // Check if a formal Work Order was created via the PM execution hook
+    const relatedWO = workOrders.find(wo => wo.assetId === asset.id && wo.category === "Corrective" && wo.status !== "Closed");
+    
+    return {
+        id: relatedWO ? relatedWO.id : `FLAG-${asset.id.slice(-6).toUpperCase()}`,
+        assetId: asset.id,
+        assetName: asset.name,
+        title: relatedWO ? relatedWO.title : `System Flag: ${asset.status}`,
+        description: relatedWO ? relatedWO.description : `Asset profile was updated to ${asset.status}. Immediate resolution required to return to active service.`,
+        priority: relatedWO ? relatedWO.priority : "High",
+        dateCreated: relatedWO ? relatedWO.dateCreated : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        associatedWO: relatedWO // Store this so we can close it later if it exists
+    };
+  });
 
   // Handle local image upload and convert to Base64 string
   const handlePhotoUpload = (e) => {
@@ -34,27 +52,10 @@ export default function CorrectiveActionsTab({
     const exactTimestamp = new Date().toLocaleString('en-US');
 
     try {
-      // 1. Close the Corrective Action Ticket
-      const updatedWO = {
-        ...selectedAction,
-        status: "Closed",
-        resolutionNotes: resolutionNotes,
-        photoEvidence: attachedPhoto,
-        resolvedBy: currentUser?.name || "System Operator",
-        dateResolved: todayStr,
-        timestampResolved: exactTimestamp
-      };
-
-      await window.fetch('/api/workorders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedWO)
-      });
-
-      // 2. Reactivate the Asset
+      // 1. Reactivate the Asset back to "Active"
       const targetAsset = assets.find(a => a.id === selectedAction.assetId);
       if (targetAsset) {
-        const updatedAsset = { ...targetAsset, status: "Operational" };
+        const updatedAsset = { ...targetAsset, status: "Active" };
         await window.fetch('/api/assets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -62,7 +63,47 @@ export default function CorrectiveActionsTab({
         });
       }
 
-      alert("Corrective Action resolved, photo evidence saved, and equipment reactivated!");
+      // 2. If there was an actual Work Order ticket tied to it, close it out
+      if (selectedAction.associatedWO) {
+        const updatedWO = {
+          ...selectedAction.associatedWO,
+          status: "Closed",
+          resolutionNotes: resolutionNotes,
+          photoEvidence: attachedPhoto,
+          resolvedBy: currentUser?.name || "System Operator",
+          dateResolved: todayStr,
+          timestampResolved: exactTimestamp
+        };
+
+        await window.fetch('/api/workorders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedWO)
+        });
+      }
+
+      // 3. Generate a History Audit Log for the Repair
+      const historyPayload = {
+        id: `REP-${Date.now().toString().slice(-4)}`,
+        assetId: selectedAction.assetId, 
+        assetName: selectedAction.assetName, 
+        actionType: 'Corrective Action Resolution', 
+        templateName: 'System Repair Sign-Off', 
+        performedBy: currentUser?.name || "System Operator", 
+        performedByEmail: currentUser?.email || "",          
+        date: todayStr,                                      
+        timestamp: exactTimestamp,                           
+        status: 'Operational', 
+        comments: resolutionNotes 
+      };
+      
+      await window.fetch('/api/history', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(historyPayload) 
+      });
+
+      alert("Corrective Action resolved, audit log generated, and equipment reactivated!");
       window.location.reload();
 
     } catch (err) {

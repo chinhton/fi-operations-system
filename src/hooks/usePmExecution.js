@@ -6,7 +6,7 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
   const [selectedPmTemplate, setSelectedPmTemplate] = useState("");
   const [pmAnswers, setPmAnswers] = useState({});
   const [pmComments, setPmComments] = useState("");
-  const [pmStatusState, setPmStatusState] = useState("Operational");
+  const [pmStatusState, setPmStatusState] = useState("Active");
   const [isSubmittingPm, setIsSubmittingPm] = useState(false);
 
   const openPmModal = (asset, templateToAutoSelect = null) => {
@@ -14,7 +14,7 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
     setSelectedPmTemplate(templateToAutoSelect || ""); // Auto-selects if provided, otherwise leaves blank
     setPmAnswers({});
     setPmComments("");
-    setPmStatusState("Operational");
+    setPmStatusState("Active");
     setIsPmModalOpen(true);
   };
 
