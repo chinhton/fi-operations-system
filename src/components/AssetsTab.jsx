@@ -92,8 +92,8 @@ export default function AssetsTab({
     return currentUser?.preferences?.assetGrouping || localStorage.getItem("fi_oms_asset_grouping") || "category";
   });
 
-  const userDept = currentUser?.department || "";
-  const isDepartmentRestricted = !isSystemAdmin;
+  const isManager = currentUser?.role?.toLowerCase() === 'manager';
+const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleGroupChange = async (type) => {
     setGroupBy(type);
@@ -363,14 +363,9 @@ export default function AssetsTab({
     }
   };
 
-  const openRegisterForNew = () => {
-    const defaultDept = isDepartmentRestricted ? [userDept] : [];
-    setNewAsset({ name: "", manufacturer: "", model: "", serial: "", category: "", location: "", glAccount: "", parentId: "", department: defaultDept, operatorEmail: "", pmDates: {} });
-    setIsAddingNewCategory(false);
-    setOverrideFreq("");
-    setOverrideDate("");
-    setIsRegisterModalOpen(true);
-  };
+  const openAddModal = () => {
+    // Pre-fills with your department for speed, but remains unlocked for Managers!
+    const defaultDept = currentUser?.department && currentUser.department !== "Unassigned" ? [currentUser.department] : [];
 
   const openRegisterForEdit = (asset) => {
     setNewAsset(asset);
