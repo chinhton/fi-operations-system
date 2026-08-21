@@ -26,6 +26,13 @@ const customStyles = `
 
 const PM_CYCLE_OPTIONS = ["Daily", "Weekly", "Monthly", "Quarterly", "Semi-Annually", "Annually", "2-Year", "3-Year", "4-Year", "5-Year", "Calibration (Semi-Annual)", "Calibration (Annual)"];
 
+const isCategoryMatch = (templateCat, assetCat) => {
+  if (!templateCat) return false;
+  if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
+  if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
+  return templateCat === assetCat;
+};
+
 export default function App() {
   
   const [activeTab, setActiveTab] = useState(() => {
