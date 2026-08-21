@@ -49,7 +49,6 @@ export default function DashboardTab({
     setRouteAnswers({}); 
   };
 
-  // --- ADDED: ADMIN SWEEP TRIGGER ---
   const handleTestSweep = async () => {
     if (!window.confirm("Fire the daily sweep right now? This will send live Teams messages to operators with overdue assets.")) return;
     
@@ -296,7 +295,6 @@ export default function DashboardTab({
   return (
     <div className="space-y-8 animate-entrance w-full relative">
       
-      {/* --- ADDED: ADMIN TEST BUTTON IN UI --- */}
       {isSystemAdmin && (
         <div className="flex justify-end mt-2">
           <button 
@@ -812,7 +810,7 @@ export default function DashboardTab({
                     <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-colors">
                       <div className="w-full md:w-1/4 shrink-0">
                         {step.section ? (
-                          <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm">
+                          <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm max-w-[200px] truncate" title={step.section}>
                             {step.section}
                           </span>
                         ) : (
@@ -826,7 +824,6 @@ export default function DashboardTab({
                         <span className="text-sm font-bold text-gray-800">{stepLabel}</span>
                       </div>
                       
-                      {/* --- THE FIX: Status Override Toggle & Dynamic Inputs --- */}
                       <div className="w-full md:flex-1 flex flex-col md:flex-row gap-2 justify-end items-stretch md:items-center">
                         {routeAnswers[idx] === 'OFFLINE' ? (
                           <div className="flex-1 text-[11px] px-3 py-2 border border-red-200 rounded bg-red-50 text-red-700 font-bold text-center shadow-inner uppercase tracking-wider flex items-center justify-center">
@@ -890,10 +887,10 @@ export default function DashboardTab({
                 className={`bg-purple-700 hover:bg-purple-800 text-white px-6 py-2.5 rounded text-xs font-bold uppercase tracking-wider shadow-sm transition-all flex items-center space-x-2 ${isSavingRoute ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isSavingRoute ? (
-                  <span>Processing Avalanche...</span>
+                  <span>Submitting PM...</span>
                 ) : (
                   <>
-                    <span>Submit & Sync Route</span>
+                    <span>Submit PM</span>
                     <span className="bg-white/20 px-2 py-0.5 rounded text-[10px]">({activeRoute.rawItem.length})</span>
                   </>
                 )}

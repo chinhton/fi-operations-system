@@ -441,11 +441,13 @@ export default function TemplatesTab({
 
                   <div className="space-y-1.5 mb-5">
                     <div className="flex items-start text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Map:</span>
-                      <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global' || template.targetCategory.length === 0) ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
-                        {Array.isArray(template.targetCategory) ? template.targetCategory.join(', ') : (template.targetCategory || "Global")}
-                      </span>
-                    </div>
+                    <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Map:</span>
+                    <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global' || template.targetCategory.length === 0) ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
+                    {Array.isArray(template.targetCategory) && template.targetCategory.length > 2 
+                     ? `${template.targetCategory.length} Facility Assets` 
+                     : (Array.isArray(template.targetCategory) ? template.targetCategory.join(', ') : (template.targetCategory || "Global"))}
+                     </span>
+                  </div>
                     <div className="flex items-start text-[10px]">
                       <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Dept:</span>
                       <span className="text-gray-700 font-bold block leading-tight">
