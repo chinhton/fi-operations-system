@@ -49,16 +49,14 @@ export default function DashboardTab({
     setRouteAnswers({}); 
   };
 
-  // --- THE FIX: Smart, detailed alert function that notifies both Manager & Operator ---
   const handleSendAlert = (e, item, isEscalation = false) => {
     e.target.innerText = isEscalation ? "ESCALATED ✓" : "NOTIFIED ✓"; 
     e.target.classList.add("text-green-600");
-    e.target.disabled = true; // Prevents clicking twice
+    e.target.disabled = true;
 
     const managerEmails = getManagerForDepartment(item.department);
     const operatorEmail = item.assignedTo && item.assignedTo.includes('@') ? item.assignedTo : null;
     
-    // Combine emails and remove duplicates using a Set
     const emailSet = new Set(managerEmails.split(';').filter(Boolean));
     if (operatorEmail) emailSet.add(operatorEmail);
     const targetEmails = Array.from(emailSet).join(';');
@@ -92,9 +90,6 @@ export default function DashboardTab({
 
   if (assets && pmTemplates && calculateDaysRemaining) {
     
-    // ==========================================
-    // GROUPED ROUTES
-    // ==========================================
     const routeTemplates = pmTemplates.filter(t => t.executionMode === 'route');
     routeTemplates.forEach(template => {
         const mappedAssets = assets.filter(a => a.status !== "Inactive" && isCategoryMatch(template.targetCategory, a.category));
@@ -167,9 +162,6 @@ export default function DashboardTab({
         }
     });
 
-    // ==========================================
-    // INDIVIDUAL ASSET PMs
-    // ==========================================
     assets.forEach(asset => {
       if (asset.status === "Inactive") return;
 
@@ -531,12 +523,23 @@ export default function DashboardTab({
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-red-600 font-mono font-bold">{item.displayDate}</div>
-                            {item.type === 'asset' && (
-                              <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
-                            )}
-                            {item.type === 'route' && (
-                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
-                            )}
+                            
+                            <div className="flex items-center space-x-3 mt-1">
+                              <button 
+                                onClick={(e) => handleSendAlert(e, item, true)} 
+                                className="block text-right text-[10px] text-orange-600 font-extrabold uppercase tracking-wider hover:underline transition-all"
+                              >
+                                🔔 Alert Operator
+                              </button>
+
+                              {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                              )}
+                              {item.type === 'route' && (
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                              )}
+                            </div>
+
                           </div>
                         </div>
                       ))}
@@ -568,12 +571,23 @@ export default function DashboardTab({
                           </div>
                           <div className="text-right ml-4 flex flex-col items-end">
                             <div className="mb-2 text-[10px] text-indigo-600 font-mono font-bold">{item.displayDate}</div>
-                            {item.type === 'asset' && (
-                              <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
-                            )}
-                            {item.type === 'route' && (
-                              <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
-                            )}
+                            
+                            <div className="flex items-center space-x-3 mt-1">
+                              <button 
+                                onClick={(e) => handleSendAlert(e, item, false)} 
+                                className="block text-right text-[10px] text-[#00A1E4] font-extrabold uppercase tracking-wider hover:underline transition-all"
+                              >
+                                ✉️ Notify Operator
+                              </button>
+
+                              {item.type === 'asset' && (
+                                <button onClick={() => openPmModal(item.rawItem, item.targetTemplate)} className="block text-right text-[10px] text-[#005596] font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                              )}
+                              {item.type === 'route' && (
+                                <button onClick={() => openRouteModal(item)} className="block text-right text-[10px] text-purple-700 font-extrabold uppercase tracking-wider hover:underline transition-all">Execute PM &rarr;</button>
+                              )}
+                            </div>
+
                           </div>
                         </div>
                       ))}
