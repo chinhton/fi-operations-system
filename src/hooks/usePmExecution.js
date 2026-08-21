@@ -35,7 +35,11 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
       
       if (!updatedAsset.pmDates) updatedAsset.pmDates = {};
       updatedAsset.pmDates[selectedPmTemplate.interval] = todayStr;
-      updatedAsset.status = pmStatusState;
+      
+      // If any answer was marked OFFLINE, force the status to Corrective Maintenance
+      const hasOfflineAnswers = Object.values(pmAnswers).some(val => val === 'OFFLINE');
+      const finalStatus = hasOfflineAnswers ? "Corrective Maintenance" : pmStatusState;
+      updatedAsset.status = finalStatus;
 
       // --- EXPLICIT WINDOW.FETCH FOR INTERCEPTOR ---
       await window.fetch('/api/assets', { 
@@ -57,7 +61,7 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
         performedByEmail: currentUser?.email || "",          
         date: todayStr,                                      
         timestamp: exactTimestamp,                           
-        status: pmStatusState, 
+        status: finalStatus, 
         comments: pmComments, 
         responses: pmAnswers 
       };
@@ -67,6 +71,30 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(historyPayload) 
       });
+
+      // --- THE FIX: DYNAMIC CORRECTIVE ACTION SPAWNING ---
+      if (finalStatus === "Corrective Maintenance" || finalStatus === "Out of Calibration") {
+        const newWorkOrder = {
+          id: `WO-${Date.now()}`,
+          title: `AUTO-FLAG: ${finalStatus} - ${selectedPmAsset.name}`,
+          description: `Automatically generated from failed PM execution.\n\nSOP: ${selectedPmTemplate.name}\nNotes: ${pmComments}`,
+          status: "Open",
+          priority: "High",
+          category: "Corrective",
+          assetId: selectedPmAsset.id,
+          assetName: selectedPmAsset.name,
+          assignedTo: selectedPmAsset.operatorEmail || "Unassigned",
+          createdBy: currentUser?.email || "System",
+          dateCreated: todayStr,
+          dueDate: new Date(Date.now() + 86400000 * 3).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) // Due in 3 days
+        };
+
+        await window.fetch('/api/workorders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newWorkOrder)
+        });
+      }
 
       setAssets(assets.map(a => a.id === selectedPmAsset.id ? updatedAsset : a));
       setHistory([historyPayload, ...history]);

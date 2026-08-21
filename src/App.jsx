@@ -82,7 +82,8 @@ export default function App() {
     return saved ? saved : "dashboard";
   });
   
-  const [navOrder] = useState(['dashboard', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
+  // THE FIX: Added 'corrective' to the navOrder array
+  const [navOrder] = useState(['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // --- NEW: Loading and Lazy Fetch States ---
@@ -390,7 +391,11 @@ export default function App() {
 
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
-              triggerTeamsAlert("admin@fcimg.com", `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`);
+              
+              // THE FIX: CC's the active operator (you) so you get the completion note in Teams!
+              const targetEmails = `admin@fcimg.com;${activeUser.email}`;
+              
+              triggerTeamsAlert(targetEmails, `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`);
           }
       }
 

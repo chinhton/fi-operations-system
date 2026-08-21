@@ -6,6 +6,7 @@ import AssetsTab from './AssetsTab';
 // --- NEW MODULE IMPORTS ---
 import HardwareVendorsTab from './HardwareVendorsTab';
 import KeyManagementTab from './KeyManagementTab'; 
+import CorrectiveActionsTab from './CorrectiveActionsTab';
 
 import ManualsTab from './ManualsTab';
 import TemplatesTab from './TemplatesTab';
@@ -20,6 +21,10 @@ export default function ContentRouter(props) {
   return (
     <main className="flex-grow p-4 md:p-8">
       {props.activeTab === "dashboard" && <DashboardTab {...props} />}
+      
+      {/* --- CORRECTIVE ACTIONS TAB ROUTED HERE --- */}
+      {props.activeTab === "corrective" && <CorrectiveActionsTab {...props} />}
+
       {props.activeTab === "workOrders" && <WorkOrdersTab {...props} />}
       {props.activeTab === "assets" && <AssetsTab {...props} />}
       
