@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
-const { sendTeamsMessage } = require('./teamsService'); // <-- Importing the central helper
+const { sendTeamsMessage } = require('./teamsService'); 
 
 app.http('dailySweep', {
     methods: ['GET', 'POST'],
@@ -23,9 +23,8 @@ app.http('dailySweep', {
             today.setHours(0, 0, 0, 0);
             const todayStr = today.toLocaleDateString('en-US');
 
-            const criticalList = [];
-            const dueTodayList = [];
-            const upcomingList = [];
+            // --- THE FIX: Group by Operator Email ---
+            const userDigests = {}; 
 
             const calculateNextPmDate = (lastDateStr, freq) => {
                 if (!lastDateStr || !freq) return null;
@@ -50,7 +49,7 @@ app.http('dailySweep', {
                 return nextDate;
             };
 
-            const categorizeItem = (itemName, itemId, targetDate, isCriticalStatus, assignedTo) => {
+            const categorizeItem = (itemName, itemId, targetDate, isCriticalStatus, assignedToEmail) => {
                 let diffDays;
                 if (isCriticalStatus) {
                     diffDays = -1; 
@@ -59,15 +58,22 @@ app.http('dailySweep', {
                     diffDays = Math.round((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                 }
 
-                const assignee = assignedTo || 'Unassigned';
-                const itemString = `• **${itemName}** (S/N: ${itemId}) - OP: ${assignee}`;
+                // Determine target email (fallback to admin)
+                const email = (assignedToEmail && assignedToEmail !== 'Unassigned') ? assignedToEmail : 'admin@fcimg.com';
+
+                // Initialize their bucket if it doesn't exist yet
+                if (!userDigests[email]) {
+                    userDigests[email] = { critical: [], dueToday: [], upcoming: [] };
+                }
+
+                const itemString = `• **${itemName}** (S/N: ${itemId})`;
 
                 if (diffDays < 0) {
-                    criticalList.push(`${itemString} *(Overdue by ${Math.abs(diffDays)} days)*`);
+                    userDigests[email].critical.push(`${itemString} *(Overdue by ${Math.abs(diffDays)} days)*`);
                 } else if (diffDays === 0) {
-                    dueTodayList.push(itemString);
+                    userDigests[email].dueToday.push(itemString);
                 } else if (diffDays === 5) {
-                    upcomingList.push(itemString);
+                    userDigests[email].upcoming.push(itemString);
                 }
             };
 
@@ -100,23 +106,25 @@ app.http('dailySweep', {
                 }
             }
 
-            // --- REPLACED: Using central teamsService instead of internal function ---
+            // --- THE FIX: Send personalized messages per operator ---
             let sentCount = 0;
-            if (criticalList.length > 0) {
-                await sendTeamsMessage(`CRITICAL: ${criticalList.length} Overdue Action(s)`, `The following systems are overdue and require immediate compliance action:\n\n${criticalList.join('\n\n')}`, null, "Attention");
-                sentCount++;
+            
+            for (const [email, lists] of Object.entries(userDigests)) {
+                if (lists.critical.length > 0) {
+                    await sendTeamsMessage(email, `CRITICAL: ${lists.critical.length} Overdue Action(s)`, `The following systems assigned to you are overdue and require immediate compliance action:\n\n${lists.critical.join('\n\n')}`);
+                    sentCount++;
+                }
+                if (lists.dueToday.length > 0) {
+                    await sendTeamsMessage(email, `DUE TODAY: ${lists.dueToday.length} Action(s)`, `The following routine maintenance actions assigned to you must be completed today:\n\n${lists.dueToday.join('\n\n')}`);
+                    sentCount++;
+                }
+                if (lists.upcoming.length > 0) {
+                    await sendTeamsMessage(email, `UPCOMING: ${lists.upcoming.length} Action(s) Due in 5 Days`, `Advanced warning for systems assigned to you. Please ensure any required parts are ordered:\n\n${lists.upcoming.join('\n\n')}`);
+                    sentCount++;
+                }
             }
-            if (dueTodayList.length > 0) {
-                await sendTeamsMessage(`DUE TODAY: ${dueTodayList.length} Action(s)`, `The following routine maintenance actions must be completed today:\n\n${dueTodayList.join('\n\n')}`, null, "Warning");
-                sentCount++;
-            }
-            if (upcomingList.length > 0) {
-                await sendTeamsMessage(`UPCOMING: ${upcomingList.length} Action(s) Due in 5 Days`, `Advanced warning for the following systems. Please ensure any required parts are ordered and external vendors are scheduled:\n\n${upcomingList.join('\n\n')}`, null, "Accent");
-                sentCount++;
-            }
-            // -------------------------------------------------------------------------
 
-            return { status: 200, body: `Sweep completed. ${sentCount} digest(s) pushed to Teams.` };
+            return { status: 200, body: `Sweep completed. ${sentCount} personalized digest(s) pushed to Teams.` };
 
         } catch (error) {
             return { status: 500, body: `Error running sweep: ${error.message}` };
