@@ -25,7 +25,6 @@ const parseCSV = (str) => {
   return arr;
 };
 
-// Updated to handle the new Limits/Notes column data
 const encodeSteps = (steps) => {
   if (!steps || !Array.isArray(steps)) return "";
   return steps.map(s => `[${s.type}] ${s.section ? `{${s.section}} ` : ''}${s.label}${s.limits ? ` <${s.limits}>` : ''}`).join(' | ');
@@ -60,6 +59,7 @@ export default function TemplatesTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState(null);
   
   const [syncProgress, setSyncProgress] = useState({ active: false, action: '', current: 0, total: 0 });
   
@@ -72,7 +72,7 @@ export default function TemplatesTab({
     targetCategory: [],
     managerEmail: "",
     operatorEmail: "",
-    contractor: "", // <-- NEW FIELD
+    contractor: "",
     checklistSteps: [],
     attachedManualName: "",
     attachedManualData: null
@@ -80,7 +80,6 @@ export default function TemplatesTab({
 
   const fileInputRef = useRef(null);
 
-  // --- THE BUG FIX FROM EARLIER ---
   const userDept = currentUser?.department || "Unassigned";
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
@@ -332,6 +331,29 @@ export default function TemplatesTab({
     }
   }
 
+  // --- DRAG AND DROP REORDER HANDLER ---
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const updatedSteps = [...(newTemplate.checklistSteps || [])];
+    const [movedItem] = updatedSteps.splice(draggedIndex, 1);
+    updatedSteps.splice(targetIndex, 0, movedItem);
+
+    setNewTemplate({ ...newTemplate, checklistSteps: updatedSteps });
+    setDraggedIndex(null);
+  };
+
   return (
     <div className="space-y-8 animate-entrance w-full">
       
@@ -405,7 +427,6 @@ export default function TemplatesTab({
                     </span>
                   </div>
                   
-                  {/* --- VISUAL INDICATOR FOR EXECUTION MODE --- */}
                   <div className="mb-4">
                     {template.executionMode === 'route' ? (
                       <span className="inline-flex items-center space-x-1.5 bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider">
@@ -643,7 +664,6 @@ export default function TemplatesTab({
                   </div>
                 </div>
 
-                {/* --- NEW CONTRACTOR FIELD --- */}
                 <div>
                   <label className="block text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">Assign Contractor / Vendor (Optional)</label>
                   <input 
@@ -656,25 +676,37 @@ export default function TemplatesTab({
                 </div>
                 
                 <div className="md:col-span-2 mt-2">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
+                  <div className="flex justify-between items-center mb-3">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Dynamic Protocol Actions</label>
+                    <span className="text-[10px] text-gray-400 font-bold">💡 Tip: Drag ⠿ handle to reorder rows</span>
+                  </div>
                   
                   <div className="mb-4 max-h-96 overflow-y-auto border border-gray-200 rounded shadow-inner bg-white">
                     <table className="min-w-full divide-y divide-gray-200 text-left">
                       <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 tracking-wider sticky top-0 z-10 shadow-sm">
                         <tr>
-                          <th className="px-4 py-3 w-12 text-center border-r border-gray-200">#</th>
+                          <th className="px-3 py-3 w-14 text-center border-r border-gray-200">#</th>
                           <th className="px-4 py-3 w-48 border-r border-gray-200">Asset / Section Tag</th>
                           <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
-                          {/* --- NEW LIMITS COLUMN --- */}
                           <th className="px-4 py-3 w-40 border-r border-gray-200">Limits / Notes</th>
                           <th className="px-4 py-3 w-32 border-r border-gray-200">Input Type</th>
-                          <th className="px-4 py-3 w-20 text-center">Actions</th>
+                          <th className="px-4 py-3 w-28 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
                         {newTemplate.checklistSteps?.map((step, idx) => (
-                          <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
-                            <td className="px-4 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50">{idx + 1}</td>
+                          <tr 
+                            key={idx} 
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, idx)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, idx)}
+                            className={`transition-colors group ${draggedIndex === idx ? 'bg-purple-100/70 opacity-50' : 'hover:bg-blue-50/30'}`}
+                          >
+                            <td className="px-2 py-3 text-center font-mono font-bold text-gray-500 border-r border-gray-100 bg-gray-50/50 flex items-center justify-center space-x-1 cursor-grab active:cursor-grabbing select-none" title="Drag to reorder">
+                              <span className="text-gray-400 group-hover:text-purple-600 font-bold">⠿</span>
+                              <span>{idx + 1}</span>
+                            </td>
                             
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
@@ -705,7 +737,6 @@ export default function TemplatesTab({
                               />
                             </td>
 
-                            {/* --- NEW LIMITS INPUT ROW --- */}
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
                                 type="text" 
@@ -743,7 +774,22 @@ export default function TemplatesTab({
                               </select>
                             </td>
 
-                            <td className="px-4 py-3 text-center flex justify-center items-center space-x-3 mt-1">
+                            <td className="px-2 py-3 text-center flex justify-center items-center space-x-2 mt-1">
+                              {/* --- INLINE ADD BELOW BUTTON --- */}
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const newSteps = [...newTemplate.checklistSteps];
+                                  newSteps.splice(idx + 1, 0, { type: 'checkbox', section: step.section || "", label: '', limits: '' });
+                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                                }} 
+                                className="text-emerald-600 hover:text-emerald-800 transition-colors text-sm font-bold" 
+                                title="Insert New Row Below"
+                              >
+                                ➕
+                              </button>
+
+                              {/* --- DUPLICATE ROW BUTTON --- */}
                               <button 
                                 type="button" 
                                 onClick={() => {
@@ -757,6 +803,7 @@ export default function TemplatesTab({
                                 📋
                               </button>
 
+                              {/* --- REMOVE ROW BUTTON --- */}
                               <button 
                                 type="button" 
                                 onClick={() => {
@@ -780,7 +827,6 @@ export default function TemplatesTab({
                     )}
                   </div>
 
-                  {/* --- UPDATED BUILDER BAR WITH LIMITS INPUT --- */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
                     <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-40 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
