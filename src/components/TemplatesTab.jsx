@@ -79,6 +79,7 @@ export default function TemplatesTab({
 
   const fileInputRef = useRef(null);
 
+  const userDept = currentUser?.department || "Unassigned";
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
