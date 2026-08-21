@@ -17,6 +17,37 @@ import useManuals from './hooks/useManuals';
 import usePmExecution from './hooks/usePmExecution';
 import useDashboardStats from './hooks/useDashboardStats';
 
+import { useEffect, useRef } from 'react';
+
+const useIdleTimeout = (onTimeout, idleTime = 300000) => { // 300,000ms = 5 minutes
+  const timeoutRef = useRef(null);
+
+  const handleActivity = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(onTimeout, idleTime);
+  };
+
+  useEffect(() => {
+    // Start the timer when the app loads
+    handleActivity();
+
+    // Reset the timer whenever the user does anything
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('scroll', handleActivity);
+
+    // Cleanup listeners if the component unmounts
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('scroll', handleActivity);
+    };
+  }, []);
+};
+
 const customStyles = `
   body { font-family: 'Verdana', Geneva, sans-serif !important; background-color: #F4F6F8; color: #1A2530; }
   @keyframes movingGradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
@@ -34,6 +65,19 @@ const isCategoryMatch = (templateCat, assetCat) => {
 };
 
 export default function App() {
+
+  // Fires the timeout function after 5 minutes (300000 ms)
+  useIdleTimeout(() => {
+    // Only trigger if someone is actually logged in
+    if (currentUser) {
+      alert("🔒 For security purposes, you have been logged out due to 5 minutes of inactivity.");
+      
+      // Execute your standard logout logic here
+      setCurrentUser(null); 
+      localStorage.removeItem("fi_current_user"); // Adjust if your token name is different
+      window.location.reload();
+    }
+  }, 300000);
   
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem("fi_current_tab");
