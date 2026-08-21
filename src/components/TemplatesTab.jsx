@@ -79,8 +79,8 @@ export default function TemplatesTab({
 
   const fileInputRef = useRef(null);
 
-  const userDept = currentUser?.department || "";
-  const isDepartmentRestricted = !isSystemAdmin;
+  const isManager = currentUser?.role?.toLowerCase() === 'manager';
+  const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleExportCSV = () => {
     const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
@@ -230,7 +230,8 @@ export default function TemplatesTab({
   };
 
   const openBuildModal = () => {
-    const defaultDept = isDepartmentRestricted ? [userDept] : [];
+    // Pre-fills with your department for speed, but remains unlocked for Managers!
+    const defaultDept = userDept && userDept !== "Unassigned" ? [userDept] : [];
     setNewTemplate({
       id: '',
       name: "",
