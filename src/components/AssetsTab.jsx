@@ -93,7 +93,7 @@ export default function AssetsTab({
   });
 
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
-const isDepartmentRestricted = !isSystemAdmin && !isManager;
+  const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleGroupChange = async (type) => {
     setGroupBy(type);
@@ -363,9 +363,32 @@ const isDepartmentRestricted = !isSystemAdmin && !isManager;
     }
   };
 
-  const openAddModal = () => {
+  // --- THE FULLY RESTORED FUNCTION ---
+  const openRegisterForNew = () => {
     // Pre-fills with your department for speed, but remains unlocked for Managers!
     const defaultDept = currentUser?.department && currentUser.department !== "Unassigned" ? [currentUser.department] : [];
+    
+    setNewAsset({
+      id: '',
+      name: '',
+      manufacturer: '',
+      model: '',
+      serial: '',
+      category: '',
+      location: '',
+      glAccount: '',
+      department: defaultDept,
+      operatorEmail: '',
+      status: 'Active',
+      pmDates: {},
+      parentId: ''
+    });
+    
+    setIsAddingNewCategory(false);
+    setOverrideFreq("");
+    setOverrideDate("");
+    setIsRegisterModalOpen(true);
+  };
 
   const openRegisterForEdit = (asset) => {
     setNewAsset(asset);
