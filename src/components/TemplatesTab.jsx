@@ -25,25 +25,25 @@ const parseCSV = (str) => {
   return arr;
 };
 
+// Updated to handle the new Limits/Notes column data
 const encodeSteps = (steps) => {
   if (!steps || !Array.isArray(steps)) return "";
-  return steps.map(s => `[${s.type}] ${s.section ? `{${s.section}} ` : ''}${s.label}`).join(' | ');
+  return steps.map(s => `[${s.type}] ${s.section ? `{${s.section}} ` : ''}${s.label}${s.limits ? ` <${s.limits}>` : ''}`).join(' | ');
 };
 
 const decodeSteps = (stepString) => {
   if (!stepString) return [];
   return stepString.split(/\s*\|\s*/).filter(Boolean).map(s => {
-    const match = s.match(/^\[(.*?)\]\s*(?:\{(.*?)\}\s*)?(.*)$/);
+    const match = s.match(/^\[(.*?)\]\s*(?:\{(.*?)\}\s*)?(.*?)(?:\s*<(.*?)>)?$/);
     if (match) {
       let t = match[1].toLowerCase().trim();
       if (!['checkbox', 'text', 'number', 'passfail'].includes(t)) t = 'checkbox';
-      return { type: t, section: match[2] ? match[2].trim() : "", label: match[3].trim() };
+      return { type: t, section: match[2] ? match[2].trim() : "", label: match[3].trim(), limits: match[4] ? match[4].trim() : "" };
     }
-    return { type: 'checkbox', section: "", label: s.trim() }; 
+    return { type: 'checkbox', section: "", label: s.trim(), limits: "" }; 
   });
 };
 
-// --- ADDED HELPER FUNCTION HERE ---
 const isCategoryMatch = (templateCat, assetCat) => {
   if (!templateCat) return false;
   if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
@@ -72,6 +72,7 @@ export default function TemplatesTab({
     targetCategory: [],
     managerEmail: "",
     operatorEmail: "",
+    contractor: "", // <-- NEW FIELD
     checklistSteps: [],
     attachedManualName: "",
     attachedManualData: null
@@ -79,12 +80,13 @@ export default function TemplatesTab({
 
   const fileInputRef = useRef(null);
 
+  // --- THE BUG FIX FROM EARLIER ---
   const userDept = currentUser?.department || "Unassigned";
   const isManager = currentUser?.role?.toLowerCase() === 'manager';
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleExportCSV = () => {
-    const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
+    const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
     pmTemplates.forEach(template => {
@@ -161,6 +163,7 @@ export default function TemplatesTab({
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
             operatorEmail: rowObj['operatorEmail'] || "",
+            contractor: rowObj['contractor'] || "",
             attachedManualName: rowObj['attachedManualName'] || "",
             checklistSteps: decodeSteps(rowObj['checklistSteps'] || "")
           };
@@ -231,7 +234,6 @@ export default function TemplatesTab({
   };
 
   const openBuildModal = () => {
-    // Pre-fills with your department for speed, but remains unlocked for Managers!
     const defaultDept = userDept && userDept !== "Unassigned" ? [userDept] : [];
     setNewTemplate({
       id: '',
@@ -242,6 +244,7 @@ export default function TemplatesTab({
       targetCategory: [],
       managerEmail: "",
       operatorEmail: "",
+      contractor: "",
       checklistSteps: [],
       attachedManualName: "",
       attachedManualData: null
@@ -250,7 +253,7 @@ export default function TemplatesTab({
   };
 
   const openEditModal = (template) => {
-    setNewTemplate({ ...template, executionMode: template.executionMode || 'asset' });
+    setNewTemplate({ ...template, executionMode: template.executionMode || 'asset', contractor: template.contractor || "" });
     setShowTemplateModal(true);
   };
 
@@ -428,6 +431,12 @@ export default function TemplatesTab({
                         {Array.isArray(template.department) ? template.department.join(', ') : (template.department || 'Global')}
                       </span>
                     </div>
+                    {template.contractor && (
+                      <div className="flex items-center text-[10px]">
+                        <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0">Vendor:</span>
+                        <span className="text-amber-600 font-bold">{template.contractor}</span>
+                      </div>
+                    )}
                     <div className="flex items-center text-[10px]">
                       <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0">Actions:</span>
                       <span className="text-gray-700 font-mono font-bold">{template.checklistSteps?.length || 0} Steps Configured</span>
@@ -633,6 +642,18 @@ export default function TemplatesTab({
                     </div>
                   </div>
                 </div>
+
+                {/* --- NEW CONTRACTOR FIELD --- */}
+                <div>
+                  <label className="block text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">Assign Contractor / Vendor (Optional)</label>
+                  <input 
+                    type="text" 
+                    value={newTemplate.contractor || ""} 
+                    onChange={(e) => setNewTemplate({...newTemplate, contractor: e.target.value})} 
+                    placeholder="e.g. ACME HVAC Services..." 
+                    className="w-full text-xs rounded border-amber-200 shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 p-2.5 border bg-amber-50/30 outline-none"
+                  />
+                </div>
                 
                 <div className="md:col-span-2 mt-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">Dynamic Protocol Actions</label>
@@ -644,6 +665,8 @@ export default function TemplatesTab({
                           <th className="px-4 py-3 w-12 text-center border-r border-gray-200">#</th>
                           <th className="px-4 py-3 w-48 border-r border-gray-200">Asset / Section Tag</th>
                           <th className="px-4 py-3 border-r border-gray-200">Checklist Action</th>
+                          {/* --- NEW LIMITS COLUMN --- */}
+                          <th className="px-4 py-3 w-40 border-r border-gray-200">Limits / Notes</th>
                           <th className="px-4 py-3 w-32 border-r border-gray-200">Input Type</th>
                           <th className="px-4 py-3 w-20 text-center">Actions</th>
                         </tr>
@@ -671,7 +694,7 @@ export default function TemplatesTab({
                             <td className="px-2 py-2 border-r border-gray-100">
                               <input 
                                 type="text" 
-                                value={step.label} 
+                                value={step.label || ""} 
                                 onChange={(e) => {
                                   const newSteps = [...newTemplate.checklistSteps];
                                   newSteps[idx].label = e.target.value;
@@ -681,8 +704,23 @@ export default function TemplatesTab({
                                 className="w-full text-xs font-medium text-gray-800 bg-transparent border border-transparent hover:border-gray-200 focus:bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] px-2 py-1.5 rounded outline-none transition-all"
                               />
                             </td>
+
+                            {/* --- NEW LIMITS INPUT ROW --- */}
                             <td className="px-2 py-2 border-r border-gray-100">
-                              {/* --- UPDATED: Dynamic Color Coding for Input Types --- */}
+                              <input 
+                                type="text" 
+                                value={step.limits || ""} 
+                                onChange={(e) => {
+                                  const newSteps = [...newTemplate.checklistSteps];
+                                  newSteps[idx].limits = e.target.value;
+                                  setNewTemplate({...newTemplate, checklistSteps: newSteps});
+                                }}
+                                placeholder="e.g. 40-50 PSI"
+                                className="w-full text-xs font-medium text-gray-600 bg-transparent border border-transparent hover:border-gray-200 focus:bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] px-2 py-1.5 rounded outline-none transition-all"
+                              />
+                            </td>
+
+                            <td className="px-2 py-2 border-r border-gray-100">
                               <select 
                                 value={step.type} 
                                 onChange={(e) => {
@@ -742,6 +780,7 @@ export default function TemplatesTab({
                     )}
                   </div>
 
+                  {/* --- UPDATED BUILDER BAR WITH LIMITS INPUT --- */}
                   <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 items-stretch bg-gray-50 p-3 rounded border border-gray-200">
                     <select id="builderTypeSOPModal" className="text-xs border border-gray-300 rounded p-2.5 bg-white cursor-pointer w-full md:w-40 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]">
                         <option value="checkbox">Checkbox (Done/Not Done)</option>
@@ -760,15 +799,19 @@ export default function TemplatesTab({
                     
                     <input type="text" id="builderLabelSOPModal" placeholder="Action description, question, or parameter..." className="flex-1 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepSOPModal').click(); }}} />
                     
+                    <input type="text" id="builderLimitsSOPModal" placeholder="Limits or Notes (Opt.)" className="w-full md:w-40 text-xs border border-gray-300 rounded p-2.5 shadow-inner focus:outline-none focus:ring-2 focus:ring-[#00A1E4]" onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); document.getElementById('btnAddStepSOPModal').click(); }}} />
+
                     <button type="button" id="btnAddStepSOPModal" onClick={() => {
                         const type = document.getElementById('builderTypeSOPModal').value;
                         const section = document.getElementById('builderSectionSOPModal').value.trim();
                         const label = document.getElementById('builderLabelSOPModal').value.trim();
+                        const limits = document.getElementById('builderLimitsSOPModal').value.trim();
                         if(!label) return;
                         
-                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, section, label }]});
+                        setNewTemplate({...newTemplate, checklistSteps: [...(newTemplate.checklistSteps || []), { type, section, label, limits }]});
                         
                         document.getElementById('builderLabelSOPModal').value = '';
+                        document.getElementById('builderLimitsSOPModal').value = '';
                     }} className="bg-gray-800 hover:bg-gray-700 text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-sm whitespace-nowrap">Add Row</button>
                   </div>
                 </div>
