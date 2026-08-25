@@ -4,7 +4,6 @@ export default function KpiBanner({ complianceRate, assetsCount = 0, activeCount
   return (
     <div className="bg-[#0081b8] border-b border-[#00608a] shadow-inner w-full">
       <div className="w-full px-4 py-6 md:px-6">
-        {/* Switched to lg:grid-cols-8 to fit the new separated Inspection stat */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 lg:gap-4">
           
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
@@ -38,12 +37,12 @@ export default function KpiBanner({ complianceRate, assetsCount = 0, activeCount
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-red-300 uppercase tracking-wider mb-2">Calibration</h3>
+            <h3 className="text-[9px] xl:text-[10px] font-black text-red-300 uppercase tracking-wider mb-2">Overdue Calibration</h3>
             <div className="text-2xl xl:text-3xl font-black text-white">{calibrationCount}</div>
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-orange-300 uppercase tracking-wider mb-2">Corrective</h3>
+            <h3 className="text-[9px] xl:text-[10px] font-black text-orange-300 uppercase tracking-wider mb-2">Corrective Maintenance</h3>
             <div className="text-2xl xl:text-3xl font-black text-white">{correctiveCount}</div>
           </div>
 

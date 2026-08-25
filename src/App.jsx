@@ -64,7 +64,7 @@ export default function App() {
     if (currentUser) {
       alert("🔒 For security purposes, you have been logged out due to 5 minutes of inactivity.");
       setCurrentUser(null); 
-      localStorage.removeItem("fi_current_user"); 
+      localStorage.removeItem("fi_oms_session"); // <-- THE FIX: Use the correct session key
       window.location.reload();
     }
   }, 300000);
