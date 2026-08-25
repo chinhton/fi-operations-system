@@ -206,10 +206,7 @@ export default function App() {
 
   const calculateNextPmDate = (lastDateStr, freqRaw) => {
     if (!lastDateStr || !freqRaw) return null;
-    
-    // --- THE FIX: Strip out the word "Cycle" to perfectly align the math engine ---
     const freq = freqRaw.replace(/ Cycle/gi, '').trim();
-
     const lastDate = new Date(lastDateStr);
     let nextDate = new Date(lastDate);
     switch (freq) {
@@ -296,7 +293,9 @@ export default function App() {
       for (const asset of assets) {
         if (asset.status !== "Active") continue;
         let isOverdue = false;
-        const assetTemplates = pmTemplates.filter(t => isCategoryMatch(t.targetCategory, asset.category));
+        
+        // THE FIX: Ignore routes! Only true Individual PM templates can trigger a global "Maintenance Due" status
+        const assetTemplates = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
         const freqs = [...new Set(assetTemplates.map(t => t.interval))];
         freqs.forEach(freq => {
           const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
@@ -318,16 +317,11 @@ export default function App() {
   }, [assets, pmTemplates, currentUser]);
 
 
-  // =========================================================================
-  // THE FIX: STRICT DEPARTMENT SILOS FOR UI RENDERING
-  // =========================================================================
-
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
   const visibleUsers = users.filter(u => { if (isGodMode) return true; return u.department === userDept; });
   const visibleAssets = assets.filter(filterHierarchy);
 
-  // Filters Audit Trail so managers only see logs related to their own department's equipment
   const visibleHistory = isGodMode ? history : history.filter(h => {
     if (h.executionMode === 'route' && h.assetsIncluded) {
         return h.assetsIncluded.some(assetName => visibleAssets.some(va => va.name === assetName));
@@ -335,37 +329,26 @@ export default function App() {
     return visibleAssets.some(va => va.id === h.assetId || va.name === h.assetName);
   });
 
-  // Filters Manuals so managers only see PDFs linked to their own department's equipment
   const visibleManuals = isGodMode ? manuals : manuals.filter(m => {
     if (!m.linkedAssets || m.linkedAssets.length === 0) return true;
     return m.linkedAssets.some(assetId => visibleAssets.some(va => va.id === assetId || va.name === assetId));
   });
 
-  // Filters Hardware Inventory so managers only see spare parts linked to their own department's equipment
   const visibleParts = isGodMode ? parts : parts.filter(p => {
     if (!p.targetAssets || p.targetAssets.length === 0) return true;
     return p.targetAssets.some(assetId => visibleAssets.some(va => va.id === assetId || va.name === assetId));
   });
 
-  const visibleVendors = isGodMode ? vendors : vendors; // Vendors remain global to avoid duplicate external contacts
+  const visibleVendors = isGodMode ? vendors : vendors; 
   const visibleKeys = isGodMode || userDept === 'Facilities' ? keys : [];
-
-  // =========================================================================
-  // THE FIX: HOOK INITIALIZATION (SAFE BACKGROUND DATA)
-  // =========================================================================
   
   const stats = useDashboardStats(visibleUsers, visibleAssets, visibleWorkOrders, visibleTemplates, visibleHistory);
 
-  // We intentionally pass the FULL (unfiltered) arrays into these core engine hooks. 
-  // This ensures that if a Production Manager saves an asset edit, the hook maps over the full 
-  // background database and doesn't accidentally delete all the hidden Facilities assets!
   const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
   const manualHooks = useManuals(manuals, setManuals, assets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
   const pmHooks = usePmExecution(assets, setAssets, history, setHistory, currentUser, modals.triggerModal);
   const woHooks = useWorkOrders(currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
-
-  // =========================================================================
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
   const dynamicComplianceRate = scorableAssets.length > 0 ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) : 100;
@@ -507,7 +490,6 @@ export default function App() {
     triggerEmailAlert, triggerTeamsAlert, 
     pendingApprovals, activeAccounts, handleApproveUser, handleDenyUser, handleRevokeUser,
     
-    // OVERRIDE RAW STATE WITH SILOED VISIBLE STATE FOR UI RENDERING
     history: visibleHistory, setHistory, 
     assets: visibleAssets, setAssets, 
     pmTemplates: visibleTemplates, setPmTemplates, 

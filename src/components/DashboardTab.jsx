@@ -90,19 +90,20 @@ export default function DashboardTab({
 
   if (assets && pmTemplates && calculateDaysRemaining) {
     
+    // ==========================================
+    // 1. GROUPED ROUTES MATH (THE FIX)
+    // ==========================================
     const routeTemplates = pmTemplates.filter(t => t.executionMode === 'route');
     routeTemplates.forEach(template => {
         const mappedAssets = assets.filter(a => a.status !== "Inactive" && isCategoryMatch(template.targetCategory, a.category));
         if (mappedAssets.length === 0) return;
 
         let lowestDays = null;
-        let isCriticalStatus = false;
         
         mappedAssets.forEach(asset => {
             const explicitLastDone = asset.pmDates?.[template.interval];
             if (isToday(explicitLastDone)) return; 
 
-            // --- THE FIX: Default to null instead of 0 to prevent fake "Due Today" ---
             let daysLeft = null; 
             if (explicitLastDone) {
                 daysLeft = calculateDaysRemaining(explicitLastDone, template.interval);
@@ -111,17 +112,17 @@ export default function DashboardTab({
             if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
                 lowestDays = daysLeft;
             }
-            if (criticalStatuses.includes(asset.status)) isCriticalStatus = true;
         });
 
-        if (lowestDays === null && !isCriticalStatus) return; 
+        if (lowestDays === null) return; 
 
         let taskCategory = null;
         let dueMessage = "";
+        let isCriticalStatus = false;
 
-        if (isCriticalStatus || lowestDays < 0) {
+        if (lowestDays < 0) {
             taskCategory = 'Critical';
-            dueMessage = lowestDays < 0 ? `Overdue by ${Math.abs(lowestDays)} days` : "Immediate Action Required";
+            dueMessage = `Inspection Overdue (${Math.abs(lowestDays)}d)`;
             isCriticalStatus = true;
         } else if (lowestDays <= 5) {
             taskCategory = 'Upcoming';
@@ -138,7 +139,7 @@ export default function DashboardTab({
                 serial: `${mappedAssets.length} Targeted Assets`,
                 department: template.department || "Global",
                 badgeColor: isCriticalStatus ? "bg-purple-100 text-purple-800" : "bg-purple-50 text-purple-700",
-                displayStatus: isCriticalStatus ? "Route Overdue" : "Route Pending",
+                displayStatus: isCriticalStatus ? "Inspection Overdue" : "Inspection Pending",
                 displayDate: dueMessage,
                 assignedTo: Array.isArray(template.department) ? template.department.join(', ') : "Global Route",
                 rawItem: mappedAssets, 
@@ -163,12 +164,14 @@ export default function DashboardTab({
         }
     });
 
+    // ==========================================
+    // 2. INDIVIDUAL ASSET MATH 
+    // ==========================================
     assets.forEach(asset => {
       if (asset.status === "Inactive") return;
 
-      let taskCategory = null; 
-      let dueMessage = "";
-      let isCriticalStatus = criticalStatuses.includes(asset.status);
+      const manualOfflineStatuses = ["Out of Calibration", "Corrective Maintenance"];
+      let isManualOffline = manualOfflineStatuses.includes(asset.status);
       
       const assetTemplates = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
       const freqs = [...new Set(assetTemplates.map(t => t.interval))];
@@ -180,7 +183,6 @@ export default function DashboardTab({
           const explicitLastDone = asset.pmDates?.[freq];
           if (isToday(explicitLastDone)) return;
 
-          // --- THE FIX: Default to null instead of 0 to prevent fake "Due Today" ---
           let daysLeft = null;
           if (explicitLastDone) {
               daysLeft = calculateDaysRemaining(explicitLastDone, freq);
@@ -194,20 +196,38 @@ export default function DashboardTab({
           }
       });
 
-      if (isCriticalStatus) {
+      let taskCategory = null; 
+      let dueMessage = "";
+      let finalDisplayStatus = "";
+      let isCritical = false;
+
+      if (isManualOffline) {
           taskCategory = 'Critical';
           dueMessage = "Immediate Action Required";
+          finalDisplayStatus = asset.status;
+          isCritical = true;
       } else if (lowestDays !== null) {
           if (lowestDays < 0) {
               taskCategory = 'Critical';
               dueMessage = `Overdue by ${Math.abs(lowestDays)} days`;
-              isCriticalStatus = true;
+              finalDisplayStatus = "Overdue";
+              isCritical = true;
           } else if (lowestDays <= 5) {
               taskCategory = 'Upcoming';
               dueMessage = lowestDays === 0 ? "Due Today" : `Due in ${lowestDays} days`;
+              finalDisplayStatus = "Upcoming PM";
           } else if (lowestDays <= 30) {
               taskCategory = 'Pending';
               dueMessage = `Due in ${lowestDays} days`;
+              finalDisplayStatus = "Pending PM";
+          }
+      } else if (asset.status === "Maintenance Due") {
+          const belongsToRoute = pmTemplates.some(t => t.executionMode === 'route' && isCategoryMatch(t.targetCategory, asset.category));
+          if (!belongsToRoute) {
+              taskCategory = 'Critical';
+              dueMessage = "Manual Maintenance Required";
+              finalDisplayStatus = "Maintenance Due";
+              isCritical = true;
           }
       }
 
@@ -217,13 +237,13 @@ export default function DashboardTab({
           name: asset.name,
           serial: asset.serial || "N/A",
           department: asset.department || "Unassigned",
-          badgeColor: isCriticalStatus ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"),
-          displayStatus: isCriticalStatus ? (asset.status !== "Active" ? asset.status : "Overdue") : (taskCategory === 'Upcoming' ? "Upcoming PM" : "Pending PM"),
+          badgeColor: isCritical ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"),
+          displayStatus: finalDisplayStatus,
           displayDate: dueMessage,
           assignedTo: asset.operatorEmail || "Unassigned",
           rawItem: asset,
           type: 'asset',
-          isCritical: isCriticalStatus,
+          isCritical: isCritical,
           taskCategory: taskCategory,
           targetTemplate: targetTemplate 
         };
