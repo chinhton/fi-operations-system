@@ -65,7 +65,6 @@ export default function App() {
       alert("🔒 For security purposes, you have been logged out due to 5 minutes of inactivity.");
       localStorage.removeItem("fi_oms_session"); 
       setCurrentUser(null); 
-      // 🚨 We removed window.location.reload() here so React seamlessly renders the AuthScreen!
     }
   }, 300000);
   
@@ -290,13 +289,21 @@ export default function App() {
       hasSwept.current = true; 
       let sweptCount = 0;
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+      // Helper to find the manager email for automatic notifications
+      const getManagerEmails = (dept) => {
+          if (!users || users.length === 0 || !dept || dept === "Unassigned") return "admin@fcimg.com";
+          const deptArray = Array.isArray(dept) ? dept : [dept];
+          const managers = users.filter(u => deptArray.includes(u.department) && u.role === "Manager").map(u => u.email);
+          return managers.length > 0 ? managers.join(';') : "admin@fcimg.com";
+      };
+
       for (const asset of assets) {
         if (["Inactive", "Corrective Maintenance", "Out of Calibration"].includes(asset.status)) continue;
         
         let isPmOverdue = false;
         let isInspectionOverdue = false;
         
-        // Check Individual PMs
         const pmTemplatesForAsset = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
         const pmFreqs = [...new Set(pmTemplatesForAsset.map(t => t.interval))];
         pmFreqs.forEach(freq => {
@@ -307,7 +314,6 @@ export default function App() {
           }
         });
 
-        // Check Routes (Inspections)
         const routeTemplatesForAsset = pmTemplates.filter(t => t.executionMode === 'route' && isCategoryMatch(t.targetCategory, asset.category));
         const routeFreqs = [...new Set(routeTemplatesForAsset.map(t => t.interval))];
         routeFreqs.forEach(freq => {
@@ -329,13 +335,26 @@ export default function App() {
           try {
             await window.fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...asset, status: newStatus }) });
             sweptCount++;
+
+            // --- AUTO NOTIFICATION SYSTEM PING ---
+            const operatorEmail = asset.operatorEmail && asset.operatorEmail.includes('@') ? asset.operatorEmail : null;
+            const managerEmails = getManagerEmails(asset.department);
+            const emailSet = new Set(managerEmails.split(';').filter(Boolean));
+            if (operatorEmail) emailSet.add(operatorEmail);
+            const targetEmails = Array.from(emailSet).join(';');
+
+            const subject = `🚨 SYSTEM ESCALATION: ${newStatus} for ${asset.name}`;
+            const bodyText = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${asset.name}<br>**Serial / Details:** ${asset.serial || "N/A"}<br>**System Flag:** ${newStatus}<br>**Assigned Operator:** ${asset.operatorEmail || "Unassigned"}<br><br>The background sweep has flagged this system as overdue for its required cycle. Please log into the FI-Maintenance Management System to execute the required protocol immediately.`;
+
+            triggerTeamsAlert(targetEmails, subject, bodyText);
+
           } catch (err) {}
         }
       }
       if (sweptCount > 0) window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
     };
     runDailySweep();
-  }, [assets, pmTemplates, currentUser]);
+  }, [assets, pmTemplates, currentUser, users]);
 
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
@@ -432,7 +451,9 @@ export default function App() {
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
-          triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.\n\n**Name:** ${newUserDetails.name || 'Unknown'}\n**Email:** ${newUserDetails.email || 'Unknown'}\n**Department:** ${newUserDetails.department || 'Unknown'}\n\nPlease log in to grant access.`);
+          
+          // --- FORMATTED WITH <br> ---
+          triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.<br><br>**Name:** ${newUserDetails.name || 'Unknown'}<br>**Email:** ${newUserDetails.email || 'Unknown'}<br>**Department:** ${newUserDetails.department || 'Unknown'}<br><br>Please log in to grant access.`);
           return response;
       }
 
@@ -447,7 +468,9 @@ export default function App() {
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
               const targetEmails = `admin@fcimg.com;${activeUser.email}`;
-              triggerTeamsAlert(targetEmails, `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.\n\n**Asset:** ${logDetails.assetName || 'Unknown'}\n**SOP:** ${templateName}\n**Status:** ${logDetails.status || 'Completed'}\n**Notes:** ${commentText || 'None'}\n**Timestamp:** ${new Date().toLocaleString()}`);
+              
+              // --- FORMATTED WITH <br> ---
+              triggerTeamsAlert(targetEmails, `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.<br><br>**Asset:** ${logDetails.assetName || 'Unknown'}<br>**SOP:** ${templateName}<br>**Status:** ${logDetails.status || 'Completed'}<br>**Notes:** ${commentText || 'None'}<br>**Timestamp:** ${new Date().toLocaleString()}`);
           }
       }
 

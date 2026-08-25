@@ -69,7 +69,8 @@ export default function DashboardTab({
         ? `Execute Master Facility Route` 
         : `Execute SOP: ${item.targetTemplate?.name || 'General Preventative Maintenance'}`;
 
-    const body = `**FI-OMS Automated Alert**\n\n**Target Asset:** ${item.name}\n**Serial / Details:** ${item.serial}\n**Current Status:** ${item.displayStatus} (${item.displayDate})\n**Required Action:** ${actionText}\n**Assigned Operator:** ${item.assignedTo}\n\nPlease log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
+    // --- FIXED NAME AND ADDED <br> FORMATTING ---
+    const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>Please log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
 
     triggerTeamsAlert(targetEmails, subject, body);
   };
@@ -280,8 +281,6 @@ export default function DashboardTab({
 
     try {
         for (const asset of mappedAssets) {
-            
-            // THE FIX: Reset the machine back to active if it was just waiting on an inspection!
             let newStatus = asset.status;
             if (newStatus === "Inspection Due" || newStatus === "Maintenance Due") {
                  newStatus = "Active"; 
