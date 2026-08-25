@@ -68,6 +68,7 @@ export default function TemplatesTab({
     name: "",
     interval: "Daily",
     executionMode: "asset", 
+    sopType: "Preventive Maintenance", // <-- ADDED SOP TYPE
     department: [],
     targetCategory: [],
     managerEmail: "",
@@ -85,7 +86,8 @@ export default function TemplatesTab({
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleExportCSV = () => {
-    const headers = ["id", "name", "interval", "executionMode", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
+    // Added sopType to headers
+    const headers = ["id", "name", "interval", "executionMode", "sopType", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
     pmTemplates.forEach(template => {
@@ -158,6 +160,7 @@ export default function TemplatesTab({
             name: name,
             interval: rowObj['interval'] || "Monthly",
             executionMode: rowObj['executionMode'] || "asset",
+            sopType: rowObj['sopType'] || rowObj['Type'] || "Preventive Maintenance", // <-- ADDED
             department: parsedDept,
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
@@ -239,6 +242,7 @@ export default function TemplatesTab({
       name: "",
       interval: "Daily",
       executionMode: "asset",
+      sopType: "Preventive Maintenance", // Default to PM
       department: defaultDept,
       targetCategory: [],
       managerEmail: "",
@@ -252,7 +256,12 @@ export default function TemplatesTab({
   };
 
   const openEditModal = (template) => {
-    setNewTemplate({ ...template, executionMode: template.executionMode || 'asset', contractor: template.contractor || "" });
+    setNewTemplate({ 
+      ...template, 
+      executionMode: template.executionMode || 'asset', 
+      contractor: template.contractor || "",
+      sopType: template.sopType || "Preventive Maintenance" // Backwards compatibility for old templates
+    });
     setShowTemplateModal(true);
   };
 
@@ -427,7 +436,8 @@ export default function TemplatesTab({
                     </span>
                   </div>
                   
-                  <div className="mb-4">
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {/* Execution Mode Badge */}
                     {template.executionMode === 'route' ? (
                       <span className="inline-flex items-center space-x-1.5 bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider">
                         <span>🚶‍♂️</span> <span>Grouped Route</span>
@@ -437,6 +447,15 @@ export default function TemplatesTab({
                         <span>⚙️</span> <span>Asset PMs</span>
                       </span>
                     )}
+
+                    {/* NEW SOP Type Badge */}
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
+                        template.sopType === 'Calibration' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                        template.sopType === 'Inspection' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        'bg-[#005596]/10 text-[#005596] border-[#005596]/20' // Default PM styling
+                    }`}>
+                      {template.sopType || 'Preventive Maintenance'}
+                    </span>
                   </div>
 
                   <div className="space-y-1.5 mb-5">
@@ -537,6 +556,20 @@ export default function TemplatesTab({
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                   <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
                     {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
+                  </select>
+                </div>
+
+                {/* NEW SOP TYPE DROPDOWN */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Type</label>
+                  <select 
+                    value={newTemplate.sopType || "Preventive Maintenance"} 
+                    onChange={(e) => setNewTemplate({...newTemplate, sopType: e.target.value})} 
+                    className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
+                  >
+                    <option value="Preventive Maintenance">⚙️ Preventive Maintenance</option>
+                    <option value="Calibration">🔬 Calibration</option>
+                    <option value="Inspection">📋 Inspection</option>
                   </select>
                 </div>
 
