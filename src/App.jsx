@@ -63,9 +63,9 @@ export default function App() {
   useIdleTimeout(() => {
     if (currentUser) {
       alert("🔒 For security purposes, you have been logged out due to 5 minutes of inactivity.");
+      localStorage.removeItem("fi_oms_session"); 
       setCurrentUser(null); 
-      localStorage.removeItem("fi_oms_session"); // <-- THE FIX: Use the correct session key
-      window.location.reload();
+      // 🚨 We removed window.location.reload() here so React seamlessly renders the AuthScreen!
     }
   }, 300000);
   

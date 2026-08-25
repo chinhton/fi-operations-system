@@ -8,7 +8,7 @@ export default function TopHeader({
   handleSignOut, 
   setCurrentUser, 
   triggerModal,
-  closeModal // <-- Added closeModal to break the loop
+  closeModal 
 }) {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
@@ -44,8 +44,14 @@ export default function TopHeader({
                 Settings
               </button>
               <button 
-                // Explicitly calling closeModal() so it doesn't freeze on the screen
-                onClick={() => triggerModal("Confirm Sign Out", "Are you sure you want to securely sign out of the system?", "confirm", () => { handleSignOut(); closeModal(); })} 
+                onClick={() => triggerModal("Confirm Sign Out", "Are you sure you want to securely sign out of the system?", "confirm", () => { 
+                  // 1. Wipe the browser memory so they are actually logged out
+                  localStorage.removeItem("fi_oms_session");
+                  // 2. Instantly reset the React state so the UI snaps back to the AuthScreen
+                  setCurrentUser(null);
+                  // 3. Clear the modal
+                  closeModal(); 
+                })} 
                 className="px-3 py-1.5 bg-[#1A2530] text-white hover:bg-red-600 hover:shadow-md transform hover:-translate-y-0.5 text-xs font-bold rounded shadow-sm transition-all duration-200"
               >
                 Sign Out

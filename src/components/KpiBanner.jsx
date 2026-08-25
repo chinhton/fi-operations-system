@@ -27,12 +27,12 @@ export default function KpiBanner({ complianceRate, assetsCount = 0, activeCount
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-purple-300 uppercase tracking-wider mb-2">Overdue Inspect</h3>
+            <h3 className="text-[9px] xl:text-[10px] font-black text-purple-300 uppercase tracking-wider mb-2">Overdue Inspection</h3>
             <div className="text-2xl xl:text-3xl font-black text-white">{inspectionCount}</div>
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-yellow-300 uppercase tracking-wider mb-2">Overdue PM</h3>
+            <h3 className="text-[9px] xl:text-[10px] font-black text-yellow-300 uppercase tracking-wider mb-2">Overdue Preventive Maintenance</h3>
             <div className="text-2xl xl:text-3xl font-black text-white">{overdueCount}</div>
           </div>
 
