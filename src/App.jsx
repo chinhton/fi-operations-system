@@ -204,8 +204,12 @@ export default function App() {
     }
   };
 
-  const calculateNextPmDate = (lastDateStr, freq) => {
-    if (!lastDateStr || !freq) return null;
+  const calculateNextPmDate = (lastDateStr, freqRaw) => {
+    if (!lastDateStr || !freqRaw) return null;
+    
+    // --- THE FIX: Strip out the word "Cycle" to perfectly align the math engine ---
+    const freq = freqRaw.replace(/ Cycle/gi, '').trim();
+
     const lastDate = new Date(lastDateStr);
     let nextDate = new Date(lastDate);
     switch (freq) {

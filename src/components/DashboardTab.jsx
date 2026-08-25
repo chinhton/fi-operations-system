@@ -102,7 +102,8 @@ export default function DashboardTab({
             const explicitLastDone = asset.pmDates?.[template.interval];
             if (isToday(explicitLastDone)) return; 
 
-            let daysLeft = 0; 
+            // --- THE FIX: Default to null instead of 0 to prevent fake "Due Today" ---
+            let daysLeft = null; 
             if (explicitLastDone) {
                 daysLeft = calculateDaysRemaining(explicitLastDone, template.interval);
             }
@@ -179,7 +180,8 @@ export default function DashboardTab({
           const explicitLastDone = asset.pmDates?.[freq];
           if (isToday(explicitLastDone)) return;
 
-          let daysLeft = 0;
+          // --- THE FIX: Default to null instead of 0 to prevent fake "Due Today" ---
+          let daysLeft = null;
           if (explicitLastDone) {
               daysLeft = calculateDaysRemaining(explicitLastDone, freq);
           } else if (asset.lastPmDate) {
