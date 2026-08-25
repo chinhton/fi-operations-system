@@ -90,9 +90,6 @@ export default function DashboardTab({
 
   if (assets && pmTemplates && calculateDaysRemaining) {
     
-    // ==========================================
-    // 1. GROUPED ROUTES MATH (THE FIX)
-    // ==========================================
     const routeTemplates = pmTemplates.filter(t => t.executionMode === 'route');
     routeTemplates.forEach(template => {
         const mappedAssets = assets.filter(a => a.status !== "Inactive" && isCategoryMatch(template.targetCategory, a.category));
@@ -164,9 +161,6 @@ export default function DashboardTab({
         }
     });
 
-    // ==========================================
-    // 2. INDIVIDUAL ASSET MATH 
-    // ==========================================
     assets.forEach(asset => {
       if (asset.status === "Inactive") return;
 
@@ -286,8 +280,16 @@ export default function DashboardTab({
 
     try {
         for (const asset of mappedAssets) {
+            
+            // THE FIX: Reset the machine back to active if it was just waiting on an inspection!
+            let newStatus = asset.status;
+            if (newStatus === "Inspection Due" || newStatus === "Maintenance Due") {
+                 newStatus = "Active"; 
+            }
+            
             const updatedAsset = {
                 ...asset,
+                status: newStatus,
                 pmDates: { ...(asset.pmDates || {}), [targetTemplate.interval]: todayStr }
             };
             await window.fetch('/api/assets', {

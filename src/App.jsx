@@ -291,22 +291,43 @@ export default function App() {
       let sweptCount = 0;
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       for (const asset of assets) {
-        if (asset.status !== "Active") continue;
-        let isOverdue = false;
+        if (["Inactive", "Corrective Maintenance", "Out of Calibration"].includes(asset.status)) continue;
         
-        // THE FIX: Ignore routes! Only true Individual PM templates can trigger a global "Maintenance Due" status
-        const assetTemplates = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
-        const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-        freqs.forEach(freq => {
+        let isPmOverdue = false;
+        let isInspectionOverdue = false;
+        
+        // Check Individual PMs
+        const pmTemplatesForAsset = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
+        const pmFreqs = [...new Set(pmTemplatesForAsset.map(t => t.interval))];
+        pmFreqs.forEach(freq => {
           const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
           if (targetDate && targetDate !== todayStr) {
             const daysLeft = calculateDaysRemaining(targetDate, freq);
-            if (daysLeft !== null && daysLeft < 0) isOverdue = true;
+            if (daysLeft !== null && daysLeft < 0) isPmOverdue = true;
           }
         });
-        if (isOverdue) {
+
+        // Check Routes (Inspections)
+        const routeTemplatesForAsset = pmTemplates.filter(t => t.executionMode === 'route' && isCategoryMatch(t.targetCategory, asset.category));
+        const routeFreqs = [...new Set(routeTemplatesForAsset.map(t => t.interval))];
+        routeFreqs.forEach(freq => {
+          const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
+          if (targetDate && targetDate !== todayStr) {
+            const daysLeft = calculateDaysRemaining(targetDate, freq);
+            if (daysLeft !== null && daysLeft < 0) isInspectionOverdue = true;
+          }
+        });
+
+        let newStatus = asset.status;
+        if (isPmOverdue) {
+            newStatus = "Maintenance Due";
+        } else if (isInspectionOverdue && asset.status !== "Maintenance Due") {
+            newStatus = "Inspection Due";
+        }
+
+        if (newStatus !== asset.status && (newStatus === "Maintenance Due" || newStatus === "Inspection Due")) {
           try {
-            await window.fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...asset, status: "Maintenance Due" }) });
+            await window.fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...asset, status: newStatus }) });
             sweptCount++;
           } catch (err) {}
         }
@@ -315,7 +336,6 @@ export default function App() {
     };
     runDailySweep();
   }, [assets, pmTemplates, currentUser]);
-
 
   const visibleWorkOrders = workOrders.filter(filterHierarchy);
   const visibleTemplates = pmTemplates.filter(filterHierarchy);
@@ -352,9 +372,11 @@ export default function App() {
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
   const dynamicComplianceRate = scorableAssets.length > 0 ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) : 100;
+  
   const activeCount = visibleAssets.filter(a => a.status === "Active").length;
   const inactiveCount = visibleAssets.filter(a => a.status === "Inactive").length;
   const overdueCount = visibleAssets.filter(a => a.status === "Maintenance Due").length;
+  const inspectionCount = visibleAssets.filter(a => a.status === "Inspection Due").length;
   const calibrationCount = visibleAssets.filter(a => a.status === "Out of Calibration").length;
   const correctiveCount = visibleAssets.filter(a => a.status === "Corrective Maintenance").length;
 
@@ -501,7 +523,7 @@ export default function App() {
     keys: visibleKeys, setKeys, 
     
     calculateDaysRemaining, calculateNextPmDate,
-    activeCount, inactiveCount, overdueCount, calibrationCount, correctiveCount,
+    activeCount, inactiveCount, overdueCount, inspectionCount, calibrationCount, correctiveCount,
     assetsCount: visibleAssets.length,
     templatesCount: visibleTemplates.length,
     historyCount: visibleHistory.length,

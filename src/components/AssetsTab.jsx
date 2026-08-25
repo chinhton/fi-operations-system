@@ -280,6 +280,8 @@ export default function AssetsTab({
               status = "Maintenance Due";
           } else if (rawStatus.includes('INACTIVE')) {
               status = "Inactive";
+          } else if (rawStatus.includes('INSPECTION')) {
+              status = "Inspection Due";
           } else if (rawStatus.includes('CORRECTIVE')) {
               status = "Corrective Maintenance";
           } else if (rawStatus && !rawStatus.includes('ACTIVE')) {
@@ -611,6 +613,7 @@ export default function AssetsTab({
                             className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent cursor-pointer hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#005596] ${
                               checkStatus === "ACTIVE" ? "bg-emerald-100 text-emerald-800" :
                               checkStatus === "INACTIVE" ? "bg-gray-200 text-gray-600" :
+                              checkStatus === "INSPECTION DUE" ? "bg-purple-100 text-purple-800" :
                               checkStatus === "MAINTENANCE DUE" ? "bg-yellow-100 text-yellow-800" :
                               checkStatus === "OUT OF CALIBRATION" ? "bg-red-100 text-red-800" :
                               (checkStatus === "CORRECTIVE MAINTENANCE" || checkStatus === "CORRECTIVE ACTION") ? "bg-orange-100 text-orange-800" :
@@ -619,6 +622,7 @@ export default function AssetsTab({
                           >
                             <option value="Active">Active</option>
                             <option value="Inactive">Inactive</option>
+                            <option value="Inspection Due">Inspection Due</option>
                             <option value="Maintenance Due">Maintenance Due</option>
                             <option value="Out of Calibration">Out of Calibration</option>
                             <option value="Corrective Maintenance">Corrective Maintenance</option>
