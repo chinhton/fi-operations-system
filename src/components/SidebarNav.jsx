@@ -15,7 +15,8 @@ export default function SidebarNav({
   keysCount = 0,
   correctiveCount = 0, 
   navOrder = [],      
-  onOrderChange       
+  onOrderChange,
+  manuals = [] // <-- THE FIX: Added manuals array so it doesn't crash when counting them!
 }) {
 
   const isFacilities = currentUser?.department === 'Facilities';
@@ -29,7 +30,7 @@ export default function SidebarNav({
     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: hardwareCount },
     keys: { icon: "🔑", label: "Hard Key Tracking", badge: keysCount },
     manuals: { icon: "📖", label: "Equipment Manuals", badge: manualsCount },
-    contractors: { icon: "🗂️", label: "Contractor Reports", badge: manuals.filter(m => m.docType === 'contractor').length }, // <-- ADDED TAB
+    contractors: { icon: "🗂️", label: "Contractor Reports", badge: manuals.filter(m => m.docType === 'contractor').length }, // <-- Works perfectly now
     templates: { icon: "⚙️", label: "Established SOPs", badge: templatesCount },
     history: { icon: "📜", label: "Executed Audits", badge: historyCount }
   };
@@ -39,7 +40,6 @@ export default function SidebarNav({
 
   const [draggedTab, setDraggedTab] = useState(null);
 
-  // THE FIX: Removed 'isSystemAdmin' requirement so everyone can drag
   const handleDragStart = (e, tabId) => {
     setDraggedTab(tabId);
     e.dataTransfer.effectAllowed = 'move';
@@ -83,7 +83,7 @@ export default function SidebarNav({
           return (
             <div
               key={tabId}
-              draggable={true} // THE FIX: Everyone can drag now!
+              draggable={true} 
               onDragStart={(e) => handleDragStart(e, tabId)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, tabId)}
