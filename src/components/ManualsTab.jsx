@@ -13,6 +13,15 @@ export default function ManualsTab({
   // Filter out Contractor Reports
   const standardManuals = manuals.filter(m => m.docType !== 'contractor');
 
+  // --- THE FIX: Helper function to grab actual machine names ---
+  const getMappedAssetNames = (ids) => {
+    if (!ids || ids.length === 0) return "Unassigned";
+    return ids.map(id => {
+        const found = assets.find(a => a.id === id);
+        return found ? found.name : "Unknown Asset";
+    }).join(', ');
+  };
+
   // Drag and drop handlers
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -28,7 +37,6 @@ export default function ManualsTab({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      // Pass the dropped file to your existing file handler
       handleManualFileChange({ target: { files: e.dataTransfer.files } });
     }
   };
@@ -57,9 +65,12 @@ export default function ManualsTab({
                   className={`p-4 cursor-pointer hover:bg-blue-50 transition flex justify-between items-center ${viewingManual?.id === doc.id ? 'bg-blue-50 border-l-4 border-[#005596]' : ''}`}
                 >
                   <div>
-                    <span className="font-bold text-gray-900 text-xs block truncate max-w-[250px]">{doc.fileName}</span>
-                    <span className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]">
-                      Mapped to {doc.linkedAssetIds?.length || 0} systems • {doc.fileSize}
+                    <span className="font-bold text-gray-900 text-xs block truncate max-w-[250px]" title={doc.fileName}>{doc.fileName}</span>
+                    <span 
+                      className="text-[10px] text-gray-500 font-mono mt-0.5 block truncate max-w-[200px]"
+                      title={`Systems: ${getMappedAssetNames(doc.linkedAssetIds)}`}
+                    >
+                      Systems: <span className="text-gray-700">{getMappedAssetNames(doc.linkedAssetIds)}</span> • {doc.fileSize}
                     </span>
                   </div>
                   <span className="text-[#005596] text-lg font-bold">➔</span>
@@ -143,7 +154,9 @@ export default function ManualsTab({
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h4 className="font-bold text-base text-[#005596]">{viewingManual.fileName}</h4>
-                    <span className="text-xs text-gray-500 block font-mono mt-1">ID: {viewingManual.id} • Associated Systems: {viewingManual.linkedAssetIds?.length || 0}</span>
+                    <span className="text-xs text-gray-500 block font-mono mt-1">
+                      ID: {viewingManual.id} • Systems: <span className="text-gray-800 font-bold">{getMappedAssetNames(viewingManual.linkedAssetIds)}</span>
+                    </span>
                   </div>
                   <div className="flex space-x-2">
                     <button onClick={() => setIsMaximized(true)} className="bg-slate-700 hover:bg-slate-800 text-white text-[10px] font-bold uppercase py-2 px-3 rounded shadow transition">🖥️ Maximize</button>
