@@ -16,12 +16,16 @@ export default function SidebarNav({
   correctiveCount = 0, 
   navOrder = [],      
   onOrderChange,
-  manuals = [] // <-- THE FIX: Added manuals array so it doesn't crash when counting them!
+  manuals = [] 
 }) {
 
   const isFacilities = currentUser?.department === 'Facilities';
   const canSeeKeys = isSystemAdmin || isFacilities;
   const hardwareCount = (parts?.length || 0) + (vendors?.length || 0);
+
+  // Filter manuals for badge counts
+  const standardManualsCount = manuals.filter(m => m.docType !== 'contractor').length;
+  const contractorReportsCount = manuals.filter(m => m.docType === 'contractor').length;
 
   const navData = {
     dashboard: { icon: "📊", label: "Operations Dashboard" },
@@ -29,14 +33,22 @@ export default function SidebarNav({
     assets: { icon: "🏢", label: "Facility Assets", badge: assetsCount },
     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: hardwareCount },
     keys: { icon: "🔑", label: "Hard Key Tracking", badge: keysCount },
-    manuals: { icon: "📖", label: "Equipment Manuals", badge: manualsCount },
-    contractors: { icon: "🗂️", label: "Contractor Reports", badge: manuals.filter(m => m.docType === 'contractor').length }, // <-- Works perfectly now
+    manuals: { icon: "📖", label: "Equipment Manuals", badge: standardManualsCount },
+    contractors: { icon: "🗂️", label: "Contractor Reports", badge: contractorReportsCount },
     templates: { icon: "⚙️", label: "Established SOPs", badge: templatesCount },
     history: { icon: "📜", label: "Executed Audits", badge: historyCount }
   };
 
   const fallbackOrder = ['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'contractors', 'templates', 'history'];
-  const currentOrder = navOrder.length > 0 ? navOrder : fallbackOrder;
+  
+  // THE FIX: Smart merge! If the user has a saved layout, check if any new system features are missing and append them.
+  let currentOrder = navOrder.length > 0 ? navOrder : fallbackOrder;
+  const allAvailableTabs = Object.keys(navData);
+  const missingTabs = allAvailableTabs.filter(tab => !currentOrder.includes(tab));
+  
+  if (missingTabs.length > 0) {
+    currentOrder = [...currentOrder, ...missingTabs];
+  }
 
   const [draggedTab, setDraggedTab] = useState(null);
 

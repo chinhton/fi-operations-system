@@ -7,24 +7,26 @@ export default function ManualsTab({
   setManualText, isAttachingManual, isSystemAdmin, handleRemoveManual
 }) {
 
-  // --- Full-Screen State ---
   const [isMaximized, setIsMaximized] = useState(false);
+
+  // THE FIX: Filter out Contractor Reports so they only show up in the new tab!
+  const standardManuals = manuals.filter(m => m.docType !== 'contractor');
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
       <div className="lg:col-span-5 space-y-6">
         
-        {/* Document Library (Now independent of assets) */}
+        {/* Document Library */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="bg-[#1A2530] text-white px-5 py-4 flex items-center justify-between">
             <h3 className="font-bold text-xs uppercase tracking-wider">📚 Document Library</h3>
-            <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{manuals.length} manuals</span>
+            <span className="text-[10px] bg-gray-700 px-2 py-0.5 rounded-full">{standardManuals.length} manuals</span>
           </div>
           <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
-            {manuals.length === 0 ? (
+            {standardManuals.length === 0 ? (
               <div className="p-6 text-center text-gray-500 text-xs">No documentation manuals currently in the global library. Use the upload tool to attach a file.</div>
             ) : (
-              manuals.map(doc => (
+              standardManuals.map(doc => (
                 <div 
                   key={doc.id} 
                   onClick={() => { 
