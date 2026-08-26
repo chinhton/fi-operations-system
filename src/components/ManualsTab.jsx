@@ -2,15 +2,36 @@ import React, { useState } from 'react';
 
 export default function ManualsTab({
   manuals = [], viewingManual, setViewingManual, 
-  handleAttachManualSubmit, assets, manualAssetIds, setManualAssetIds, 
+  handleAttachManualSubmit, assets = [], manualAssetIds = [], setManualAssetIds, 
   manualFileInputRef, manualFile, handleManualFileChange, manualText, 
   setManualText, isAttachingManual, isSystemAdmin, handleRemoveManual
 }) {
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  // THE FIX: Filter out Contractor Reports so they only show up in the new tab!
+  // Filter out Contractor Reports
   const standardManuals = manuals.filter(m => m.docType !== 'contractor');
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      // Pass the dropped file to your existing file handler
+      handleManualFileChange({ target: { files: e.dataTransfer.files } });
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
@@ -82,8 +103,19 @@ export default function ManualsTab({
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload Manual File</label>
-              <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-slate-50 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100" onClick={() => manualFileInputRef.current.click()}>
-                <span className="text-2xl mb-1">📁</span><span className="text-[11px] text-gray-500 font-semibold uppercase">{manualFile ? manualFile.name : "Select manual file"}</span>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                  isDragging ? 'border-[#005596] bg-blue-50 scale-[1.02] shadow-inner' : 'border-gray-300 bg-slate-50 hover:bg-slate-100'
+                }`}
+                onClick={() => manualFileInputRef.current.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <span className="text-3xl mb-2">{isDragging ? '📥' : '📁'}</span>
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDragging ? 'text-[#005596]' : 'text-gray-500'}`}>
+                  {isDragging ? "Drop file here!" : (manualFile ? manualFile.name : "Drag & Drop or Click to Select File")}
+                </span>
                 <input type="file" ref={manualFileInputRef} onChange={handleManualFileChange} className="hidden" />
               </div>
             </div>
@@ -91,7 +123,7 @@ export default function ManualsTab({
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Quick Manual SOP Text Layout</label>
               <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Input procedures..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
             </div>
-            <button type="submit" disabled={isAttachingManual} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <button type="submit" disabled={isAttachingManual} className={`w-full bg-[#00A1E4] hover:bg-[#00A1E4]/90 text-white py-2.5 rounded text-xs font-bold uppercase transition-all shadow-sm ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {isAttachingManual ? 'Uploading Data...' : 'Save Manual to Library'}
             </button>
           </form>
