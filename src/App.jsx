@@ -290,7 +290,6 @@ export default function App() {
       let sweptCount = 0;
       const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-      // Helper to find the manager email for automatic notifications
       const getManagerEmails = (dept) => {
           if (!users || users.length === 0 || !dept || dept === "Unassigned") return "admin@fcimg.com";
           const deptArray = Array.isArray(dept) ? dept : [dept];
@@ -336,7 +335,6 @@ export default function App() {
             await window.fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...asset, status: newStatus }) });
             sweptCount++;
 
-            // --- AUTO NOTIFICATION SYSTEM PING ---
             const operatorEmail = asset.operatorEmail && asset.operatorEmail.includes('@') ? asset.operatorEmail : null;
             const managerEmails = getManagerEmails(asset.department);
             const emailSet = new Set(managerEmails.split(';').filter(Boolean));
@@ -452,7 +450,6 @@ export default function App() {
           let newUserDetails = {};
           if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
           
-          // --- FORMATTED WITH <br> ---
           triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.<br><br>**Name:** ${newUserDetails.name || 'Unknown'}<br>**Email:** ${newUserDetails.email || 'Unknown'}<br>**Department:** ${newUserDetails.department || 'Unknown'}<br><br>Please log in to grant access.`);
           return response;
       }
@@ -463,13 +460,21 @@ export default function App() {
           const commentText = logDetails.comments || logDetails.notes || "";
           const templateName = logDetails.templateName || "";
           
-          const isSystemLog = !templateName || logDetails.assetId === "SYS-AUTO" || templateName.includes("System Action") || templateName.includes("Asset Profile Update") || commentText.includes("Registered new facility asset") || commentText.includes("Updated facility asset") || commentText.includes("Automated Tracker");
+          // THE FIX: Added "Manual Attachment" and manual linking phrases to the exclusion list so they don't trigger PM alerts!
+          const isSystemLog = !templateName || 
+            logDetails.assetId === "SYS-AUTO" || 
+            templateName.includes("System Action") || 
+            templateName.includes("Asset Profile Update") || 
+            templateName.includes("Manual Attachment") ||
+            commentText.includes("Linked new independent manual") || 
+            commentText.includes("Registered new facility asset") || 
+            commentText.includes("Updated facility asset") || 
+            commentText.includes("Automated Tracker");
 
           if (!isSystemLog) {
               originalFetch('/api/history').then(r => r.json()).then(setHistory).catch(console.error);
               const targetEmails = `admin@fcimg.com;${activeUser.email}`;
               
-              // --- FORMATTED WITH <br> ---
               triggerTeamsAlert(targetEmails, `✅ PM Executed: ${logDetails.assetName || 'Asset'}`, `**${activeUser.name}** has completed a preventative maintenance task.<br><br>**Asset:** ${logDetails.assetName || 'Unknown'}<br>**SOP:** ${templateName}<br>**Status:** ${logDetails.status || 'Completed'}<br>**Notes:** ${commentText || 'None'}<br>**Timestamp:** ${new Date().toLocaleString()}`);
           }
       }

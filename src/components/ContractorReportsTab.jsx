@@ -8,9 +8,30 @@ export default function ContractorReportsTab({
 }) {
 
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Filter only contractor reports
   const contractorDocs = manuals.filter(m => m.docType === 'contractor');
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      // Pass the dropped file to your existing file handler
+      handleManualFileChange({ target: { files: e.dataTransfer.files } });
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-entrance">
@@ -86,8 +107,19 @@ export default function ContractorReportsTab({
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Upload Report File (PDF / Invoice)</label>
-              <div className="border border-dashed border-gray-300 rounded-lg p-4 bg-slate-50 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100" onClick={() => manualFileInputRef.current.click()}>
-                <span className="text-2xl mb-1">📄</span><span className="text-[11px] text-gray-500 font-semibold uppercase">{manualFile ? manualFile.name : "Select contractor report"}</span>
+              <div 
+                className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                  isDragging ? 'border-amber-500 bg-amber-50 scale-[1.02] shadow-inner' : 'border-gray-300 bg-slate-50 hover:bg-slate-100'
+                }`}
+                onClick={() => manualFileInputRef.current.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                <span className="text-3xl mb-2">{isDragging ? '📥' : '📄'}</span>
+                <span className={`text-xs font-bold uppercase tracking-wider ${isDragging ? 'text-amber-600' : 'text-gray-500'}`}>
+                  {isDragging ? "Drop file here!" : (manualFile ? manualFile.name : "Drag & Drop or Click to Select File")}
+                </span>
                 <input type="file" ref={manualFileInputRef} onChange={handleManualFileChange} className="hidden" />
               </div>
             </div>
@@ -95,7 +127,7 @@ export default function ContractorReportsTab({
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Contractor Service Notes / Summary</label>
               <textarea value={manualText} onChange={(e) => setManualText(e.target.value)} rows="5" placeholder="Enter vendor findings, calibration values, or service notes..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
             </div>
-            <button type="submit" disabled={isAttachingManual} className={`w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded text-xs font-bold uppercase transition-all ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <button type="submit" disabled={isAttachingManual} className={`w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded text-xs font-bold uppercase transition-all shadow-sm ${isAttachingManual ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {isAttachingManual ? 'Uploading Data...' : 'Save Report to Library'}
             </button>
           </form>
