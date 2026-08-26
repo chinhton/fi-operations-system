@@ -69,7 +69,6 @@ export default function DashboardTab({
         ? `Execute Master Facility Route` 
         : `Execute SOP: ${item.targetTemplate?.name || 'General Preventative Maintenance'}`;
 
-    // --- FIXED NAME AND ADDED <br> FORMATTING ---
     const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>Please log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
 
     triggerTeamsAlert(targetEmails, subject, body);
@@ -866,6 +865,7 @@ export default function DashboardTab({
                   {activeRoute.targetTemplate.checklistSteps.map((step, idx) => {
                     const stepType = typeof step === 'string' ? 'checkbox' : step.type;
                     const stepLabel = typeof step === 'string' ? step : step.label;
+                    const stepLimits = typeof step === 'string' ? '' : step.limits;
 
                     return (
                     <div key={idx} className="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-slate-50 transition-colors">
@@ -881,8 +881,13 @@ export default function DashboardTab({
                         )}
                       </div>
                       
-                      <div className="w-full md:w-1/3">
+                      <div className="w-full md:w-1/3 flex flex-col justify-center">
                         <span className="text-sm font-bold text-gray-800">{stepLabel}</span>
+                        {stepLimits && (
+                          <span className="text-[10px] font-bold text-gray-500 mt-1 uppercase tracking-wider">
+                            Limits/Notes: <span className="text-[#00A1E4]">{stepLimits}</span>
+                          </span>
+                        )}
                       </div>
                       
                       <div className="w-full md:flex-1 flex flex-col md:flex-row gap-2 justify-end items-stretch md:items-center">
