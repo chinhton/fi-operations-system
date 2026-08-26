@@ -49,10 +49,12 @@ export default function DashboardTab({
     setRouteAnswers({}); 
   };
 
-  const handleSendAlert = (e, item, isEscalation = false) => {
-    e.target.innerText = isEscalation ? "ESCALATED ✓" : "NOTIFIED ✓"; 
-    e.target.classList.add("text-green-600");
-    e.target.disabled = true;
+  const handleSendAlert = async (e, item, isEscalation = false) => {
+    if (e) {
+      e.target.innerText = isEscalation ? "ESCALATED ✓" : "NOTIFIED ✓"; 
+      e.target.classList.add("text-green-600");
+      e.target.disabled = true;
+    }
 
     const managerEmails = getManagerForDepartment(item.department);
     const operatorEmail = item.assignedTo && item.assignedTo.includes('@') ? item.assignedTo : null;
@@ -71,7 +73,7 @@ export default function DashboardTab({
 
     const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>Please log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
 
-    triggerTeamsAlert(targetEmails, subject, body);
+    await triggerTeamsAlert(targetEmails, subject, body);
   };
 
   if (assets && pmTemplates && calculateDaysRemaining) {
@@ -265,21 +267,7 @@ export default function DashboardTab({
       
       // Loop through everything the dashboard has already identified as Overdue/Critical
       for (const item of adminCritical) {
-        const managerEmails = getManagerForDepartment(item.department);
-        const operatorEmail = item.assignedTo && item.assignedTo.includes('@') ? item.assignedTo : null;
-        
-        const emailSet = new Set(managerEmails.split(';').filter(Boolean));
-        if (operatorEmail) emailSet.add(operatorEmail);
-        const targetEmails = Array.from(emailSet).join(';');
-
-        const subject = `🚨 SYSTEM ESCALATION: ${item.displayStatus} for ${item.name}`;
-        const actionText = item.type === 'route' 
-            ? `Execute Master Facility Route` 
-            : `Execute SOP: ${item.targetTemplate?.name || 'General Preventative Maintenance'}`;
-
-        const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>The background sweep has flagged this system as overdue for its required cycle. Please log into the FI-Maintenance Management System to execute the required protocol immediately.`;
-
-        await triggerTeamsAlert(targetEmails, subject, body);
+        await handleSendAlert(null, item, true);
         pingCount++;
       }
       
