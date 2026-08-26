@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 export default function ContractorReportsTab({
   manuals = [], viewingManual, setViewingManual, 
-  handleAttachManualSubmit, assets, manualAssetIds, setManualAssetIds, 
+  handleAttachManualSubmit, assets = [], manualAssetIds = [], setManualAssetIds, 
   manualFileInputRef, manualFile, handleManualFileChange, manualText, 
   setManualText, isAttachingManual, isSystemAdmin, handleRemoveManual
 }) {

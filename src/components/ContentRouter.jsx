@@ -2,16 +2,15 @@ import React from 'react';
 import DashboardTab from './DashboardTab';
 import WorkOrdersTab from './WorkOrdersTab';
 import AssetsTab from './AssetsTab';
-
-// --- NEW MODULE IMPORTS ---
 import HardwareVendorsTab from './HardwareVendorsTab';
 import KeyManagementTab from './KeyManagementTab'; 
 import CorrectiveActionsTab from './CorrectiveActionsTab';
-
 import ManualsTab from './ManualsTab';
 import TemplatesTab from './TemplatesTab';
 import HistoryTab from './HistoryTab';
 import ApprovalsTab from './ApprovalsTab';
+
+// --- NEW MODULE IMPORT ---
 import ContractorReportsTab from './ContractorReportsTab';
 
 export default function ContentRouter(props) {
@@ -22,18 +21,16 @@ export default function ContentRouter(props) {
   return (
     <main className="flex-grow p-4 md:p-8">
       {props.activeTab === "dashboard" && <DashboardTab {...props} />}
-      
-      {/* --- CORRECTIVE ACTIONS TAB ROUTED HERE --- */}
       {props.activeTab === "corrective" && <CorrectiveActionsTab {...props} />}
-
       {props.activeTab === "workOrders" && <WorkOrdersTab {...props} />}
       {props.activeTab === "assets" && <AssetsTab {...props} />}
-      
-      {/* --- NEW TABS ROUTED HERE --- */}
       {props.activeTab === "hardware" && <HardwareVendorsTab {...props} />}
       {props.activeTab === "keys" && canSeeKeys && <KeyManagementTab {...props} />}
       
+      {/* --- DOCUMENTS ROUTING --- */}
       {props.activeTab === "manuals" && <ManualsTab {...props} />}
+      {props.activeTab === "contractors" && <ContractorReportsTab {...props} />}
+      
       {props.activeTab === "templates" && <TemplatesTab {...props} />}
       {props.activeTab === "history" && <HistoryTab {...props} />}
       {props.activeTab === "approvals" && props.isSystemAdmin && <ApprovalsTab {...props} />}
