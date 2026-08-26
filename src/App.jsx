@@ -93,6 +93,12 @@ export default function App() {
 
   const changeTab = (tab) => {
     setActiveTab(tab);
+    
+    // THE FIX: Wipes the manual viewer clean when switching screens!
+    if (manualHooks && manualHooks.setViewingManual) {
+      manualHooks.setViewingManual(null);
+    }
+    
     localStorage.setItem("fi_current_tab", tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

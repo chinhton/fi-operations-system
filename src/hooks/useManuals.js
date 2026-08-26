@@ -5,7 +5,7 @@ export default function useManuals(manuals, setManuals, assets, setHistory, curr
   const [manualFile, setManualFile] = useState(null);
   const [manualText, setManualText] = useState("");
   const [isAttachingManual, setIsAttachingManual] = useState(false);
-  const [viewingManual, setViewingManual] = useState(null); // Replaced viewingManualAsset
+  const [viewingManual, setViewingManual] = useState(null);
   const manualFileInputRef = useRef(null);
 
   const handleManualFileChange = (e) => {
@@ -21,6 +21,9 @@ export default function useManuals(manuals, setManuals, assets, setHistory, curr
     e.preventDefault();
     if (isAttachingManual) return;
     
+    // THE FIX: Grab the docType right off the form tag we injected. Defaults to 'manual' if missing.
+    const docType = e.target.dataset.docType || 'manual';
+    
     if (manualAssetIds.length === 0) { triggerModal("Field Required", "Please select at least one target asset.", "info"); return; }
     if (!manualFile && !manualText.trim()) { triggerModal("Input Required", "Please attach a file or draft a procedure.", "info"); return; }
     
@@ -32,7 +35,7 @@ export default function useManuals(manuals, setManuals, assets, setHistory, curr
       let finalFileName = manualFile ? manualFile.name : `Quick_Manual_${Date.now().toString().slice(-4)}.txt`;
 
       if (manualFile) {
-        triggerModal("Uploading", `Transferring manual to Azure Blob Storage...`, "info");
+        triggerModal("Uploading", `Transferring file to Azure Blob Storage...`, "info");
         try {
           const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: manualFile.name, fileData: manualFile.data }) });
           if (uploadRes.ok) {
@@ -51,7 +54,8 @@ export default function useManuals(manuals, setManuals, assets, setHistory, curr
         fileSize: manualFile ? manualFile.size : `${(new Blob([manualText]).size / 1024).toFixed(1)} KB`, 
         fileData: finalFileUrl, 
         manualText: manualText || "Refer to attached file.",
-        linkedAssetIds: manualAssetIds // Store associations on the manual itself
+        linkedAssetIds: manualAssetIds,
+        docType: docType // THE FIX: This tells the database if it is a 'contractor' or 'manual' doc!
       };
 
       // 1. Save the Manual Independently
@@ -61,7 +65,7 @@ export default function useManuals(manuals, setManuals, assets, setHistory, curr
       // 2. Log History for Assets
       const newLogs = [];
       await Promise.all(targetAssets.map(async (targetAsset) => {
-        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Operation Manual Attachment", interval: "On-Demand", technician: currentUser?.name || "System Admin", email: currentUser?.email || "admin@fcimg.com", status: "Completed Pass", comments: `Linked new independent manual documentation to device.` };
+        const logEntry = { id: `LOG-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 1000)}`, timestamp: new Date().toLocaleString(), assetId: targetAsset.id, assetName: targetAsset.name, templateName: "Manual Attachment", interval: "On-Demand", technician: currentUser?.name || "System Admin", email: currentUser?.email || "admin@fcimg.com", status: "Completed", comments: `Linked new independent manual documentation to device.` };
         try {
           const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
           if (logRes.ok) newLogs.push(await logRes.json());
