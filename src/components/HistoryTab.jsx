@@ -112,7 +112,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     }
   };
 
-  // --- NEW: Single Log Deletion ---
   const deleteSingleLog = async (log) => {
     if (!window.confirm("Are you sure you want to permanently delete this specific audit log? The associated PM dates will be un-stamped on the asset.")) return;
     
@@ -193,17 +192,28 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     return grouped;
   };
 
+  // Extract Doc Control variables for the selected log
+  const activeTemplate = selectedLog ? pmTemplates.find(t => t.name === selectedLog.templateName) : null;
+  const docControlNumber = activeTemplate?.docControlNumber || selectedLog?.docControlNumber || "N/A";
+  const ecnNumber = activeTemplate?.ecnNumber || selectedLog?.ecnNumber || "N/A";
+
   return (
     <div className="space-y-6 animate-entrance">
       
+      {/* 
+        THE FIX: Massively upgraded print CSS. 
+        Forces strict background colors, structured grid lines, and high-end fonts. 
+      */}
       <style>{`
         @media print {
           @page { size: letter; margin: 0.5in; }
           body { 
             margin: 0 !important; 
             padding: 0 !important; 
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
             -webkit-print-color-adjust: exact !important; 
             print-color-adjust: exact !important; 
+            background-color: white !important;
           }
           body * { visibility: hidden; }
           #pdf-print-area, #pdf-print-area * { visibility: visible; }
@@ -218,6 +228,10 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
             box-shadow: none !important;
           }
           .no-print { display: none !important; }
+          .print-border { border: 1px solid #d1d5db !important; }
+          .print-border-b { border-bottom: 1px solid #d1d5db !important; }
+          .print-bg-gray { background-color: #f3f4f6 !important; }
+          .print-bg-dark { background-color: #1e293b !important; color: white !important; }
         }
       `}</style>
 
@@ -345,32 +359,56 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
             <button 
               onClick={() => {
                 const originalTitle = document.title;
-                document.title = `Maintenance Management Report - ${selectedLog.id || 'Log'}`;
+                document.title = `${docControlNumber !== 'N/A' ? docControlNumber + '_' : ''}Executed_Protocol_${selectedLog.id}`;
                 window.print();
                 document.title = originalTitle;
               }}
               className="bg-[#005596] hover:bg-[#003058] text-white px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-colors shadow-md flex items-center space-x-2"
             >
-              <span>🖨️ Export to PDF</span>
+              <span>🖨️ Export Corporate PDF</span>
             </button>
           </div>
 
-          <div id="pdf-print-area" className="p-10 bg-white">
+          <div id="pdf-print-area" className="p-8 max-w-5xl mx-auto bg-white">
             
-            <div className="flex justify-between items-end border-b-2 border-[#005596] pb-6 mb-8 mt-4">
-              <div>
-                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto object-contain mb-1" />
+            {/* --- NEW CORPORATE PDF HEADER --- */}
+            <div className="flex justify-between items-center border-b-4 border-[#003058] pb-6 mb-6">
+              <div className="flex items-center space-x-5">
+                <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-14 w-auto object-contain" />
+                <div className="border-l-2 border-gray-300 pl-5">
+                  <h1 className="text-2xl font-black text-[#003058] tracking-widest uppercase m-0 leading-none">Protocol Report</h1>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1.5 m-0">Official ISO Maintenance Record</p>
+                </div>
               </div>
               <div className="text-right">
-                <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wider">Maintenance Management Report</h2>
-                <p className="text-xs font-mono text-gray-500 mt-1">Log ID: {selectedLog.id || `LOG-SYSTEM`}</p>
+                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Audit Record ID</div>
+                <div className="text-lg font-mono font-black text-[#005596]">{selectedLog.id || `LOG-SYSTEM`}</div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-8 mb-8 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-inner">
-              <div className="space-y-4">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target System</span>
+            {/* --- NEW DOCUMENT CONTROL RIBBON --- */}
+            <div className="flex bg-gray-50 border border-gray-300 rounded-lg p-4 mb-8 justify-between items-center shadow-sm print-bg-gray print-border">
+              <div className="flex-1">
+                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Standard Operating Procedure Executed</span>
+                 <span className="text-sm font-black text-gray-900">{selectedLog.templateName || 'System Action'}</span>
+              </div>
+              <div className="flex space-x-12 border-l border-gray-300 pl-8 ml-8">
+                 <div>
+                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Doc Control #</span>
+                   <span className="text-sm font-mono font-bold text-gray-800">{docControlNumber}</span>
+                 </div>
+                 <div>
+                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Revision / ECN</span>
+                   <span className="text-sm font-mono font-bold text-indigo-700">{ecnNumber}</span>
+                 </div>
+              </div>
+            </div>
+
+            {/* --- METADATA GRID --- */}
+            <div className="grid grid-cols-2 gap-6 mb-8 border border-gray-300 rounded-lg overflow-hidden print-border">
+              <div className="p-5 border-r border-gray-300 print-border">
+                <div className="mb-4">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Target System / Asset</span>
                   <span className="text-sm font-bold text-gray-900 block">
                     {(selectedLog.status || "").includes("Grouped Route") || selectedLog.executionMode === 'route' 
                       ? "Master Route Execution" 
@@ -379,64 +417,59 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                   {selectedLog.assetSerial && <span className="text-[10px] text-gray-500 font-mono block mt-0.5">S/N: {selectedLog.assetSerial}</span>}
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Protocol Executed</span>
-                  <span className="text-sm text-gray-800 font-bold block">{selectedLog.templateName || 'N/A'}</span>
-                </div>
-                <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Service Interval</span>
-                  <span className="text-sm text-gray-800 block">{selectedLog.interval || 'System Action'}</span>
+                  <span className="text-sm text-gray-800 font-bold block">{selectedLog.interval || 'System Action'}</span>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div>
+              
+              <div className="p-5 bg-gray-50 print-bg-gray">
+                <div className="mb-4">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Execution Timestamp</span>
                   <span className="font-mono text-sm text-[#005596] font-bold block">{formatDate(selectedLog.timestamp || selectedLog.date)}</span>
                 </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Authorized Technician</span>
-                  <span className="text-sm text-gray-800 block">{selectedLog.technician || selectedLog.performedBy || 'System Operator'}</span>
-                  {(selectedLog.email || selectedLog.performedByEmail) && <span className="text-xs text-gray-500 font-mono block mt-0.5">{selectedLog.email || selectedLog.performedByEmail}</span>}
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Final Status</span>
-                  <span className={`inline-block px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider ${getStatusColor(selectedLog.status)}`}>
-                    {selectedLog.status || 'UNKNOWN'}
-                  </span>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Final Status</span>
+                    <span className={`inline-block px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider ${getStatusColor(selectedLog.status)}`}>
+                      {selectedLog.status || 'UNKNOWN'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="mb-8">
-              <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">SOP Checklist Items Completed</h3>
+            {/* --- STRUCTURED DATA TABLE --- */}
+            <div className="mb-10">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-3">Protocol Actions & Test Results</h3>
               
               {getGroupedResponses() ? (
-                <div className="bg-gray-50 rounded-lg border border-gray-200 shadow-inner overflow-hidden">
+                <div className="rounded-lg border border-gray-300 overflow-hidden print-border">
                   <table className="w-full text-left text-sm border-collapse">
                     <thead>
-                      <tr className="bg-gray-200/50 border-b border-gray-300 text-[10px] uppercase tracking-wider text-gray-600 font-bold">
-                        <th className="py-3 px-4">Task Description</th>
-                        <th className="py-3 px-4 w-32 text-center">Result</th>
+                      <tr className="bg-slate-800 text-white text-[10px] uppercase tracking-wider font-bold print-bg-dark">
+                        <th className="py-3 px-4 w-3/4 border-r border-slate-700">Task / Parameter Evaluated</th>
+                        <th className="py-3 px-4 w-1/4 text-center">Output Result</th>
                       </tr>
                     </thead>
                     <tbody>
                       {Object.entries(getGroupedResponses()).map(([groupName, tasks], groupIdx) => (
                         <React.Fragment key={groupIdx}>
-                          <tr className="bg-gray-100 border-b border-gray-200">
-                            <td colSpan="2" className="py-2 px-4 font-bold text-[#005596] text-[10px] uppercase tracking-wider">
+                          <tr className="bg-gray-100 print-bg-gray border-b border-gray-300 print-border-b">
+                            <td colSpan="2" className="py-2.5 px-4 font-black text-[#003058] text-[10px] uppercase tracking-wider">
                               {groupName}
                             </td>
                           </tr>
                           {tasks.map((task, taskIdx) => (
-                            <tr key={`${groupIdx}-${taskIdx}`} className="border-b border-gray-200 last:border-0 hover:bg-white transition-colors bg-gray-50/50">
-                              <td className="py-2.5 pl-8 pr-4 text-gray-800 font-medium text-xs">
+                            <tr key={`${groupIdx}-${taskIdx}`} className="border-b border-gray-200 last:border-0 print-border-b print-zebra">
+                              <td className="py-3 pl-8 pr-4 text-gray-800 font-medium text-xs border-r border-gray-200">
                                 {task.label}
                               </td>
-                              <td className="py-2.5 px-4 text-center font-bold font-mono text-xs">
+                              <td className="py-3 px-4 text-center font-bold font-mono text-xs">
                                 {task.result === true || task.result === "true" || task.result === "Pass" || task.result === "PASS" ? 
-                                  <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded border border-emerald-100 shadow-sm inline-block w-full">PASS</span> : 
+                                  <span className="text-emerald-700 block">PASS</span> : 
                                  task.result === false || task.result === "false" || task.result === "Fail" || task.result === "FAIL" ? 
-                                  <span className="text-red-600 bg-red-50 px-2 py-1 rounded border border-red-100 shadow-sm inline-block w-full">FAIL</span> : 
-                                  <span className="text-gray-700 bg-white px-2 py-1 rounded border border-gray-200 shadow-sm inline-block w-full">{task.result}</span>
+                                  <span className="text-red-600 block">FAIL</span> : 
+                                  <span className="text-gray-900 block">{task.result}</span>
                                 }
                               </td>
                             </tr>
@@ -447,25 +480,35 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
                   </table>
                 </div>
               ) : (
-                <div className="p-6 bg-gray-50 border border-gray-200 rounded-lg text-sm italic text-gray-500 text-center shadow-inner">
-                  No specific checklist actions or parameters were recorded during this execution.
+                <div className="p-6 border border-dashed border-gray-300 rounded-lg text-sm italic text-gray-500 text-center">
+                  No specific parameter checklists were appended to this execution.
                 </div>
               )}
             </div>
 
             <div className="mb-12">
-              <h3 className="text-xs font-bold text-[#005596] uppercase tracking-wider border-b border-gray-200 pb-2 mb-4">Technician Notes & Comments</h3>
-              <div className="p-5 bg-gray-50 rounded-lg border border-gray-200 min-h-[100px] text-sm text-gray-700 whitespace-pre-wrap font-mono shadow-inner">
-                {selectedLog.comments || selectedLog.notes || "No additional comments provided during execution."}
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-3">Service Notes & Comments</h3>
+              <div className="p-5 border border-gray-300 rounded-lg min-h-[80px] text-sm text-gray-700 whitespace-pre-wrap font-mono print-border">
+                {selectedLog.comments || selectedLog.notes || "N/A"}
               </div>
             </div>
 
-            <div className="mt-16 pt-8 border-t border-gray-300">
-              <div className="w-72">
-                <div className="border-b-2 border-gray-800 pb-2 mb-2 text-center font-mono text-sm text-gray-800 italic">
-                  Electronically Signed: {selectedLog.technician || selectedLog.performedBy || 'N/A'}
+            {/* --- AUTHORIZATION BLOCK --- */}
+            <div className="pt-8 border-t-2 border-gray-800 mt-12 flex justify-between items-end">
+              <div>
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Authorization & Verification</h3>
+                <div className="text-sm font-bold text-gray-900">{selectedLog.technician || selectedLog.performedBy || 'System Operator'}</div>
+                {(selectedLog.email || selectedLog.performedByEmail) && <div className="text-xs text-gray-500 font-mono mt-0.5">{selectedLog.email || selectedLog.performedByEmail}</div>}
+              </div>
+              
+              <div className="w-64 text-center">
+                <div className="border-b border-gray-800 pb-2 mb-2">
+                  {/* Digital Signature rendering */}
+                  <span className="font-mono text-sm text-[#005596] italic block w-full truncate">
+                    Digitally Signed: {formatDate(selectedLog.timestamp || selectedLog.date)}
+                  </span>
                 </div>
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider text-center">Technician Digital Signature</div>
+                <div className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Electronic Signature Bind</div>
               </div>
             </div>
 

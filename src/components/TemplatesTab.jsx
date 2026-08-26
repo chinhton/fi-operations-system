@@ -66,9 +66,11 @@ export default function TemplatesTab({
   const [newTemplate, setNewTemplate] = useState({
     id: '',
     name: "",
+    docControlNumber: "", // <-- ADDED DOC CONTROL
+    ecnNumber: "",        // <-- ADDED ECN NUMBER
     interval: "Daily",
     executionMode: "asset", 
-    sopType: "Preventive Maintenance", // <-- ADDED SOP TYPE
+    sopType: "Preventive Maintenance",
     department: [],
     targetCategory: [],
     managerEmail: "",
@@ -86,8 +88,8 @@ export default function TemplatesTab({
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleExportCSV = () => {
-    // Added sopType to headers
-    const headers = ["id", "name", "interval", "executionMode", "sopType", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
+    // Added Doc Control and ECN to headers
+    const headers = ["id", "name", "docControlNumber", "ecnNumber", "interval", "executionMode", "sopType", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
     pmTemplates.forEach(template => {
@@ -158,9 +160,11 @@ export default function TemplatesTab({
           const finalTemplate = {
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
+            docControlNumber: rowObj['docControlNumber'] || rowObj['Doc Control Number'] || "",
+            ecnNumber: rowObj['ecnNumber'] || rowObj['ECN Number'] || "",
             interval: rowObj['interval'] || "Monthly",
             executionMode: rowObj['executionMode'] || "asset",
-            sopType: rowObj['sopType'] || rowObj['Type'] || "Preventive Maintenance", // <-- ADDED
+            sopType: rowObj['sopType'] || rowObj['Type'] || "Preventive Maintenance",
             department: parsedDept,
             targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
@@ -240,9 +244,11 @@ export default function TemplatesTab({
     setNewTemplate({
       id: '',
       name: "",
+      docControlNumber: "",
+      ecnNumber: "",
       interval: "Daily",
       executionMode: "asset",
-      sopType: "Preventive Maintenance", // Default to PM
+      sopType: "Preventive Maintenance",
       department: defaultDept,
       targetCategory: [],
       managerEmail: "",
@@ -258,9 +264,11 @@ export default function TemplatesTab({
   const openEditModal = (template) => {
     setNewTemplate({ 
       ...template, 
+      docControlNumber: template.docControlNumber || "",
+      ecnNumber: template.ecnNumber || "",
       executionMode: template.executionMode || 'asset', 
       contractor: template.contractor || "",
-      sopType: template.sopType || "Preventive Maintenance" // Backwards compatibility for old templates
+      sopType: template.sopType || "Preventive Maintenance"
     });
     setShowTemplateModal(true);
   };
@@ -309,7 +317,8 @@ export default function TemplatesTab({
 
   const filteredTemplates = pmTemplates.filter(t => {
     const matchesSearch = t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (Array.isArray(t.department) ? t.department.join(' ').toLowerCase().includes(searchQuery.toLowerCase()) : t.department?.toLowerCase().includes(searchQuery.toLowerCase()));
+                          (Array.isArray(t.department) ? t.department.join(' ').toLowerCase().includes(searchQuery.toLowerCase()) : t.department?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                          t.docControlNumber?.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (Array.isArray(t.targetCategory)) {
       return matchesSearch || t.targetCategory.some(cat => cat.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -404,7 +413,7 @@ export default function TemplatesTab({
 
         <input 
           type="text" 
-          placeholder="Search by Title, Category, or Dept..." 
+          placeholder="Search by Title, Category, Dept, or Doc #..." 
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full xl:w-96 text-xs rounded-lg border border-gray-300 p-3 bg-gray-50 shadow-inner focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 transition-all"
@@ -435,6 +444,13 @@ export default function TemplatesTab({
                       {template.interval}
                     </span>
                   </div>
+
+                  {(template.docControlNumber || template.ecnNumber) && (
+                    <div className="flex space-x-3 mb-3 text-[9px] font-mono bg-gray-50 p-2 rounded border border-gray-100">
+                      {template.docControlNumber && <div className="text-gray-500"><span className="font-bold">DOC:</span> {template.docControlNumber}</div>}
+                      {template.ecnNumber && <div className="text-indigo-500"><span className="font-bold">REV:</span> {template.ecnNumber}</div>}
+                    </div>
+                  )}
                   
                   <div className="mb-4 flex flex-wrap gap-2">
                     {/* Execution Mode Badge */}
@@ -448,7 +464,7 @@ export default function TemplatesTab({
                       </span>
                     )}
 
-                    {/* NEW SOP Type Badge */}
+                    {/* SOP Type Badge */}
                     <span className={`inline-flex items-center px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
                         template.sopType === 'Calibration' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                         template.sopType === 'Inspection' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
@@ -522,9 +538,21 @@ export default function TemplatesTab({
             
             <form onSubmit={handleLocalSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
-                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
+                
+                {/* --- TITLE & DOC CONTROL ROW --- */}
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-12 gap-4 border-b border-gray-100 pb-5">
+                  <div className="md:col-span-6">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
+                    <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Doc Control # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                    <input type="text" value={newTemplate.docControlNumber} onChange={(e) => setNewTemplate({...newTemplate, docControlNumber: e.target.value})} placeholder="e.g. SOP-7482" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">ECN / Rev # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                    <input type="text" value={newTemplate.ecnNumber} onChange={(e) => setNewTemplate({...newTemplate, ecnNumber: e.target.value})} placeholder="e.g. Rev. B" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                  </div>
                 </div>
                 
                 <div>
@@ -559,7 +587,6 @@ export default function TemplatesTab({
                   </select>
                 </div>
 
-                {/* NEW SOP TYPE DROPDOWN */}
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Type</label>
                   <select 

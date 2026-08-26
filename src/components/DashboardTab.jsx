@@ -258,14 +258,12 @@ export default function DashboardTab({
   const myUpcoming = userAssignedTasks.filter(item => item.taskCategory === 'Upcoming');
   const myPending = userAssignedTasks.filter(item => item.taskCategory === 'Pending');
 
-  // --- THE FIX: Hijack the sweep button to bypass the backend and force the frontend queue ---
   const handleTestSweep = async () => {
     if (!window.confirm("Fire the daily sweep right now? This will forcefully send live Teams messages to operators for ALL currently overdue assets in your critical queue.")) return;
     
     try {
       let pingCount = 0;
       
-      // Loop through everything the dashboard has already identified as Overdue/Critical
       for (const item of adminCritical) {
         await handleSendAlert(null, item, true);
         pingCount++;
@@ -287,9 +285,37 @@ export default function DashboardTab({
     const exactTimestamp = new Date().toLocaleString('en-US');
 
     try {
+        let totalFails = 0;
+        Object.values(routeAnswers).forEach(val => {
+            if (val === 'OFFLINE' || val === 'fail') totalFails++;
+        });
+
         for (const asset of mappedAssets) {
             let newStatus = asset.status;
-            if (newStatus === "Inspection Due" || newStatus === "Maintenance Due") {
+            
+            // --- THE FIX: Smart scanner checks if this specific asset failed a step ---
+            let isFailed = false;
+            targetTemplate.checklistSteps.forEach((step, idx) => {
+                const answer = routeAnswers[idx];
+                if (answer === 'OFFLINE' || answer === 'fail') {
+                    const stepLabel = (typeof step === 'string' ? step : step.label).toLowerCase();
+                    const stepSection = (typeof step === 'string' ? '' : step.section || '').toLowerCase();
+                    const searchStr = `${stepLabel} ${stepSection}`;
+                    
+                    const assetName = asset.name.toLowerCase();
+                    // Allows "Humidifier 1" to match "Humidifier #1" securely
+                    const assetNameNoHash = assetName.replace('#', '').replace(/\s+/g, ' ').trim();
+                    
+                    if (searchStr.includes(assetName) || searchStr.includes(assetNameNoHash)) {
+                        isFailed = true;
+                    }
+                }
+            });
+
+            // Route to Corrective Action Queue if failed!
+            if (isFailed) {
+                newStatus = "Corrective Maintenance";
+            } else if (newStatus === "Inspection Due" || newStatus === "Maintenance Due") {
                  newStatus = "Active"; 
             }
             
@@ -319,8 +345,8 @@ export default function DashboardTab({
             performedByEmail: currentUser?.email || "",
             date: todayStr,
             timestamp: exactTimestamp,
-            status: 'Completed (Grouped Route)',
-            comments: 'Facility walk completed and submitted as a single master record.',
+            status: totalFails > 0 ? 'Failed / Offline Items Logged' : 'Completed (Grouped Route)',
+            comments: totalFails > 0 ? `Facility walk completed with ${totalFails} failed or offline parameters.` : 'Facility walk completed and submitted as a single master record.',
             responses: routeAnswers 
         };
 
