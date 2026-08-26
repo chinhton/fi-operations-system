@@ -62,7 +62,7 @@ export default function DashboardTab({
     const targetEmails = Array.from(emailSet).join(';');
 
     const subject = isEscalation 
-        ? `🚨 CRITICAL ESCALATION: Maintenance Required for ${item.name}`
+        ? `🚨 CRITICAL ESCALATION: Action Required for ${item.name}`
         : `📅 UPCOMING PM: Action Required for ${item.name}`;
 
     const actionText = item.type === 'route' 
@@ -72,20 +72,6 @@ export default function DashboardTab({
     const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>Please log into the FI-Maintenance Management System to execute and sign off on this protocol.`;
 
     triggerTeamsAlert(targetEmails, subject, body);
-  };
-
-  const handleTestSweep = async () => {
-    if (!window.confirm("Fire the daily sweep right now? This will send live Teams messages to operators with overdue assets.")) return;
-    
-    try {
-      const response = await fetch('/api/dailySweep', { method: 'POST' });
-      const result = await response.text();
-      
-      alert(`Sweep Complete: ${result}`);
-    } catch (err) {
-      console.error("Sweep trigger failed:", err);
-      alert("Failed to trigger the sweep. Check the console.");
-    }
   };
 
   if (assets && pmTemplates && calculateDaysRemaining) {
@@ -269,6 +255,40 @@ export default function DashboardTab({
   const myCritical = userAssignedTasks.filter(item => item.taskCategory === 'Critical');
   const myUpcoming = userAssignedTasks.filter(item => item.taskCategory === 'Upcoming');
   const myPending = userAssignedTasks.filter(item => item.taskCategory === 'Pending');
+
+  // --- THE FIX: Hijack the sweep button to bypass the backend and force the frontend queue ---
+  const handleTestSweep = async () => {
+    if (!window.confirm("Fire the daily sweep right now? This will forcefully send live Teams messages to operators for ALL currently overdue assets in your critical queue.")) return;
+    
+    try {
+      let pingCount = 0;
+      
+      // Loop through everything the dashboard has already identified as Overdue/Critical
+      for (const item of adminCritical) {
+        const managerEmails = getManagerForDepartment(item.department);
+        const operatorEmail = item.assignedTo && item.assignedTo.includes('@') ? item.assignedTo : null;
+        
+        const emailSet = new Set(managerEmails.split(';').filter(Boolean));
+        if (operatorEmail) emailSet.add(operatorEmail);
+        const targetEmails = Array.from(emailSet).join(';');
+
+        const subject = `🚨 SYSTEM ESCALATION: ${item.displayStatus} for ${item.name}`;
+        const actionText = item.type === 'route' 
+            ? `Execute Master Facility Route` 
+            : `Execute SOP: ${item.targetTemplate?.name || 'General Preventative Maintenance'}`;
+
+        const body = `**FI-MMS Automated Alert**<br><br>**Target Asset:** ${item.name}<br>**Serial / Details:** ${item.serial}<br>**Current Status:** ${item.displayStatus} (${item.displayDate})<br>**Required Action:** ${actionText}<br>**Assigned Operator:** ${item.assignedTo}<br><br>The background sweep has flagged this system as overdue for its required cycle. Please log into the FI-Maintenance Management System to execute the required protocol immediately.`;
+
+        await triggerTeamsAlert(targetEmails, subject, body);
+        pingCount++;
+      }
+      
+      alert(`Sweep Complete! Forcefully dispatched ${pingCount} live Teams escalation alerts directly from the dashboard.`);
+    } catch (err) {
+      console.error("Sweep trigger failed:", err);
+      alert("Failed to trigger the sweep. Check the console.");
+    }
+  };
 
   const handleSubmitMasterRoute = async (e) => {
     e.preventDefault();
