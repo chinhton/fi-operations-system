@@ -29,11 +29,12 @@ export default function SidebarNav({
     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: hardwareCount },
     keys: { icon: "🔑", label: "Hard Key Tracking", badge: keysCount },
     manuals: { icon: "📖", label: "Equipment Manuals", badge: manualsCount },
+    contractors: { icon: "🗂️", label: "Contractor Reports", badge: manuals.filter(m => m.docType === 'contractor').length }, // <-- ADDED TAB
     templates: { icon: "⚙️", label: "Established SOPs", badge: templatesCount },
     history: { icon: "📜", label: "Executed Audits", badge: historyCount }
   };
 
-  const fallbackOrder = ['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history'];
+  const fallbackOrder = ['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'contractors', 'templates', 'history'];
   const currentOrder = navOrder.length > 0 ? navOrder : fallbackOrder;
 
   const [draggedTab, setDraggedTab] = useState(null);

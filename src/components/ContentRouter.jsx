@@ -12,6 +12,7 @@ import ManualsTab from './ManualsTab';
 import TemplatesTab from './TemplatesTab';
 import HistoryTab from './HistoryTab';
 import ApprovalsTab from './ApprovalsTab';
+import ContractorReportsTab from './ContractorReportsTab';
 
 export default function ContentRouter(props) {
   // Security Check for Key Tab
