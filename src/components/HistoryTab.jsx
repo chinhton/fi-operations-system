@@ -192,7 +192,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
     return grouped;
   };
 
-  // Extract Doc Control variables for the selected log
   const activeTemplate = selectedLog ? pmTemplates.find(t => t.name === selectedLog.templateName) : null;
   const docControlNumber = activeTemplate?.docControlNumber || selectedLog?.docControlNumber || "N/A";
   const ecnNumber = activeTemplate?.ecnNumber || selectedLog?.ecnNumber || "N/A";
@@ -200,10 +199,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
   return (
     <div className="space-y-6 animate-entrance">
       
-      {/* 
-        THE FIX: Massively upgraded print CSS. 
-        Forces strict background colors, structured grid lines, and high-end fonts. 
-      */}
       <style>{`
         @media print {
           @page { size: letter; margin: 0.5in; }
@@ -371,36 +366,35 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
 
           <div id="pdf-print-area" className="p-8 max-w-5xl mx-auto bg-white">
             
-            {/* --- NEW CORPORATE PDF HEADER --- */}
+            {/* --- NEW CORPORATE PDF HEADER WITH DOC CONTROL --- */}
             <div className="flex justify-between items-center border-b-4 border-[#003058] pb-6 mb-6">
               <div className="flex items-center space-x-5">
                 <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-14 w-auto object-contain" />
                 <div className="border-l-2 border-gray-300 pl-5">
                   <h1 className="text-2xl font-black text-[#003058] tracking-widest uppercase m-0 leading-none">Protocol Report</h1>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1.5 m-0">Official ISO Maintenance Record</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Audit Record ID</div>
-                <div className="text-lg font-mono font-black text-[#005596]">{selectedLog.id || `LOG-SYSTEM`}</div>
+              <div className="flex space-x-8 text-right">
+                 <div className="text-right">
+                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Doc Control #</span>
+                   <span className="text-base font-mono font-bold text-gray-800">{docControlNumber}</span>
+                 </div>
+                 <div className="text-right">
+                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Revision / ECN</span>
+                   <span className="text-base font-mono font-bold text-[#005596]">{ecnNumber}</span>
+                 </div>
               </div>
             </div>
 
-            {/* --- NEW DOCUMENT CONTROL RIBBON --- */}
+            {/* --- RIBBON WITH AUDIT ID --- */}
             <div className="flex bg-gray-50 border border-gray-300 rounded-lg p-4 mb-8 justify-between items-center shadow-sm print-bg-gray print-border">
               <div className="flex-1">
                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Standard Operating Procedure Executed</span>
                  <span className="text-sm font-black text-gray-900">{selectedLog.templateName || 'System Action'}</span>
               </div>
-              <div className="flex space-x-12 border-l border-gray-300 pl-8 ml-8">
-                 <div>
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Doc Control #</span>
-                   <span className="text-sm font-mono font-bold text-gray-800">{docControlNumber}</span>
-                 </div>
-                 <div>
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Revision / ECN</span>
-                   <span className="text-sm font-mono font-bold text-indigo-700">{ecnNumber}</span>
-                 </div>
+              <div className="border-l border-gray-300 pl-8 ml-8 text-right">
+                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Audit Record ID</span>
+                 <span className="text-sm font-mono font-bold text-gray-800">{selectedLog.id || `LOG-SYSTEM`}</span>
               </div>
             </div>
 
@@ -503,7 +497,6 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
               
               <div className="w-64 text-center">
                 <div className="border-b border-gray-800 pb-2 mb-2">
-                  {/* Digital Signature rendering */}
                   <span className="font-mono text-sm text-[#005596] italic block w-full truncate">
                     Digitally Signed: {formatDate(selectedLog.timestamp || selectedLog.date)}
                   </span>

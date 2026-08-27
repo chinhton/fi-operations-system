@@ -66,8 +66,8 @@ export default function TemplatesTab({
   const [newTemplate, setNewTemplate] = useState({
     id: '',
     name: "",
-    docControlNumber: "", // <-- ADDED DOC CONTROL
-    ecnNumber: "",        // <-- ADDED ECN NUMBER
+    docControlNumber: "",
+    ecnNumber: "",
     interval: "Daily",
     executionMode: "asset", 
     sopType: "Preventive Maintenance",
@@ -88,7 +88,6 @@ export default function TemplatesTab({
   const isDepartmentRestricted = !isSystemAdmin && !isManager;
 
   const handleExportCSV = () => {
-    // Added Doc Control and ECN to headers
     const headers = ["id", "name", "docControlNumber", "ecnNumber", "interval", "executionMode", "sopType", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
@@ -273,6 +272,18 @@ export default function TemplatesTab({
     setShowTemplateModal(true);
   };
 
+  // --- NEW: DUPLICATE SOP HANDLER ---
+  const handleDuplicateTemplate = (template) => {
+    setNewTemplate({
+      ...template,
+      id: '', // Stripping the ID forces it to save as a brand new protocol
+      name: `${template.name} (Copy)`,
+      docControlNumber: "", // Stripped to prevent accidental ISO compliance overlaps
+      ecnNumber: ""
+    });
+    setShowTemplateModal(true);
+  };
+
   const handleLocalSubmit = async (e) => {
     e.preventDefault();
     
@@ -349,7 +360,6 @@ export default function TemplatesTab({
     }
   }
 
-  // --- DRAG AND DROP REORDER HANDLER ---
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = 'move';
@@ -375,9 +385,7 @@ export default function TemplatesTab({
   return (
     <div className="space-y-8 animate-entrance w-full">
       
-      {/* DIRECTORY HEADER & CONTROLS */}
       <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-        
         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
           <button 
             onClick={openBuildModal}
@@ -420,7 +428,6 @@ export default function TemplatesTab({
         />
       </div>
 
-      {/* SOP DIRECTORY GRID */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-[#1A2530] text-white px-6 py-4 flex flex-col sm:flex-row items-center justify-between">
           <h3 className="font-bold text-sm tracking-wide uppercase">Standard Operating Procedures</h3>
@@ -453,7 +460,6 @@ export default function TemplatesTab({
                   )}
                   
                   <div className="mb-4 flex flex-wrap gap-2">
-                    {/* Execution Mode Badge */}
                     {template.executionMode === 'route' ? (
                       <span className="inline-flex items-center space-x-1.5 bg-purple-50 text-purple-700 border border-purple-200 px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider">
                         <span>🚶‍♂️</span> <span>Grouped Route</span>
@@ -464,11 +470,10 @@ export default function TemplatesTab({
                       </span>
                     )}
 
-                    {/* SOP Type Badge */}
                     <span className={`inline-flex items-center px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
                         template.sopType === 'Calibration' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                         template.sopType === 'Inspection' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                        'bg-[#005596]/10 text-[#005596] border-[#005596]/20' // Default PM styling
+                        'bg-[#005596]/10 text-[#005596] border-[#005596]/20'
                     }`}>
                       {template.sopType || 'Preventive Maintenance'}
                     </span>
@@ -503,6 +508,9 @@ export default function TemplatesTab({
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-3 border-t border-gray-100">
+                  <button onClick={() => handleDuplicateTemplate(template)} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 uppercase tracking-wider transition-colors">
+                    📋 Duplicate
+                  </button>
                   <button onClick={() => openEditModal(template)} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors">
                     ✏️ Edit SOP
                   </button>
@@ -518,7 +526,6 @@ export default function TemplatesTab({
         )}
       </div>
 
-      {/* --- QUICK TEMPLATE BUILDER MODAL --- */}
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-entrance relative">
@@ -539,20 +546,19 @@ export default function TemplatesTab({
             <form onSubmit={handleLocalSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* --- TITLE & DOC CONTROL ROW --- */}
-                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-12 gap-4 border-b border-gray-100 pb-5">
-                  <div className="md:col-span-6">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
-                    <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Doc Control # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
-                    <input type="text" value={newTemplate.docControlNumber} onChange={(e) => setNewTemplate({...newTemplate, docControlNumber: e.target.value})} placeholder="e.g. SOP-7482" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">ECN / Rev # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
-                    <input type="text" value={newTemplate.ecnNumber} onChange={(e) => setNewTemplate({...newTemplate, ecnNumber: e.target.value})} placeholder="e.g. Rev. B" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
-                  </div>
+                <div className="md:col-span-2 border-b border-gray-100 pb-5 mb-1">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Checklist Title</label>
+                  <input type="text" value={newTemplate.name} onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})} placeholder="e.g. Annual Precision ISO Check" className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" required />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Doc Control # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                  <input type="text" value={newTemplate.docControlNumber} onChange={(e) => setNewTemplate({...newTemplate, docControlNumber: e.target.value})} placeholder="e.g. Form 248 Rev G" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">ECN / Rev # <span className="text-gray-400 font-normal normal-case">(Optional)</span></label>
+                  <input type="text" value={newTemplate.ecnNumber} onChange={(e) => setNewTemplate({...newTemplate, ecnNumber: e.target.value})} placeholder="e.g. ECN 250061" className="w-full text-xs font-mono rounded border-gray-300 shadow-sm p-2.5 border bg-white focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none" />
                 </div>
                 
                 <div>
@@ -756,7 +762,11 @@ export default function TemplatesTab({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 text-xs">
-                        {newTemplate.checklistSteps?.map((step, idx) => (
+                        {newTemplate.checklistSteps?.map((step, idx) => {
+                          // --- THE FIX: Smart Visual Grouping for the Builder Table ---
+                          const isSameSection = idx > 0 && newTemplate.checklistSteps[idx - 1].section === step.section && step.section !== "";
+
+                          return (
                           <tr 
                             key={idx} 
                             draggable
@@ -781,7 +791,12 @@ export default function TemplatesTab({
                                   setNewTemplate({...newTemplate, checklistSteps: newSteps});
                                 }}
                                 placeholder="-- No Tag --"
-                                className="w-full text-[10px] font-bold text-indigo-700 bg-transparent border border-transparent hover:border-gray-200 focus:bg-indigo-50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 px-2 py-1.5 rounded outline-none transition-all uppercase tracking-wider placeholder-gray-400 cursor-text"
+                                title={step.section}
+                                className={`w-full text-[10px] font-bold uppercase tracking-wider px-2 py-1.5 rounded outline-none transition-all cursor-text truncate ${
+                                  isSameSection 
+                                    ? 'text-gray-300 border-transparent hover:text-indigo-500 focus:text-indigo-700 focus:bg-indigo-50' 
+                                    : 'text-indigo-700 border-transparent hover:border-gray-200 focus:bg-indigo-50 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400'
+                                }`}
                               />
                             </td>
 
@@ -837,7 +852,6 @@ export default function TemplatesTab({
                             </td>
 
                             <td className="px-2 py-3 text-center flex justify-center items-center space-x-2 mt-1">
-                              {/* --- INLINE ADD BELOW BUTTON --- */}
                               <button 
                                 type="button" 
                                 onClick={() => {
@@ -851,7 +865,6 @@ export default function TemplatesTab({
                                 ➕
                               </button>
 
-                              {/* --- DUPLICATE ROW BUTTON --- */}
                               <button 
                                 type="button" 
                                 onClick={() => {
@@ -865,7 +878,6 @@ export default function TemplatesTab({
                                 📋
                               </button>
 
-                              {/* --- REMOVE ROW BUTTON --- */}
                               <button 
                                 type="button" 
                                 onClick={() => {
@@ -880,7 +892,7 @@ export default function TemplatesTab({
                               </button>
                             </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                     
@@ -967,7 +979,6 @@ export default function TemplatesTab({
         </div>
       )}
 
-      {/* --- PROGRESS OVERLAY FOR IMPORTS / WIPES --- */}
       {syncProgress.active && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center animate-entrance">
