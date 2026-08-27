@@ -193,8 +193,11 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
   };
 
   const activeTemplate = selectedLog ? pmTemplates.find(t => t.name === selectedLog.templateName) : null;
-  const docControlNumber = activeTemplate?.docControlNumber || selectedLog?.docControlNumber || "N/A";
-  const ecnNumber = activeTemplate?.ecnNumber || selectedLog?.ecnNumber || "N/A";
+  const rawDoc = activeTemplate?.docControlNumber || selectedLog?.docControlNumber;
+  const rawEcn = activeTemplate?.ecnNumber || selectedLog?.ecnNumber;
+  
+  const docControlNumber = rawDoc ? rawDoc : "N/A";
+  const ecnNumber = rawEcn ? rawEcn : "N/A";
 
   return (
     <div className="space-y-6 animate-entrance">
@@ -366,36 +369,34 @@ export default function HistoryTab({ history = [], pmTemplates = [], isSystemAdm
 
           <div id="pdf-print-area" className="p-8 max-w-5xl mx-auto bg-white">
             
-            {/* --- NEW CORPORATE PDF HEADER WITH DOC CONTROL --- */}
+            {/* --- CORPORATE HEADER: LOGO & DOC CONTROL --- */}
             <div className="flex justify-between items-center border-b-4 border-[#003058] pb-6 mb-6">
-              <div className="flex items-center space-x-5">
+              <div className="flex items-center space-x-6">
                 <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-14 w-auto object-contain" />
-                <div className="border-l-2 border-gray-300 pl-5">
-                  <h1 className="text-2xl font-black text-[#003058] tracking-widest uppercase m-0 leading-none">Protocol Report</h1>
-                </div>
-              </div>
-              <div className="flex space-x-8 text-right">
-                 <div className="text-right">
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Doc Control #</span>
-                   <span className="text-base font-mono font-bold text-gray-800">{docControlNumber}</span>
-                 </div>
-                 <div className="text-right">
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Revision / ECN</span>
-                   <span className="text-base font-mono font-bold text-[#005596]">{ecnNumber}</span>
-                 </div>
+                
+                {(docControlNumber !== 'N/A' || ecnNumber !== 'N/A') && (
+                  <div className="flex space-x-8 border-l-2 border-gray-300 pl-6">
+                     {docControlNumber !== 'N/A' && (
+                       <div>
+                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Doc Control #</span>
+                         <span className="text-sm font-mono font-bold text-gray-800">{docControlNumber}</span>
+                       </div>
+                     )}
+                     {ecnNumber !== 'N/A' && (
+                       <div>
+                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Revision / ECN</span>
+                         <span className="text-sm font-mono font-bold text-[#005596]">{ecnNumber}</span>
+                       </div>
+                     )}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* --- RIBBON WITH AUDIT ID --- */}
-            <div className="flex bg-gray-50 border border-gray-300 rounded-lg p-4 mb-8 justify-between items-center shadow-sm print-bg-gray print-border">
-              <div className="flex-1">
-                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Standard Operating Procedure Executed</span>
-                 <span className="text-sm font-black text-gray-900">{selectedLog.templateName || 'System Action'}</span>
-              </div>
-              <div className="border-l border-gray-300 pl-8 ml-8 text-right">
-                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Audit Record ID</span>
-                 <span className="text-sm font-mono font-bold text-gray-800">{selectedLog.id || `LOG-SYSTEM`}</span>
-              </div>
+            {/* --- MAIN TITLE RIBBON --- */}
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-5 mb-8 shadow-sm print-bg-gray print-border">
+               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Standard Operating Procedure Executed</span>
+               <span className="text-xl font-black text-[#003058]">{selectedLog.templateName || 'System Action'}</span>
             </div>
 
             {/* --- METADATA GRID --- */}
