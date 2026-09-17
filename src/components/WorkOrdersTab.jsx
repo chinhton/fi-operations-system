@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CompleteWorkOrderModal from './CompleteWorkOrderModal';
 
 const CORPORATE_DEPARTMENTS = [
   "System Administration",
@@ -19,6 +20,7 @@ export default function WorkOrdersTab({
   // Moved from App.jsx!
   const [filterSearch, setFilterSearch] = useState("");
   const [filterPriority, setFilterPriority] = useState("All");
+  const [completingWo, setCompletingWo] = useState(null);
 
   // Local filtering logic
   const filteredWorkOrders = (workOrders || []).filter(w => 
@@ -304,7 +306,7 @@ export default function WorkOrdersTab({
                         ) : (
                           <select
                             value={wo.status}
-                            onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
+                            onChange={(e) => e.target.value === "Completed" ? setCompletingWo(wo) : handleUpdateWoStatus(wo.id, e.target.value)}
                             disabled={!isSystemAdmin && wo.assignedTo !== currentUser?.email}
                             className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-transparent ${!isSystemAdmin && wo.assignedTo !== currentUser?.email ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-gray-300'} ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
                           >
@@ -325,6 +327,15 @@ export default function WorkOrdersTab({
           </table>
         </div>
       </div>
+
+      <CompleteWorkOrderModal
+        workOrder={completingWo}
+        onClose={() => setCompletingWo(null)}
+        onConfirm={(comments, reportFile) => {
+          handleUpdateWoStatus(completingWo.id, "Completed", comments, reportFile);
+          setCompletingWo(null);
+        }}
+      />
     </div>
   );
 }

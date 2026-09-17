@@ -361,7 +361,7 @@ export default function App() {
   const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
   const manualHooks = useManuals(manuals, setManuals, assets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
-  const woHooks = useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
+  const woHooks = useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory, setManuals);
   const pmHooks = usePmExecution(assets, setAssets, history, setHistory, currentUser, modals.triggerModal, woHooks.handleUpdateWoStatus);
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");

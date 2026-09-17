@@ -103,7 +103,7 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
       setHistory([historyPayload, ...history]);
 
       if (sourceWorkOrderId && handleUpdateWoStatus) {
-        await handleUpdateWoStatus(sourceWorkOrderId, "Completed");
+        await handleUpdateWoStatus(sourceWorkOrderId, "Completed", pmComments);
       }
 
       triggerModal("Protocol Logged", "Preventative Maintenance successfully recorded.", "success");

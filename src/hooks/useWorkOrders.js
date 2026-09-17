@@ -22,7 +22,7 @@ const calculateNextDueDate = (dateStr, frequency) => {
   return nextDate.toISOString().split('T')[0];
 };
 
-export default function useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, triggerModal, closeModal, setHistory) {
+export default function useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, triggerModal, closeModal, setHistory, setManuals) {
   const [isSubmittingWo, setIsSubmittingWo] = useState(false);
   const [newWo, setNewWo] = useState({
     title: "", description: "", assetId: "", assignedTo: "", priority: "",
@@ -81,15 +81,40 @@ export default function useWorkOrders(workOrders, setWorkOrders, currentUser, us
     } finally { setIsSubmittingWo(false); }
   };
 
-  const handleUpdateWoStatus = async (woId, newStatus) => {
+  const handleUpdateWoStatus = async (woId, newStatus, completionComments = "", completionFile = null) => {
     const targetWo = workOrders.find(w => w.id === woId);
     if (!targetWo) return;
+
+    let contractorReportId = null;
+
+    if (newStatus === "Completed" && completionFile) {
+      try {
+        const uploadRes = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: completionFile.name, fileData: completionFile.data }) });
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          const reportDoc = {
+            id: `DOC-${Date.now().toString().slice(-6)}`,
+            fileName: uploadData.fileName,
+            fileSize: completionFile.size,
+            fileData: uploadData.url,
+            manualText: `Contractor report attached on completion of work order: ${targetWo.title}`,
+            linkedAssetIds: targetWo.assetId ? [targetWo.assetId] : [],
+            docType: 'contractor'
+          };
+          await fetch('/api/manuals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reportDoc) });
+          if (setManuals) setManuals(prev => [...prev, reportDoc]);
+          contractorReportId = reportDoc.id;
+        }
+      } catch (err) { console.error("Failed to upload contractor report:", err); }
+    }
 
     const isRecurringCompletion = newStatus === "Completed" && targetWo.frequency && targetWo.frequency !== "One-Time";
 
     const updatedWo = isRecurringCompletion
       ? { ...targetWo, status: "Open", dueDate: calculateNextDueDate(targetWo.dueDate, targetWo.frequency) }
-      : { ...targetWo, status: newStatus };
+      : newStatus === "Completed"
+        ? { ...targetWo, status: newStatus, resolutionNotes: completionComments || targetWo.description || "", contractorReportId: contractorReportId || targetWo.contractorReportId }
+        : { ...targetWo, status: newStatus };
 
     setWorkOrders(workOrders.map(w => w.id === woId ? updatedWo : w));
 
@@ -107,7 +132,8 @@ export default function useWorkOrders(workOrders, setWorkOrders, currentUser, us
           technician: currentUser.name,
           email: currentUser.email,
           status: "Completed Pass",
-          comments: targetWo.description || "Work order marked resolved by technician."
+          comments: completionComments || targetWo.description || "Work order marked resolved by technician.",
+          contractorReportId: contractorReportId || targetWo.contractorReportId || null
         };
         const logRes = await fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(logEntry) });
         if (logRes.ok) {

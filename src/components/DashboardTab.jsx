@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import CompleteWorkOrderModal from './CompleteWorkOrderModal';
 
 export default function DashboardTab({
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
   assets, pmTemplates, calculateDaysRemaining, users = [],
   workOrders = [], handleUpdateWoStatus, changeTab
 }) {
+  const [completingWo, setCompletingWo] = useState(null);
   
   const adminGlobalQueue = [];
   const userAssignedTasks = [];
@@ -755,7 +757,7 @@ export default function DashboardTab({
                         ) : handleUpdateWoStatus ? (
                           <select
                             value={wo.status}
-                            onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
+                            onChange={(e) => e.target.value === "Completed" ? setCompletingWo(wo) : handleUpdateWoStatus(wo.id, e.target.value)}
                             className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-1 cursor-pointer border border-transparent ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
                           >
                             <option value="Open">Open</option>
@@ -1088,6 +1090,14 @@ export default function DashboardTab({
         </div>
       )}
 
+      <CompleteWorkOrderModal
+        workOrder={completingWo}
+        onClose={() => setCompletingWo(null)}
+        onConfirm={(comments, reportFile) => {
+          handleUpdateWoStatus(completingWo.id, "Completed", comments, reportFile);
+          setCompletingWo(null);
+        }}
+      />
     </div>
   );
 }
