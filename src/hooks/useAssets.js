@@ -134,7 +134,7 @@ export default function useAssets(assets, setAssets, history, setHistory, trigge
   const updateAssetSubDoc = async (updatedAsset) => {
     setActiveAssetDetails(updatedAsset);
     setAssets(assets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch(err){}
+    try { await fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatedAsset) }); } catch (err) { console.error("Failed to update asset sub-document:", err); }
   };
 
   const addPart = (e) => {

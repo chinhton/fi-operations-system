@@ -323,7 +323,7 @@ export default function TemplatesTab({
     if (!window.confirm("Are you sure you want to permanently delete this SOP? Active assets relying on it will lose their PM framework.")) return;
     try {
       await window.fetch(`/api/templates?id=${id}`, { method: 'DELETE' });
-    } catch (err) {}
+    } catch (err) { console.error("Failed to delete SOP:", err); }
   };
 
   const filteredTemplates = pmTemplates.filter(t => {

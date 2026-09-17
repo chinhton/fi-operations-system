@@ -7,7 +7,7 @@ export default function GlobalAlertModal({ show, title, message, type, onConfirm
     <div className="fixed inset-0 z-[100] overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-sm w-full overflow-hidden animate-entrance">
         <div className={`p-4 text-white text-xs font-bold uppercase tracking-wider ${type === "error" ? "bg-red-600" : "bg-[#005596]"}`}>
-          {type === "error" ? "⚠️ System Error" : "ℹ️ System Message"}
+          {title || (type === "error" ? "⚠️ System Error" : "ℹ️ System Message")}
         </div>
         <div className="p-5">
           <p className="text-xs text-gray-700 leading-relaxed font-medium">{message}</p>

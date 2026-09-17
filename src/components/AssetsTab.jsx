@@ -116,7 +116,7 @@ export default function AssetsTab({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updatedUser)
         });
-      } catch (err) {}
+      } catch (err) { console.error("Failed to save user preference:", err); }
     }
   };
 
@@ -176,7 +176,7 @@ export default function AssetsTab({
           body: JSON.stringify(updatedAsset)
         });
       }));
-    } catch (err) {}
+    } catch (err) { console.error("Failed to bulk move asset group:", err); }
   };
 
   const handleExportCSV = () => {
@@ -837,7 +837,7 @@ export default function AssetsTab({
                     >
                       <option value="">-- Add Department --</option>
                       {isDepartmentRestricted ? (
-                        !(Array.isArray(newAsset.department) ? newAsset.department : []).includes(userDept) && <option value={userDept}>{userDept}</option>
+                        !(Array.isArray(newAsset.department) ? newAsset.department : []).includes(currentUser?.department) && <option value={currentUser?.department}>{currentUser?.department}</option>
                       ) : (
                         CORPORATE_DEPARTMENTS.filter(dept => {
                             let current = newAsset.department;

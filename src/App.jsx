@@ -352,7 +352,7 @@ export default function App() {
 
             triggerTeamsAlert(targetEmails, subject, bodyText);
 
-          } catch (err) {}
+          } catch (err) { console.error("Daily sweep escalation failed:", err); }
         }
       }
       if (sweptCount > 0) window.fetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error);
@@ -417,7 +417,7 @@ export default function App() {
     try {
       await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...targetUser, status: "Active" }) });
       setUsers(users.map(u => (u.email === email && u.status !== "Active") ? { ...targetUser, status: "Active" } : u));
-    } catch (err) {}
+    } catch (err) { console.error("Failed to approve user:", err); }
   };
 
   const handleDenyUser = async (email) => {
@@ -426,7 +426,7 @@ export default function App() {
     try {
       await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
       setUsers(users.filter(u => !(u.email === email && u.status !== "Active")));
-    } catch (err) {}
+    } catch (err) { console.error("Failed to deny user:", err); }
   };
 
   const handleRevokeUser = async (email) => {
@@ -437,7 +437,7 @@ export default function App() {
           await fetch(`/api/users?id=${targetUser.id}`, { method: 'DELETE' });
           setUsers(users.filter(u => !(u.email === email && u.status === "Active")));
           modals.closeModal();
-        } catch (err) {}
+        } catch (err) { console.error("Failed to revoke user:", err); }
       }
     );
   };
@@ -454,7 +454,7 @@ export default function App() {
 
       if (!activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/users')) {
           let newUserDetails = {};
-          if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) {} }
+          if (config.body) { try { newUserDetails = JSON.parse(config.body); } catch (e) { console.error("Failed to parse new user request body:", e); } }
           
           triggerTeamsAlert("admin@fcimg.com", "New Account Pending Approval", `A new user has registered for the Operations Management System.<br><br>**Name:** ${newUserDetails.name || 'Unknown'}<br>**Email:** ${newUserDetails.email || 'Unknown'}<br>**Department:** ${newUserDetails.department || 'Unknown'}<br><br>Please log in to grant access.`);
           return response;
@@ -462,7 +462,7 @@ export default function App() {
 
       if (activeUser && response.ok && config && config.method && config.method.toUpperCase() === 'POST' && typeof url === 'string' && url.includes('/api/history')) {
           let logDetails = {};
-          if (config.body) { try { logDetails = JSON.parse(config.body); } catch(e){} }
+          if (config.body) { try { logDetails = JSON.parse(config.body); } catch (e) { console.error("Failed to parse history log request body:", e); } }
           const commentText = logDetails.comments || logDetails.notes || "";
           const templateName = logDetails.templateName || "";
           
