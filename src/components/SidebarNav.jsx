@@ -16,7 +16,8 @@ export default function SidebarNav({
   correctiveCount = 0, 
   navOrder = [],      
   onOrderChange,
-  manuals = [] 
+  manuals = [],
+  workOrders = []
 }) {
 
   const isFacilities = currentUser?.department === 'Facilities';
@@ -26,9 +27,11 @@ export default function SidebarNav({
   // Filter manuals for badge counts
   const standardManualsCount = manuals.filter(m => m.docType !== 'contractor').length;
   const contractorReportsCount = manuals.filter(m => m.docType === 'contractor').length;
+  const openWorkOrdersCount = (workOrders || []).filter(w => w.status !== "Completed").length;
 
   const navData = {
     dashboard: { icon: "📊", label: "Operations Dashboard" },
+    workOrders: { icon: "🔧", label: "Dispatch Work Orders", badge: openWorkOrdersCount },
     corrective: { icon: "🚨", label: "Action Queue", badge: correctiveCount },
     assets: { icon: "🏢", label: "Facility Assets", badge: assetsCount },
     hardware: { icon: "🔩", label: "Hardware & Vendors", badge: hardwareCount },
@@ -39,7 +42,7 @@ export default function SidebarNav({
     history: { icon: "📜", label: "Executed Audits", badge: historyCount }
   };
 
-  const fallbackOrder = ['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'contractors', 'templates', 'history'];
+  const fallbackOrder = ['dashboard', 'workOrders', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'contractors', 'templates', 'history'];
   
   // THE FIX: Smart merge! If the user has a saved layout, check if any new system features are missing and append them.
   let currentOrder = navOrder.length > 0 ? navOrder : fallbackOrder;
