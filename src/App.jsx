@@ -73,7 +73,6 @@ export default function App() {
     return saved ? saved : "dashboard";
   });
   
-  const [navOrder, setNavOrder] = useState(['dashboard', 'corrective', 'assets', 'hardware', 'keys', 'manuals', 'templates', 'history']);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const [isAppLoading, setIsAppLoading] = useState(false);
@@ -133,11 +132,6 @@ export default function App() {
         setVendors(vendorsRes);
         setKeys(keysRes);
 
-        const me = usersRes.find(u => u.email === currentUser.email);
-        if (me && me.preferences && me.preferences.navOrder) {
-          setNavOrder(me.preferences.navOrder);
-        }
-
       } catch (err) {
         console.error("Failed to load core system data:", err);
       } finally {
@@ -182,32 +176,6 @@ export default function App() {
   const userDept = currentUser?.department || ""; 
   
   const isGodMode = isSystemAdmin || realRole === 'System Admin' || realRole === 'admin' || userEmail === 'admin@fcimg.com' || userDept === 'System Administration';
-
-  const handlePersonalNavChange = async (newOrder) => {
-    setNavOrder(newOrder); 
-    
-    const updatedUser = {
-      ...currentUser,
-      preferences: {
-        ...(currentUser.preferences || {}),
-        navOrder: newOrder
-      }
-    };
-    
-    try {
-      await window.fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedUser)
-      });
-      
-      setCurrentUser(updatedUser);
-      localStorage.setItem('fi_oms_session', JSON.stringify(updatedUser));
-      setUsers(users.map(u => u.email === currentUser.email ? updatedUser : u));
-    } catch (err) {
-      console.error("Failed to save personal nav order to database:", err);
-    }
-  };
 
   const calculateNextPmDate = (lastDateStr, freqRaw) => {
     if (!lastDateStr || !freqRaw) return null;
@@ -563,9 +531,7 @@ export default function App() {
     templatesCount: visibleTemplates.length,
     historyCount: visibleHistory.length,
     manualsCount: visibleManuals.length,
-    keysCount: visibleKeys.length,
-    navOrder,
-    onOrderChange: handlePersonalNavChange
+    keysCount: visibleKeys.length
   };
 
   return (
