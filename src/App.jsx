@@ -361,8 +361,8 @@ export default function App() {
   const assetHooks = useAssets(assets, setAssets, history, setHistory, modals.triggerModal, modals.closeModal, currentUser);
   const templateHooks = useTemplates(modals.triggerModal, modals.closeModal, pmTemplates, setPmTemplates); 
   const manualHooks = useManuals(manuals, setManuals, assets, setHistory, currentUser, modals.triggerModal, modals.closeModal);
-  const pmHooks = usePmExecution(assets, setAssets, history, setHistory, currentUser, modals.triggerModal);
-  const woHooks = useWorkOrders(currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
+  const woHooks = useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, modals.triggerModal, modals.closeModal, setHistory);
+  const pmHooks = usePmExecution(assets, setAssets, history, setHistory, currentUser, modals.triggerModal, woHooks.handleUpdateWoStatus);
 
   const scorableAssets = visibleAssets.filter(a => a.status !== "Inactive");
   const dynamicComplianceRate = scorableAssets.length > 0 ? Math.round((scorableAssets.filter(a => a.status === "Active").length / scorableAssets.length) * 100) : 100;
@@ -463,6 +463,7 @@ export default function App() {
         if (!isBulk) {
           if (url.includes('/api/assets') && !url.includes('/api/history')) { originalFetch('/api/assets').then(r => r.json()).then(setAssets).catch(console.error); }
           if (url.includes('/api/templates')) { originalFetch('/api/templates').then(r => r.json()).then(setPmTemplates).catch(console.error); }
+          if (url.includes('/api/workorders')) { originalFetch('/api/workorders').then(r => r.json()).then(setWorkOrders).catch(console.error); }
           
           if (url.includes('/api/users') && !url.includes('/api/history')) {
               originalFetch('/api/users').then(r => r.json()).then(data => {

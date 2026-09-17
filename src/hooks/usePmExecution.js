@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function usePmExecution(assets, setAssets, history, setHistory, currentUser, triggerModal) {
+export default function usePmExecution(assets, setAssets, history, setHistory, currentUser, triggerModal, handleUpdateWoStatus) {
   const [isPmModalOpen, setIsPmModalOpen] = useState(false);
   const [selectedPmAsset, setSelectedPmAsset] = useState(null);
   const [selectedPmTemplate, setSelectedPmTemplate] = useState("");
@@ -8,19 +8,22 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
   const [pmComments, setPmComments] = useState("");
   const [pmStatusState, setPmStatusState] = useState("Active");
   const [isSubmittingPm, setIsSubmittingPm] = useState(false);
+  const [sourceWorkOrderId, setSourceWorkOrderId] = useState(null);
 
-  const openPmModal = (asset, templateToAutoSelect = null) => {
+  const openPmModal = (asset, templateToAutoSelect = null, sourceWoId = null) => {
     setSelectedPmAsset(asset);
     setSelectedPmTemplate(templateToAutoSelect || ""); // Auto-selects if provided, otherwise leaves blank
     setPmAnswers({});
     setPmComments("");
     setPmStatusState("Active");
+    setSourceWorkOrderId(sourceWoId);
     setIsPmModalOpen(true);
   };
 
   const closePmModal = () => {
     setIsPmModalOpen(false);
     setSelectedPmAsset(null);
+    setSourceWorkOrderId(null);
   };
 
   const handlePmSubmit = async (e) => {
@@ -98,9 +101,14 @@ export default function usePmExecution(assets, setAssets, history, setHistory, c
 
       setAssets(assets.map(a => a.id === selectedPmAsset.id ? updatedAsset : a));
       setHistory([historyPayload, ...history]);
+
+      if (sourceWorkOrderId && handleUpdateWoStatus) {
+        await handleUpdateWoStatus(sourceWorkOrderId, "Completed");
+      }
+
       triggerModal("Protocol Logged", "Preventative Maintenance successfully recorded.", "success");
       closePmModal();
-      
+
     } catch (err) { 
         triggerModal("Database Error", "Failed to commit PM action.", "error"); 
     } finally { 

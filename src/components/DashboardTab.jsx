@@ -740,7 +740,19 @@ export default function DashboardTab({
                         </span>
                       </div>
                       <div className="text-right ml-4">
-                        {handleUpdateWoStatus ? (
+                        {wo.templateId && wo.assetId && openPmModal ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const linkedAsset = assets.find(a => a.id === wo.assetId);
+                              const linkedTemplate = pmTemplates.find(t => t.id === wo.templateId);
+                              if (linkedAsset && linkedTemplate) openPmModal(linkedAsset, linkedTemplate, wo.id);
+                            }}
+                            className="text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-1 bg-[#005596] text-white hover:bg-[#00407a] transition-all"
+                          >
+                            ⚙️ Execute SOP &rarr;
+                          </button>
+                        ) : handleUpdateWoStatus ? (
                           <select
                             value={wo.status}
                             onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}

@@ -22,12 +22,12 @@ const calculateNextDueDate = (dateStr, frequency) => {
   return nextDate.toISOString().split('T')[0];
 };
 
-export default function useWorkOrders(currentUser, users, assets, triggerModal, closeModal, setHistory) {
-  const [workOrders, setWorkOrders] = useState([]);
+export default function useWorkOrders(workOrders, setWorkOrders, currentUser, users, assets, triggerModal, closeModal, setHistory) {
   const [isSubmittingWo, setIsSubmittingWo] = useState(false);
   const [newWo, setNewWo] = useState({
     title: "", description: "", assetId: "", assignedTo: "", priority: "",
-    department: "", frequency: "", dueDate: "", remindersEnabled: true
+    department: "", frequency: "", dueDate: "", remindersEnabled: true,
+    templateId: "", manualId: "", contractorReportId: ""
   });
 
   const handleAddWorkOrder = async (e) => {
@@ -57,7 +57,8 @@ export default function useWorkOrders(currentUser, users, assets, triggerModal, 
         setWorkOrders([savedWo, ...workOrders]);
         setNewWo({
           title: "", description: "", assetId: "", assignedTo: "", priority: "",
-          department: "", frequency: "", dueDate: "", remindersEnabled: true
+          department: "", frequency: "", dueDate: "", remindersEnabled: true,
+          templateId: "", manualId: "", contractorReportId: ""
         });
         triggerModal("Work Order Dispatched", `Task successfully assigned and queued for operator action.`, "success");
 
@@ -129,5 +130,5 @@ export default function useWorkOrders(currentUser, users, assets, triggerModal, 
     });
   };
 
-  return { workOrders, setWorkOrders, isSubmittingWo, newWo, setNewWo, handleAddWorkOrder, handleUpdateWoStatus, deleteWorkOrder };
+  return { isSubmittingWo, newWo, setNewWo, handleAddWorkOrder, handleUpdateWoStatus, deleteWorkOrder };
 }

@@ -8,11 +8,13 @@ const CORPORATE_DEPARTMENTS = [
   "Production: Engineering"
 ];
 
+const stepLabel = (step) => typeof step === 'string' ? step : step.label;
+
 export default function WorkOrdersTab({
   handleAddWorkOrder, isSubmittingWo, newWo, setNewWo,
-  assets, activeAccounts, pmTemplates, PM_CYCLE_OPTIONS,
+  assets, activeAccounts, pmTemplates, PM_CYCLE_OPTIONS, manuals = [],
   workOrders, currentUser, isSystemAdmin, // <-- Replaced the filter props with raw workOrders
-  handleUpdateWoStatus, deleteWorkOrder
+  handleUpdateWoStatus, deleteWorkOrder, openPmModal
 }) {
   // Moved from App.jsx!
   const [filterSearch, setFilterSearch] = useState("");
@@ -58,7 +60,7 @@ export default function WorkOrdersTab({
                   const template = pmTemplates.find(t => t.id === selectedId);
                   
                   if (template) {
-                    const checklistText = template.checklist.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+                    const checklistText = (template.checklistSteps || []).map((step, idx) => `${idx + 1}. ${stepLabel(step)}`).join('\n');
                     setNewWo({
                       ...newWo,
                       templateId: selectedId,
@@ -140,6 +142,29 @@ export default function WorkOrdersTab({
               </>
             )}
 
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Link Equipment Manual (Optional)</label>
+              <select
+                value={newWo.manualId || ""}
+                onChange={(e) => setNewWo({...newWo, manualId: e.target.value})}
+                className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+              >
+                <option value="">-- Select a Manual --</option>
+                {manuals.filter(m => m.docType !== 'contractor').map(m => <option key={m.id} value={m.id}>{m.fileName}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Link Contractor Report (Optional)</label>
+              <select
+                value={newWo.contractorReportId || ""}
+                onChange={(e) => setNewWo({...newWo, contractorReportId: e.target.value})}
+                className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+              >
+                <option value="">-- Select a Contractor Report --</option>
+                {manuals.filter(m => m.docType === 'contractor').map(m => <option key={m.id} value={m.id}>{m.fileName}</option>)}
+              </select>
+            </div>
+
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
               <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="4" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
@@ -210,6 +235,26 @@ export default function WorkOrdersTab({
                         {wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()} by <span className="font-bold text-[#005596]">{wo.createdBy || 'System'}</span>
                         {wo.dueDate && <> • Due: <span className="font-bold text-gray-600">{new Date(wo.dueDate).toLocaleDateString()}</span></>}
                       </span>
+                      {(wo.manualId || wo.contractorReportId) && (
+                        <span className="flex items-center gap-3 mt-1">
+                          {wo.manualId && (() => {
+                            const linkedManual = manuals.find(m => m.id === wo.manualId);
+                            return linkedManual ? (
+                              <button type="button" onClick={() => window.open(linkedManual.fileData, '_blank')} className="text-[10px] font-bold text-[#005596] hover:underline">
+                                📖 Manual
+                              </button>
+                            ) : null;
+                          })()}
+                          {wo.contractorReportId && (() => {
+                            const linkedReport = manuals.find(m => m.id === wo.contractorReportId);
+                            return linkedReport ? (
+                              <button type="button" onClick={() => window.open(linkedReport.fileData, '_blank')} className="text-[10px] font-bold text-amber-700 hover:underline">
+                                🗂️ Report
+                              </button>
+                            ) : null;
+                          })()}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shadow-sm ${
@@ -243,6 +288,19 @@ export default function WorkOrdersTab({
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-800">
                             Completed ✓
                           </span>
+                        ) : wo.templateId && wo.assetId && openPmModal ? (
+                          <button
+                            type="button"
+                            disabled={!isSystemAdmin && wo.assignedTo !== currentUser?.email}
+                            onClick={() => {
+                              const linkedAsset = assets.find(a => a.id === wo.assetId);
+                              const linkedTemplate = pmTemplates.find(t => t.id === wo.templateId);
+                              if (linkedAsset && linkedTemplate) openPmModal(linkedAsset, linkedTemplate, wo.id);
+                            }}
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${!isSystemAdmin && wo.assignedTo !== currentUser?.email ? 'cursor-not-allowed opacity-50 bg-gray-100 text-gray-500' : 'cursor-pointer bg-[#005596] text-white hover:bg-[#00407a]'}`}
+                          >
+                            ⚙️ Execute SOP &rarr;
+                          </button>
                         ) : (
                           <select
                             value={wo.status}
