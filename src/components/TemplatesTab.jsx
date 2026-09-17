@@ -562,31 +562,6 @@ export default function TemplatesTab({
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Workflow Execution Mode</label>
-                  <div className="flex bg-gray-100 p-1.5 rounded-lg border border-gray-200 shadow-inner">
-                    <button
-                      type="button"
-                      onClick={() => setNewTemplate({...newTemplate, executionMode: 'asset'})}
-                      className={`flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${newTemplate.executionMode !== 'route' ? 'bg-white text-[#005596] shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      ⚙️ Asset PMs
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewTemplate({...newTemplate, executionMode: 'route'})}
-                      className={`flex-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${newTemplate.executionMode === 'route' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      🚶‍♂️ Grouped Route
-                    </button>
-                  </div>
-                  <p className="text-[9px] text-gray-400 mt-1 font-bold">
-                    {newTemplate.executionMode === 'route' 
-                      ? "Creates ONE master checklist for an entire facility walk." 
-                      : "Creates separate, individual tickets for every matched machine."}
-                  </p>
-                </div>
-
-                <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
                   <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
                     {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}

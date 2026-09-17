@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 
 export default function DashboardTab({
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
-  assets, pmTemplates, calculateDaysRemaining, users = []
+  assets, pmTemplates, calculateDaysRemaining, users = [],
+  workOrders = [], handleUpdateWoStatus, changeTab
 }) {
   
   const adminGlobalQueue = [];
@@ -257,6 +258,10 @@ export default function DashboardTab({
   const myCritical = userAssignedTasks.filter(item => item.taskCategory === 'Critical');
   const myUpcoming = userAssignedTasks.filter(item => item.taskCategory === 'Upcoming');
   const myPending = userAssignedTasks.filter(item => item.taskCategory === 'Pending');
+
+  const myWorkOrders = (workOrders || [])
+    .filter(wo => wo.assignedTo === currentUser?.email && wo.status !== "Completed")
+    .sort((a, b) => (parseInt(b.priority) || 0) - (parseInt(a.priority) || 0));
 
   const handleTestSweep = async () => {
     if (!window.confirm("Fire the daily sweep right now? This will forcefully send live Teams messages to operators for ALL currently overdue assets in your critical queue.")) return;
@@ -686,6 +691,76 @@ export default function DashboardTab({
             </div>
           )}
           
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden mb-6">
+            <div className="bg-gradient-to-r from-emerald-700 to-emerald-900 text-white px-6 py-4 flex items-center justify-between border-b border-emerald-900">
+              <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">My Work Orders</h3>
+              <div className="flex items-center space-x-3">
+                {myWorkOrders.length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-sm">{myWorkOrders.length} Open</span>
+                )}
+                {changeTab && (
+                  <button onClick={() => changeTab("workOrders")} className="text-[10px] font-bold uppercase tracking-wider text-emerald-100 hover:text-white transition">
+                    View All &rarr;
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="max-h-[400px] overflow-y-auto bg-gray-50/30">
+              {myWorkOrders.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-xs font-medium bg-white">
+                  You have no open work order tickets.
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 bg-white">
+                  {myWorkOrders.map(wo => (
+                    <div key={wo.id} className="p-5 hover:bg-emerald-50/30 transition flex justify-between items-center border-l-4 border-emerald-500">
+                      <div className="flex-1">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="font-bold text-gray-900 text-sm">{wo.title}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shadow-sm ${
+                            wo.priority?.includes('95') ? 'bg-red-600 text-white' :
+                            wo.priority?.includes('90') ? 'bg-orange-100 text-orange-800 border border-orange-200' :
+                            wo.priority?.includes('80') ? 'bg-yellow-100 text-yellow-800' :
+                            wo.priority?.includes('70') ? 'bg-[#005596]/10 text-[#005596]' :
+                            wo.priority?.includes('60') ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-500'
+                          }`}>
+                            {wo.priority}
+                          </span>
+                          {wo.frequency && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">
+                              🔁 {wo.frequency}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-500 mt-1 block">
+                          {wo.assetId ? (assets.find(a => a.id === wo.assetId)?.name || 'Unknown Asset') : 'General Facility'}
+                          {wo.dueDate && <> • Due: <span className="font-bold">{new Date(wo.dueDate).toLocaleDateString()}</span></>}
+                        </span>
+                      </div>
+                      <div className="text-right ml-4">
+                        {handleUpdateWoStatus ? (
+                          <select
+                            value={wo.status}
+                            onChange={(e) => handleUpdateWoStatus(wo.id, e.target.value)}
+                            className={`text-[10px] font-bold uppercase tracking-wider rounded-full px-2.5 py-1 cursor-pointer border border-transparent ${wo.status === "Open" ? "bg-gray-100 text-gray-800" : "bg-blue-100 text-[#005596]"}`}
+                          >
+                            <option value="Open">Open</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Mark Completed</option>
+                          </select>
+                        ) : (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{wo.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden">
             <div className="bg-gradient-to-r from-[#005596] to-[#00407a] text-white px-6 py-4 flex items-center justify-between border-b border-[#003058]">
               <h3 className="font-bold text-xs uppercase tracking-wider shadow-sm">My Assigned Tasks</h3>
