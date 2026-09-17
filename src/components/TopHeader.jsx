@@ -1,30 +1,46 @@
 import React, { useState } from 'react';
 import AccountSettingsModal from './AccountSettingsModal';
 
-export default function TopHeader({ 
-  currentTime, 
-  currentUser, 
-  isSystemAdmin, 
-  handleSignOut, 
-  setCurrentUser, 
+export default function TopHeader({
+  currentTime,
+  currentUser,
+  isSystemAdmin,
+  handleSignOut,
+  setCurrentUser,
   triggerModal,
-  closeModal 
+  closeModal,
+  isMobileNavOpen,
+  setIsMobileNavOpen
 }) {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
 
   return (
     <>
       <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
+        <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
+          <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+            <button
+              onClick={() => setIsMobileNavOpen && setIsMobileNavOpen(!isMobileNavOpen)}
+              className="md:hidden flex-shrink-0 p-2 -ml-2 text-gray-600 hover:text-[#005596] hover:bg-gray-100 rounded-lg transition"
+              aria-label="Toggle navigation menu"
+            >
+              <span className="block w-5 h-0.5 bg-current mb-1"></span>
+              <span className="block w-5 h-0.5 bg-current mb-1"></span>
+              <span className="block w-5 h-0.5 bg-current"></span>
+            </button>
             <div className="flex-shrink-0 flex items-center">
-              <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-16 w-auto max-w-[280px] object-contain" />
+              <img src="/logo.png" alt="Fairchild Imaging Logo" className="h-10 sm:h-16 w-auto max-w-[280px] object-contain" />
             </div>
-            <span className="h-10 w-px bg-gray-200"></span>
-            <div><h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans">FI-Maintenance Management System</h1></div>
+            <span className="hidden sm:block h-10 w-px bg-gray-200"></span>
+            <div className="min-w-0">
+              <h1 className="text-sm sm:text-xl lg:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans truncate">
+                <span className="hidden sm:inline">FI-Maintenance Management System</span>
+                <span className="sm:hidden">FI-MMS</span>
+              </h1>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-2 sm:space-x-6 flex-shrink-0">
             <div className="hidden lg:block text-right border-r border-gray-200 pr-6">
                <span className="block text-xs font-bold text-gray-800">{currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
                <span className="block text-[10px] text-gray-500 font-mono mt-0.5">{currentTime.toLocaleTimeString('en-US')}</span>

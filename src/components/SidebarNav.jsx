@@ -21,7 +21,9 @@ export default function SidebarNav({
   keysCount = 0,
   correctiveCount = 0,
   manuals = [],
-  workOrders = []
+  workOrders = [],
+  isMobileNavOpen = false,
+  setIsMobileNavOpen
 }) {
 
   const isFacilities = currentUser?.department === 'Facilities';
@@ -47,8 +49,30 @@ export default function SidebarNav({
   };
 
   return (
-    <aside className="w-full md:w-64 flex-shrink-0 bg-white border-r border-gray-200 p-4 space-y-5 flex flex-col">
-      <div className="flex-1 space-y-5">
+    <>
+      {isMobileNavOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setIsMobileNavOpen && setIsMobileNavOpen(false)}
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-200 ease-in-out overflow-y-auto
+          ${isMobileNavOpen ? 'translate-x-0' : '-translate-x-full'}
+          md:relative md:translate-x-0 md:z-auto md:w-64
+          flex-shrink-0 bg-white border-r border-gray-200 p-4 space-y-5 flex flex-col`}
+      >
+        <div className="flex items-center justify-between md:hidden mb-1">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Menu</span>
+          <button
+            onClick={() => setIsMobileNavOpen && setIsMobileNavOpen(false)}
+            className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Close navigation menu"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 space-y-5">
         {NAV_GROUPS.map((group) => (
           <div key={group.label} className="space-y-1">
             <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-2 pb-1 border-b border-gray-100">
@@ -112,6 +136,7 @@ export default function SidebarNav({
           </span>
         </button>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }

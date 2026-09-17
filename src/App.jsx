@@ -74,6 +74,7 @@ export default function App() {
   });
   
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const [isAppLoading, setIsAppLoading] = useState(false);
   const [hasFetchedHistory, setHasFetchedHistory] = useState(false);
@@ -92,12 +93,13 @@ export default function App() {
 
   const changeTab = (tab) => {
     setActiveTab(tab);
-    
+    setIsMobileNavOpen(false);
+
     // THE FIX: Wipes the manual viewer clean when switching screens!
     if (manualHooks && manualHooks.setViewingManual) {
       manualHooks.setViewingManual(null);
     }
-    
+
     localStorage.setItem("fi_current_tab", tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -531,7 +533,8 @@ export default function App() {
     templatesCount: visibleTemplates.length,
     historyCount: visibleHistory.length,
     manualsCount: visibleManuals.length,
-    keysCount: visibleKeys.length
+    keysCount: visibleKeys.length,
+    isMobileNavOpen, setIsMobileNavOpen
   };
 
   return (
