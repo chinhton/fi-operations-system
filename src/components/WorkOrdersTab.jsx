@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
 
+const CORPORATE_DEPARTMENTS = [
+  "System Administration",
+  "Facilities",
+  "Production: Sensor Assembly",
+  "Production: Final Assembly and Test",
+  "Production: Engineering"
+];
+
 export default function WorkOrdersTab({
-  handleAddWorkOrder, isSubmittingWo, newWo, setNewWo, 
-  assets, activeAccounts, pmTemplates, 
+  handleAddWorkOrder, isSubmittingWo, newWo, setNewWo,
+  assets, activeAccounts, pmTemplates, PM_CYCLE_OPTIONS,
   workOrders, currentUser, isSystemAdmin, // <-- Replaced the filter props with raw workOrders
   handleUpdateWoStatus, deleteWorkOrder
 }) {
@@ -80,6 +88,58 @@ export default function WorkOrdersTab({
                 <option value="50 - Deferred">50 - Deferred</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Department</label>
+              <select
+                value={newWo.department || currentUser?.department || ""}
+                onChange={(e) => setNewWo({...newWo, department: e.target.value})}
+                className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+              >
+                <option value="">-- Select Department --</option>
+                {CORPORATE_DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Repeat Frequency</label>
+              <select
+                value={newWo.frequency || "One-Time"}
+                onChange={(e) => {
+                  const frequency = e.target.value === "One-Time" ? "" : e.target.value;
+                  setNewWo({...newWo, frequency, dueDate: frequency ? (newWo.dueDate || new Date().toISOString().split('T')[0]) : ""});
+                }}
+                className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer"
+              >
+                <option value="One-Time">One-Time (No Repeat)</option>
+                {(PM_CYCLE_OPTIONS || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+
+            {newWo.frequency && (
+              <>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Next Due Date</label>
+                  <input
+                    type="date"
+                    value={newWo.dueDate || ""}
+                    onChange={(e) => setNewWo({...newWo, dueDate: e.target.value})}
+                    className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white"
+                  />
+                </div>
+                <div className="flex items-end pb-2.5">
+                  <label className="flex items-center space-x-2 text-xs font-bold text-gray-700 uppercase tracking-wider cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newWo.remindersEnabled}
+                      onChange={(e) => setNewWo({...newWo, remindersEnabled: e.target.checked})}
+                      className="rounded border-gray-300"
+                    />
+                    <span>Send Teams Reminders</span>
+                  </label>
+                </div>
+              </>
+            )}
+
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
               <textarea value={newWo.description} onChange={(e) => setNewWo({...newWo, description: e.target.value})} rows="4" placeholder="Provide detailed instructions for the technician..." className="w-full text-xs rounded border-gray-300 p-2.5 border bg-white font-mono"></textarea>
@@ -138,9 +198,17 @@ export default function WorkOrdersTab({
                 filteredWorkOrders.map((wo) => (
                   <tr key={wo.id} className="hover:bg-gray-50/55 transition">
                     <td className="px-6 py-4">
-                      <span className="font-bold text-gray-900 block">{wo.title}</span>
+                      <span className="font-bold text-gray-900 block">
+                        {wo.title}
+                        {wo.frequency && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">
+                            🔁 {wo.frequency}
+                          </span>
+                        )}
+                      </span>
                       <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">
                         {wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()} by <span className="font-bold text-[#005596]">{wo.createdBy || 'System'}</span>
+                        {wo.dueDate && <> • Due: <span className="font-bold text-gray-600">{new Date(wo.dueDate).toLocaleDateString()}</span></>}
                       </span>
                     </td>
                     <td className="px-6 py-4">

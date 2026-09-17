@@ -1,11 +1,8 @@
 const { app } = require('@azure/functions');
 const { CosmosClient } = require('@azure/cosmos');
-const { sendTeamsMessage } = require('./teamsService'); 
+const { sendTeamsMessage } = require('./teamsService');
 
-app.http('dailySweep', {
-    methods: ['GET', 'POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
+const runDailySweep = async () => {
         try {
             const cosmosConn = process.env.CosmosDbConnectionString || process.env.COSMOS_CONNECTION_STRING;
             if (!cosmosConn) {
@@ -78,8 +75,8 @@ app.http('dailySweep', {
             };
 
             for (const wo of workOrders) {
-                if (wo.dueDate) {
-                    categorizeItem(wo.title || wo.name || 'Maintenance Task', wo.id, new Date(wo.dueDate), false, wo.operatorEmail || wo.managerEmail);
+                if (wo.dueDate && wo.remindersEnabled !== false) {
+                    categorizeItem(wo.title || wo.name || 'Maintenance Task', wo.id, new Date(wo.dueDate), false, wo.assignedTo);
                 }
             }
 
@@ -111,15 +108,15 @@ app.http('dailySweep', {
             
             for (const [email, lists] of Object.entries(userDigests)) {
                 if (lists.critical.length > 0) {
-                    await sendTeamsMessage(email, `CRITICAL: ${lists.critical.length} Overdue Action(s)`, `The following systems assigned to you are overdue and require immediate compliance action:\n\n${lists.critical.join('\n\n')}`);
+                    await sendTeamsMessage(`CRITICAL: ${lists.critical.length} Overdue Action(s)`, `The following systems assigned to you are overdue and require immediate compliance action:\n\n${lists.critical.join('\n\n')}`, email, "Attention");
                     sentCount++;
                 }
                 if (lists.dueToday.length > 0) {
-                    await sendTeamsMessage(email, `DUE TODAY: ${lists.dueToday.length} Action(s)`, `The following routine maintenance actions assigned to you must be completed today:\n\n${lists.dueToday.join('\n\n')}`);
+                    await sendTeamsMessage(`DUE TODAY: ${lists.dueToday.length} Action(s)`, `The following routine maintenance actions assigned to you must be completed today:\n\n${lists.dueToday.join('\n\n')}`, email, "Warning");
                     sentCount++;
                 }
                 if (lists.upcoming.length > 0) {
-                    await sendTeamsMessage(email, `UPCOMING: ${lists.upcoming.length} Action(s) Due in 5 Days`, `Advanced warning for systems assigned to you. Please ensure any required parts are ordered:\n\n${lists.upcoming.join('\n\n')}`);
+                    await sendTeamsMessage(`UPCOMING: ${lists.upcoming.length} Action(s) Due in 5 Days`, `Advanced warning for systems assigned to you. Please ensure any required parts are ordered:\n\n${lists.upcoming.join('\n\n')}`, email, "Accent");
                     sentCount++;
                 }
             }
@@ -129,5 +126,19 @@ app.http('dailySweep', {
         } catch (error) {
             return { status: 500, body: `Error running sweep: ${error.message}` };
         }
+};
+
+app.timer('dailySweep', {
+    schedule: '0 0 13 * * *', // Daily at 13:00 UTC
+    handler: async (timer, context) => {
+        const result = await runDailySweep();
+        context.log(result.body);
     }
+});
+
+// Manual/on-demand trigger for testing without waiting on the schedule
+app.http('dailySweepManual', {
+    methods: ['GET', 'POST'],
+    authLevel: 'anonymous',
+    handler: async (request, context) => runDailySweep()
 });

@@ -245,9 +245,10 @@ export default function App() {
   };
 
   const filterHierarchy = (item) => {
-    if (isGodMode) return true; 
+    if (isGodMode) return true;
+    if (!item.department) return true;
     if (Array.isArray(item.department)) return item.department.includes(userDept);
-    return item.department === userDept; 
+    return item.department === userDept;
   };
 
   const triggerEmailAlert = async (toAddress, subjectLine, bodyText) => {
