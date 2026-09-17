@@ -26,6 +26,9 @@ export default function PmExecutionModal({
         const step = activeSteps[i];
         const answer = pmAnswers[i];
         
+        // THE FIX: If explicitly marked offline, bypass the strict completion checks
+        if (answer === 'OFFLINE') continue;
+
         const stepType = typeof step === 'string' ? 'checkbox' : step.type;
         const stepLabel = typeof step === 'string' ? step : step.label;
 
@@ -115,7 +118,7 @@ export default function PmExecutionModal({
                                 
                                 <div className="w-full md:w-1/3 shrink-0">
                                   {step.section ? (
-                                    <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm">
+                                    <span className="inline-block bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider px-2 py-1 rounded shadow-sm max-w-[200px] truncate" title={step.section}>
                                       {step.section}
                                     </span>
                                   ) : (
@@ -129,27 +132,49 @@ export default function PmExecutionModal({
                                   <span className="text-sm font-bold text-gray-800">{stepLabel}</span>
                                 </div>
                                 
-                                <div className="w-full md:w-1/3 flex justify-end">
-                                  {stepType === 'checkbox' && (
-                                    <label className="flex items-center space-x-2 cursor-pointer bg-white border border-gray-300 rounded px-3 py-2 shadow-inner hover:bg-gray-50 w-full md:w-auto">
-                                      <input type="checkbox" checked={!!pmAnswers[idx]} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-[#00A1E4] focus:ring-[#00A1E4]" />
-                                      <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Confirm</span>
-                                    </label>
+                                {/* --- THE FIX: Status Override Toggle & Dynamic Inputs --- */}
+                                <div className="w-full md:flex-1 flex flex-col md:flex-row gap-2 justify-end items-stretch md:items-center">
+                                  {pmAnswers[idx] === 'OFFLINE' ? (
+                                    <div className="flex-1 text-[11px] px-3 py-2 border border-red-200 rounded bg-red-50 text-red-700 font-bold text-center shadow-inner uppercase tracking-wider flex items-center justify-center">
+                                      ⚠️ System Offline
+                                    </div>
+                                  ) : (
+                                    <div className="flex-1 flex justify-end">
+                                      {stepType === 'checkbox' && (
+                                        <label className="flex items-center space-x-2 cursor-pointer bg-white border border-gray-300 rounded px-3 py-2 shadow-inner hover:bg-gray-50 w-full md:w-auto">
+                                          <input type="checkbox" checked={!!pmAnswers[idx]} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-[#00A1E4] focus:ring-[#00A1E4]" />
+                                          <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider">Confirm</span>
+                                        </label>
+                                      )}
+                                      {stepType === 'text' && (
+                                        <input type="text" placeholder="Enter value..." value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none" />
+                                      )}
+                                      {stepType === 'number' && (
+                                        <input type="number" placeholder="0.0" value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none" />
+                                      )}
+                                      {stepType === 'passfail' && (
+                                        <select value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full md:w-auto text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none bg-white font-bold cursor-pointer">
+                                          <option value="">-- Result --</option>
+                                          <option value="Pass">PASS (In Spec)</option>
+                                          <option value="Fail">FAIL (Out of Spec)</option>
+                                        </select>
+                                      )}
+                                    </div>
                                   )}
-                                  {stepType === 'text' && (
-                                    <input type="text" placeholder="Enter value..." value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none" />
-                                  )}
-                                  {stepType === 'number' && (
-                                    <input type="number" placeholder="0.0" value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none" />
-                                  )}
-                                  {stepType === 'passfail' && (
-                                    <select value={pmAnswers[idx] || ""} onChange={(e) => setPmAnswers({...pmAnswers, [idx]: e.target.value})} className="w-full md:w-auto text-xs p-2.5 border border-gray-300 rounded focus:ring-2 focus:ring-[#00A1E4] focus:border-[#00A1E4] shadow-inner outline-none bg-white font-bold cursor-pointer">
-                                      <option value="">-- Result --</option>
-                                      <option value="Pass">PASS (In Spec)</option>
-                                      <option value="Fail">FAIL (Out of Spec)</option>
-                                    </select>
-                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setPmAnswers({...pmAnswers, [idx]: pmAnswers[idx] === 'OFFLINE' ? '' : 'OFFLINE'})}
+                                    className={`shrink-0 px-3 py-2 rounded text-[9px] font-black uppercase tracking-wider transition-all shadow-sm border ${
+                                      pmAnswers[idx] === 'OFFLINE'
+                                        ? 'bg-red-600 text-white border-red-700 hover:bg-red-700'
+                                        : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300'
+                                    }`}
+                                  >
+                                    {pmAnswers[idx] === 'OFFLINE' ? 'Undo Offline' : 'Mark Down'}
+                                  </button>
                                 </div>
+
                               </div>
                             );
                          })}
@@ -167,9 +192,10 @@ export default function PmExecutionModal({
                    <div>
                      <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-2">Final Equipment Status</label>
                      <select value={pmStatusState} onChange={(e) => setPmStatusState(e.target.value)} className="w-full text-xs rounded border-gray-300 p-2.5 bg-gray-50 border cursor-pointer focus:ring-2 focus:ring-[#00A1E4] outline-none font-bold text-gray-700">
-                        <option value="Operational">Operational</option>
+                        <option value="Active">Active</option>
                         <option value="Maintenance Required">Maintenance Required</option>
                         <option value="Out of Calibration">Out of Calibration</option>
+                        <option value="Corrective Maintenance">Corrective Maintenance</option>
                         <option value="Offline / Lockout">Offline / Lockout</option>
                      </select>
                    </div>
