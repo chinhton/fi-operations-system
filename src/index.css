@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+/* Desktop-only readability bump. The app leans heavily on text-xs/text-[9px]/text-[10px]
+   for density on small screens; on larger screens that reads as too small, so nudge the
+   most-used sizes up a notch without touching every component file or affecting mobile. */
+@media (min-width: 768px) {
+  .text-xs { font-size: 0.875rem; line-height: 1.25rem; }
+  .text-sm { font-size: 0.96875rem; line-height: 1.375rem; }
+  .text-\[8px\] { font-size: 9.5px; }
+  .text-\[9px\] { font-size: 11px; }
+  .text-\[10px\] { font-size: 12px; }
+  .text-\[11px\] { font-size: 13px; }
+}
