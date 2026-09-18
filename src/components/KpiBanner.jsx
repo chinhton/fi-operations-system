@@ -84,42 +84,42 @@ export default function KpiBanner({ complianceRate, assetsCount = 0, activeCount
         <div className="grid grid-cols-3 gap-4 lg:gap-6">
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Compliance Factor</h3>
+            <h3 className="text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Compliance Factor</h3>
             <div className="text-2xl xl:text-3xl font-black text-white">{complianceRate || 100}%</div>
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Fleet Status</h3>
+            <h3 className="text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Fleet Status</h3>
             <div className="flex items-end gap-6">
               <div>
                 <div className="text-2xl xl:text-3xl font-black text-white">{assetsCount}</div>
-                <div className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">Total</div>
+                <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">Total</div>
               </div>
               <div>
                 <div className="text-lg xl:text-xl font-black text-emerald-300">{activeCount}</div>
-                <div className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">Active</div>
+                <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">Active</div>
               </div>
               <div>
                 <div className="text-lg xl:text-xl font-black text-slate-300">{inactiveCount}</div>
-                <div className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">Inactive</div>
+                <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">Inactive</div>
               </div>
             </div>
           </div>
 
           <div className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl p-4 xl:p-5 transition-all duration-300 shadow-sm backdrop-blur-sm">
-            <h3 className="text-[9px] xl:text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Action Items</h3>
+            <h3 className="text-[10px] font-black text-blue-100 uppercase tracking-wider mb-2">Action Items</h3>
             {actionTotal === 0 ? (
               <div className="text-2xl xl:text-3xl font-black text-emerald-300 flex items-center gap-2">✓ All Clear</div>
             ) : (
               <div className="flex items-end gap-6 flex-wrap">
                 <div>
                   <div className="text-2xl xl:text-3xl font-black text-white">{actionTotal}</div>
-                  <div className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">Flagged</div>
+                  <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">Flagged</div>
                 </div>
                 {actionItems.map(item => (
                   <div key={item.label}>
                     <div className={`text-lg xl:text-xl font-black ${item.color}`}>{item.value}</div>
-                    <div className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">{item.label}</div>
+                    <div className="text-[10px] text-blue-200 font-bold uppercase tracking-wider">{item.label}</div>
                   </div>
                 ))}
               </div>

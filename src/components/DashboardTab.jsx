@@ -3,7 +3,7 @@ import CompleteWorkOrderModal from './CompleteWorkOrderModal';
 
 export default function DashboardTab({
   openPmModal, currentUser, isSystemAdmin, triggerTeamsAlert,
-  assets, pmTemplates, calculateDaysRemaining, users = [],
+  assets, pmTemplates, users = [],
   workOrders = [], handleUpdateWoStatus, changeTab
 }) {
   const [completingWo, setCompletingWo] = useState(null);
@@ -29,23 +29,8 @@ export default function DashboardTab({
 
   const today = new Date();
   today.setHours(0,0,0,0);
-  
-  const isToday = (dateStr) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return false; 
-      d.setHours(0,0,0,0);
-      return d.getTime() === today.getTime();
-  };
 
   const todayStr = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
-  const isCategoryMatch = (templateCat, assetCat) => {
-    if (!templateCat) return false;
-    if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
-    if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
-    return templateCat === assetCat;
-  };
 
   const openRouteModal = (task) => {
     setActiveRoute(task);
@@ -79,172 +64,43 @@ export default function DashboardTab({
     await triggerTeamsAlert(targetEmails, subject, body);
   };
 
-  if (assets && pmTemplates && calculateDaysRemaining) {
-    
-    const routeTemplates = pmTemplates.filter(t => t.executionMode === 'route');
-    routeTemplates.forEach(template => {
-        const mappedAssets = assets.filter(a => a.status !== "Inactive" && isCategoryMatch(template.targetCategory, a.category));
-        if (mappedAssets.length === 0) return;
-
-        let lowestDays = null;
-        
-        mappedAssets.forEach(asset => {
-            const explicitLastDone = asset.pmDates?.[template.interval];
-            if (isToday(explicitLastDone)) return; 
-
-            let daysLeft = null; 
-            if (explicitLastDone) {
-                daysLeft = calculateDaysRemaining(explicitLastDone, template.interval);
-            }
-            
-            if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
-                lowestDays = daysLeft;
-            }
-        });
-
-        if (lowestDays === null) return; 
-
-        let taskCategory = null;
-        let dueMessage = "";
-        let isCriticalStatus = false;
-
-        if (lowestDays < 0) {
-            taskCategory = 'Critical';
-            dueMessage = `Inspection Overdue (${Math.abs(lowestDays)}d)`;
-            isCriticalStatus = true;
-        } else if (lowestDays <= 5) {
-            taskCategory = 'Upcoming';
-            dueMessage = lowestDays === 0 ? "Due Today" : `Due in ${lowestDays} days`;
-        } else if (lowestDays <= 30) {
-            taskCategory = 'Pending';
-            dueMessage = `Due in ${lowestDays} days`;
-        }
-
-        if (taskCategory) {
-            const queueItem = {
-                queueId: `route-${template.id}`,
-                name: template.name,
-                serial: `${mappedAssets.length} Targeted Assets`,
-                department: template.department || "Global",
-                badgeColor: isCriticalStatus ? "bg-purple-100 text-purple-800" : "bg-purple-50 text-purple-700",
-                displayStatus: isCriticalStatus ? "Inspection Overdue" : "Inspection Pending",
-                displayDate: dueMessage,
-                assignedTo: Array.isArray(template.department) ? template.department.join(', ') : "Global Route",
-                rawItem: mappedAssets, 
-                type: 'route',
-                isCritical: isCriticalStatus,
-                taskCategory: taskCategory,
-                targetTemplate: template
-            };
-
-            adminGlobalQueue.push(queueItem);
-
-            const itemDeptArray = Array.isArray(template.department) ? template.department : [template.department || "Global"];
-            const mappedToMyDept = itemDeptArray.includes("Global") || itemDeptArray.includes(currentUser.department);
-            const assignedToMe = mappedAssets.some(a => a.operatorEmail && a.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase()));
-
-            if (assignedToMe || (!isManager && !isSystemAdmin && mappedToMyDept)) {
-                userAssignedTasks.push(queueItem);
-            }
-            if (isManager && mappedToMyDept) {
-                managerDepartmentQueue.push(queueItem);
-            }
-        }
-    });
-
+  // SOPs no longer carry a schedule (interval) or asset mapping (category) — that automated
+  // matching has been retired in favor of dispatched Work Orders. This queue now only reflects
+  // assets directly flagged with a critical status.
+  if (assets) {
     assets.forEach(asset => {
       if (asset.status === "Inactive") return;
 
-      const manualOfflineStatuses = ["Out of Calibration", "Corrective Maintenance"];
-      let isManualOffline = manualOfflineStatuses.includes(asset.status);
-      
-      const assetTemplates = pmTemplates.filter(t => t.executionMode !== 'route' && isCategoryMatch(t.targetCategory, asset.category));
-      const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-      
-      let lowestDays = null;
-      let targetTemplate = null; 
-      
-      freqs.forEach(freq => {
-          const explicitLastDone = asset.pmDates?.[freq];
-          if (isToday(explicitLastDone)) return;
+      const criticalAssetStatuses = ["Out of Calibration", "Corrective Maintenance", "Maintenance Due"];
+      if (!criticalAssetStatuses.includes(asset.status)) return;
 
-          let daysLeft = null;
-          if (explicitLastDone) {
-              daysLeft = calculateDaysRemaining(explicitLastDone, freq);
-          } else if (asset.lastPmDate) {
-              daysLeft = calculateDaysRemaining(asset.lastPmDate, freq);
-          }
-          
-          if (daysLeft !== null && (lowestDays === null || daysLeft < lowestDays)) {
-              lowestDays = daysLeft;
-              targetTemplate = assetTemplates.find(t => t.interval === freq); 
-          }
-      });
+      const queueItem = {
+        queueId: `ast-${asset.id}`,
+        name: asset.name,
+        serial: asset.serial || "N/A",
+        department: asset.department || "Unassigned",
+        badgeColor: "bg-red-100 text-red-800",
+        displayStatus: asset.status,
+        displayDate: "Immediate Action Required",
+        assignedTo: asset.operatorEmail || "Unassigned",
+        rawItem: asset,
+        type: 'asset',
+        isCritical: true,
+        taskCategory: 'Critical',
+        targetTemplate: null
+      };
 
-      let taskCategory = null; 
-      let dueMessage = "";
-      let finalDisplayStatus = "";
-      let isCritical = false;
+      adminGlobalQueue.push(queueItem);
 
-      if (isManualOffline) {
-          taskCategory = 'Critical';
-          dueMessage = "Immediate Action Required";
-          finalDisplayStatus = asset.status;
-          isCritical = true;
-      } else if (lowestDays !== null) {
-          if (lowestDays < 0) {
-              taskCategory = 'Critical';
-              dueMessage = `Overdue by ${Math.abs(lowestDays)} days`;
-              finalDisplayStatus = "Overdue";
-              isCritical = true;
-          } else if (lowestDays <= 5) {
-              taskCategory = 'Upcoming';
-              dueMessage = lowestDays === 0 ? "Due Today" : `Due in ${lowestDays} days`;
-              finalDisplayStatus = "Upcoming PM";
-          } else if (lowestDays <= 30) {
-              taskCategory = 'Pending';
-              dueMessage = `Due in ${lowestDays} days`;
-              finalDisplayStatus = "Pending PM";
-          }
-      } else if (asset.status === "Maintenance Due") {
-          const belongsToRoute = pmTemplates.some(t => t.executionMode === 'route' && isCategoryMatch(t.targetCategory, asset.category));
-          if (!belongsToRoute) {
-              taskCategory = 'Critical';
-              dueMessage = "Manual Maintenance Required";
-              finalDisplayStatus = "Maintenance Due";
-              isCritical = true;
-          }
+      const isAssignedToMe = asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
+      const itemDeptArray = Array.isArray(asset.department) ? asset.department : [asset.department || "Unassigned"];
+      const isUnassignedInMyDept = (!asset.operatorEmail || asset.operatorEmail === "Unassigned") && itemDeptArray.includes(currentUser.department);
+
+      if (isAssignedToMe || (!isManager && !isSystemAdmin && isUnassignedInMyDept)) {
+          userAssignedTasks.push(queueItem);
       }
-
-      if (taskCategory) {
-        const queueItem = {
-          queueId: `ast-${asset.id}`,
-          name: asset.name,
-          serial: asset.serial || "N/A",
-          department: asset.department || "Unassigned",
-          badgeColor: isCritical ? "bg-red-100 text-red-800" : (taskCategory === 'Upcoming' ? "bg-yellow-100 text-yellow-800" : "bg-gray-100 text-gray-600"),
-          displayStatus: finalDisplayStatus,
-          displayDate: dueMessage,
-          assignedTo: asset.operatorEmail || "Unassigned",
-          rawItem: asset,
-          type: 'asset',
-          isCritical: isCritical,
-          taskCategory: taskCategory,
-          targetTemplate: targetTemplate 
-        };
-
-        adminGlobalQueue.push(queueItem);
-        
-        const isAssignedToMe = asset.operatorEmail && asset.operatorEmail.toLowerCase().includes(currentUser.email.toLowerCase());
-        const itemDeptArray = Array.isArray(asset.department) ? asset.department : [asset.department || "Unassigned"];
-        const isUnassignedInMyDept = (!asset.operatorEmail || asset.operatorEmail === "Unassigned") && itemDeptArray.includes(currentUser.department);
-        
-        if (isAssignedToMe || (!isManager && !isSystemAdmin && isUnassignedInMyDept)) { 
-            userAssignedTasks.push(queueItem); 
-        }
-        if (isManager && itemDeptArray.includes(currentUser.department)) { 
-            managerDepartmentQueue.push(queueItem); 
-        }
+      if (isManager && itemDeptArray.includes(currentUser.department)) {
+          managerDepartmentQueue.push(queueItem);
       }
     });
   }

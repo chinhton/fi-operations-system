@@ -1,13 +1,5 @@
 import React, { useState, useRef } from 'react';
 
-const CORPORATE_DEPARTMENTS = [
-  "System Administration",
-  "Facilities", 
-  "Production: Sensor Assembly", 
-  "Production: Final Assembly and Test", 
-  "Production: Engineering"
-];
-
 const parseCSV = (str) => {
   const arr = [];
   let quote = false;
@@ -43,17 +35,9 @@ const decodeSteps = (stepString) => {
   });
 };
 
-const isCategoryMatch = (templateCat, assetCat) => {
-  if (!templateCat) return false;
-  if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
-  if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
-  return templateCat === assetCat;
-};
-
 export default function TemplatesTab({
   pmTemplates = [], manuals = [], assets = [],
-  PM_CYCLE_OPTIONS, isSystemAdmin, uniqueCategories = [],
-  currentUser
+  isSystemAdmin
 }) {
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,14 +52,10 @@ export default function TemplatesTab({
     name: "",
     docControlNumber: "",
     ecnNumber: "",
-    interval: "Daily",
-    executionMode: "asset", 
+    executionMode: "asset",
     sopType: "Preventive Maintenance",
-    department: [],
-    targetCategory: [],
     managerEmail: "",
     operatorEmail: "",
-    contractor: "",
     checklistSteps: [],
     attachedManualName: "",
     attachedManualData: null
@@ -83,12 +63,8 @@ export default function TemplatesTab({
 
   const fileInputRef = useRef(null);
 
-  const userDept = currentUser?.department || "Unassigned";
-  const isManager = currentUser?.role?.toLowerCase() === 'manager';
-  const isDepartmentRestricted = !isSystemAdmin && !isManager;
-
   const handleExportCSV = () => {
-    const headers = ["id", "name", "docControlNumber", "ecnNumber", "interval", "executionMode", "sopType", "department", "targetCategory", "managerEmail", "operatorEmail", "contractor", "attachedManualName", "checklistSteps"];
+    const headers = ["id", "name", "docControlNumber", "ecnNumber", "executionMode", "sopType", "managerEmail", "operatorEmail", "attachedManualName", "checklistSteps"];
     const csvRows = [headers.join(",")];
 
     pmTemplates.forEach(template => {
@@ -96,14 +72,12 @@ export default function TemplatesTab({
         let val = "";
         if (header === "checklistSteps") {
           val = encodeSteps(template[header]);
-        } else if (header === "targetCategory" || header === "department") {
-          val = Array.isArray(template[header]) ? template[header].join(';') : (template[header] || "Global");
         } else {
           val = template[header] || "";
         }
-        
-        val = val.toString().replace(/"/g, '""'); 
-        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`; 
+
+        val = val.toString().replace(/"/g, '""');
+        if (val.search(/("|,|\n)/g) >= 0) val = `"${val}"`;
         return val;
       });
       csvRows.push(row.join(","));
@@ -148,27 +122,17 @@ export default function TemplatesTab({
           });
 
           const name = rowObj['name'] || rowObj['Title'] || rowObj['SOP Name'] || '';
-          if (!name) continue; 
-          
-          const rawTarget = rowObj['targetCategory'] || "Global";
-          const parsedTarget = rawTarget.includes(';') ? rawTarget.split(';').map(s => s.trim()) : rawTarget;
-
-          const rawDept = rowObj['department'] || "Global";
-          const parsedDept = rawDept.includes(';') ? rawDept.split(';').map(s => s.trim()) : rawDept;
+          if (!name) continue;
 
           const finalTemplate = {
             id: rowObj['id'] || `sop-import-${Date.now()}-${i}`,
             name: name,
             docControlNumber: rowObj['docControlNumber'] || rowObj['Doc Control Number'] || "",
             ecnNumber: rowObj['ecnNumber'] || rowObj['ECN Number'] || "",
-            interval: rowObj['interval'] || "Monthly",
             executionMode: rowObj['executionMode'] || "asset",
             sopType: rowObj['sopType'] || rowObj['Type'] || "Preventive Maintenance",
-            department: parsedDept,
-            targetCategory: parsedTarget,
             managerEmail: rowObj['managerEmail'] || "",
             operatorEmail: rowObj['operatorEmail'] || "",
-            contractor: rowObj['contractor'] || "",
             attachedManualName: rowObj['attachedManualName'] || "",
             checklistSteps: decodeSteps(rowObj['checklistSteps'] || "")
           };
@@ -239,20 +203,15 @@ export default function TemplatesTab({
   };
 
   const openBuildModal = () => {
-    const defaultDept = userDept && userDept !== "Unassigned" ? [userDept] : [];
     setNewTemplate({
       id: '',
       name: "",
       docControlNumber: "",
       ecnNumber: "",
-      interval: "Daily",
       executionMode: "asset",
       sopType: "Preventive Maintenance",
-      department: defaultDept,
-      targetCategory: [],
       managerEmail: "",
       operatorEmail: "",
-      contractor: "",
       checklistSteps: [],
       attachedManualName: "",
       attachedManualData: null
@@ -261,12 +220,11 @@ export default function TemplatesTab({
   };
 
   const openEditModal = (template) => {
-    setNewTemplate({ 
-      ...template, 
+    setNewTemplate({
+      ...template,
       docControlNumber: template.docControlNumber || "",
       ecnNumber: template.ecnNumber || "",
-      executionMode: template.executionMode || 'asset', 
-      contractor: template.contractor || "",
+      executionMode: template.executionMode || 'asset',
       sopType: template.sopType || "Preventive Maintenance"
     });
     setShowTemplateModal(true);
@@ -326,39 +284,12 @@ export default function TemplatesTab({
     } catch (err) { console.error("Failed to delete SOP:", err); }
   };
 
-  const filteredTemplates = pmTemplates.filter(t => {
-    const matchesSearch = t.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (Array.isArray(t.department) ? t.department.join(' ').toLowerCase().includes(searchQuery.toLowerCase()) : t.department?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          t.docControlNumber?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (Array.isArray(t.targetCategory)) {
-      return matchesSearch || t.targetCategory.some(cat => cat.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    return matchesSearch || t.targetCategory?.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredTemplates = pmTemplates.filter(t =>
+    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.docControlNumber?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const isDeptMatch = (assetDept, selectedDepts) => {
-    if (!selectedDepts || selectedDepts === "Global" || selectedDepts.length === 0) return true;
-    const aDepts = Array.isArray(assetDept) ? assetDept : [assetDept || "Unassigned"];
-    const sDepts = Array.isArray(selectedDepts) ? selectedDepts : [selectedDepts];
-    return aDepts.some(d => sDepts.includes(d));
-  };
-
-  const dynamicCategories = [...new Set(
-    assets
-      .filter(a => isDeptMatch(a.department, newTemplate?.department))
-      .map(a => a.category)
-      .filter(Boolean)
-  )];
-
-  let availableTags = [];
-  if (showTemplateModal) {
-    if (!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) {
-        availableTags = dynamicCategories || []; 
-    } else {
-        availableTags = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
-    }
-  }
+  const availableTags = [...new Set(assets.map(a => a.category).filter(Boolean))];
 
   const handleDragStart = (e, index) => {
     setDraggedIndex(index);
@@ -442,14 +373,11 @@ export default function TemplatesTab({
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 bg-gray-50/50">
             {filteredTemplates.map(template => (
               <div key={template.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col justify-between group relative overflow-hidden">
-                <div className={`absolute top-0 left-0 w-full h-1.5 ${template.targetCategory === 'Global' ? 'bg-[#00A1E4]' : 'bg-purple-500'}`}></div>
-                
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-[#00A1E4]"></div>
+
                 <div>
                   <div className="flex justify-between items-start mb-3">
                     <h4 className="font-black text-gray-800 text-sm leading-tight pr-4">{template.name}</h4>
-                    <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 border border-gray-200 shadow-sm">
-                      {template.interval}
-                    </span>
                   </div>
 
                   {(template.docControlNumber || template.ecnNumber) && (
@@ -480,26 +408,6 @@ export default function TemplatesTab({
                   </div>
 
                   <div className="space-y-1.5 mb-5">
-                    <div className="flex items-start text-[10px]">
-                    <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Map:</span>
-                    <span className={`font-bold uppercase tracking-wider ${(!template.targetCategory || template.targetCategory === 'Global' || template.targetCategory.length === 0) ? 'text-[#00A1E4]' : 'text-purple-600'} block`}>
-                    {Array.isArray(template.targetCategory) && template.targetCategory.length > 2 
-                     ? `${template.targetCategory.length} Facility Assets` 
-                     : (Array.isArray(template.targetCategory) ? template.targetCategory.join(', ') : (template.targetCategory || "Global"))}
-                     </span>
-                  </div>
-                    <div className="flex items-start text-[10px]">
-                      <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0 mt-0.5">Dept:</span>
-                      <span className="text-gray-700 font-bold block leading-tight">
-                        {Array.isArray(template.department) ? template.department.join(', ') : (template.department || 'Global')}
-                      </span>
-                    </div>
-                    {template.contractor && (
-                      <div className="flex items-center text-[10px]">
-                        <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0">Vendor:</span>
-                        <span className="text-amber-600 font-bold">{template.contractor}</span>
-                      </div>
-                    )}
                     <div className="flex items-center text-[10px]">
                       <span className="font-bold text-gray-500 uppercase tracking-wider w-16 shrink-0">Actions:</span>
                       <span className="text-gray-700 font-mono font-bold">{template.checklistSteps?.length || 0} Steps Configured</span>
@@ -562,13 +470,6 @@ export default function TemplatesTab({
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Interval Frequency</label>
-                  <select value={newTemplate.interval} onChange={(e) => setNewTemplate({...newTemplate, interval: e.target.value})} className="w-full text-xs rounded border-gray-300 shadow-sm p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none">
-                    {PM_CYCLE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt} Cycle</option>)}
-                  </select>
-                </div>
-
-                <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">SOP Type</label>
                   <select 
                     value={newTemplate.sopType || "Preventive Maintenance"} 
@@ -581,143 +482,6 @@ export default function TemplatesTab({
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Assign Department (Multi-Select)</label>
-                  <div className="flex flex-col space-y-2">
-                    <select 
-                      value="" 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val) return;
-                        
-                        let current = newTemplate.department;
-                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
-                        
-                        if (val === "Global") {
-                          setNewTemplate({...newTemplate, department: "Global", targetCategory: "Global"}); 
-                        } else {
-                          if (!selectedArray.includes(val)) {
-                            setNewTemplate({...newTemplate, department: [...selectedArray, val], targetCategory: "Global"});
-                          }
-                        }
-                      }} 
-                      disabled={isDepartmentRestricted}
-                      className={`w-full text-xs rounded border-gray-300 shadow-sm p-2.5 border transition-colors outline-none ${
-                        isDepartmentRestricted ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596]'
-                      }`}
-                    >
-                      <option value="">-- Add Department Target --</option>
-                      {(!Array.isArray(newTemplate.department) || newTemplate.department.length === 0) && !isDepartmentRestricted && <option value="Global">Global (All Departments)</option>}
-                      
-                      {isDepartmentRestricted ? (
-                        !(Array.isArray(newTemplate.department) ? newTemplate.department : []).includes(userDept) && <option value={userDept}>{userDept}</option>
-                      ) : (
-                        CORPORATE_DEPARTMENTS.filter(dept => {
-                            let current = newTemplate.department;
-                            let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
-                            return !selectedArray.includes(dept);
-                        }).map(dept => (
-                          <option key={`dept-${dept}`} value={dept}>{dept}</option>
-                        ))
-                      )}
-                    </select>
-                    
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {(!newTemplate.department || newTemplate.department === "Global" || (Array.isArray(newTemplate.department) && newTemplate.department.length === 0)) ? (
-                         <span className="bg-[#005596] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            Global (All Departments)
-                         </span>
-                      ) : (Array.isArray(newTemplate.department) ? newTemplate.department : [newTemplate.department]).map(dept => (
-                         <span key={dept} className="bg-blue-100 text-[#005596] border border-blue-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            {dept}
-                            {!isDepartmentRestricted && (
-                                <button 
-                                  type="button" 
-                                  onClick={() => {
-                                    const arr = Array.isArray(newTemplate.department) ? newTemplate.department : [newTemplate.department];
-                                    const filtered = arr.filter(c => c !== dept);
-                                    setNewTemplate({...newTemplate, department: filtered.length > 0 ? filtered : "Global", targetCategory: "Global"});
-                                  }} 
-                                  className="ml-1.5 text-blue-500 hover:text-[#005596] font-bold text-sm leading-none"
-                                >
-                                  &times;
-                                </button>
-                            )}
-                         </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Target Asset Mapping (Multi-Select)</label>
-                  <div className="flex flex-col space-y-2">
-                    <select 
-                      value="" 
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (!val) return;
-                        
-                        let current = newTemplate.targetCategory;
-                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
-                        
-                        if (val === "Global") {
-                          setNewTemplate({...newTemplate, targetCategory: "Global"});
-                        } else {
-                          if (!selectedArray.includes(val)) {
-                            setNewTemplate({...newTemplate, targetCategory: [...selectedArray, val]});
-                          }
-                        }
-                      }} 
-                      className="w-full text-xs rounded border-gray-300 p-2.5 bg-white border cursor-pointer focus:border-[#005596] focus:ring-1 focus:ring-[#005596] outline-none"
-                    >
-                      <option value="">-- Add Category Target --</option>
-                      {(!Array.isArray(newTemplate.targetCategory) || newTemplate.targetCategory.length === 0) && <option value="Global">Global (All Assets)</option>}
-                      
-                      {(dynamicCategories || []).filter(cat => {
-                        let current = newTemplate.targetCategory;
-                        let selectedArray = Array.isArray(current) ? current : (current && current !== "Global" ? [current] : []);
-                        return !selectedArray.includes(cat);
-                      }).map(cat => <option key={cat} value={cat}>Strict Map: {cat}</option>)}
-                      
-                    </select>
-                    
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {(!newTemplate.targetCategory || newTemplate.targetCategory === "Global" || (Array.isArray(newTemplate.targetCategory) && newTemplate.targetCategory.length === 0)) ? (
-                         <span className="bg-[#00A1E4] text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            Global (All Assets)
-                         </span>
-                      ) : (Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory]).map(cat => (
-                         <span key={cat} className="bg-purple-100 text-purple-800 border border-purple-200 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider flex items-center shadow-sm">
-                            {cat}
-                            <button 
-                              type="button" 
-                              onClick={() => {
-                                const arr = Array.isArray(newTemplate.targetCategory) ? newTemplate.targetCategory : [newTemplate.targetCategory];
-                                const filtered = arr.filter(c => c !== cat);
-                                setNewTemplate({...newTemplate, targetCategory: filtered.length > 0 ? filtered : "Global"});
-                              }} 
-                              className="ml-1.5 text-purple-500 hover:text-purple-900 font-bold text-sm leading-none"
-                            >
-                              &times;
-                            </button>
-                         </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">Assign Contractor / Vendor (Optional)</label>
-                  <input 
-                    type="text" 
-                    value={newTemplate.contractor || ""} 
-                    onChange={(e) => setNewTemplate({...newTemplate, contractor: e.target.value})} 
-                    placeholder="e.g. ACME HVAC Services..." 
-                    className="w-full text-xs rounded border-amber-200 shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 p-2.5 border bg-amber-50/30 outline-none"
-                  />
-                </div>
-                
                 <div className="md:col-span-2 mt-2">
                   <div className="flex justify-between items-center mb-3">
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">Dynamic Protocol Actions</label>

@@ -62,18 +62,11 @@ const toTitleCase = (str) => {
   return str.toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 };
 
-const checkCategoryMatch = (templateCat, assetCat) => {
-  if (!templateCat) return false;
-  if (templateCat === "Global" || (Array.isArray(templateCat) && templateCat.includes("Global"))) return true;
-  if (Array.isArray(templateCat)) return templateCat.includes(assetCat);
-  return templateCat === assetCat;
-};
-
 export default function AssetsTab({
-  assets = [], setAssets, users = [], pmTemplates = [],
+  assets = [], setAssets, users = [],
   handleAddAssetSubmit, isAddingAsset, newAsset, setNewAsset, PM_CYCLE_OPTIONS,
-  isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus, 
-  calculateDaysRemaining, calculateNextPmDate, openPmModal, deleteAsset,
+  isSystemAdmin, deleteAssetCategory, handleUpdateAssetStatus,
+  openPmModal, deleteAsset,
   uniqueCategories, currentUser, setCurrentUser
 }) {
   
@@ -119,8 +112,6 @@ export default function AssetsTab({
       } catch (err) { console.error("Failed to save user preference:", err); }
     }
   };
-
-  const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
   const filteredAssets = assets.filter(a =>
     a.name?.toLowerCase().includes(assetSearch.toLowerCase()) ||
@@ -574,15 +565,12 @@ export default function AssetsTab({
                   <tr>
                     <th className="px-6 py-3.5">Asset Name</th>
                     <th className="px-6 py-3.5">Model / Serial No</th>
-                    <th className="px-6 py-3.5">Status & PM Cycle Tracker</th>
+                    <th className="px-6 py-3.5">Status</th>
                     <th className="px-6 py-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {(groupedAssets[activeCategoryModal] || []).map((asset) => {
-                    const assetTemplates = (pmTemplates || []).filter(t => checkCategoryMatch(t.targetCategory, asset.category));
-                    const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-                    
                     const checkStatus = (asset.status || "").toUpperCase();
 
                     return (
@@ -627,42 +615,6 @@ export default function AssetsTab({
                             <option value="Out of Calibration">Out of Calibration</option>
                             <option value="Corrective Maintenance">Corrective Maintenance</option>
                           </select>
-                          
-                          <div className="flex flex-col mt-3 space-y-2 border-t border-gray-100 pt-2">
-                            {freqs.length === 0 ? (
-                              <div>
-                                <span className="text-[9px] text-gray-400 uppercase font-bold block mb-1.5">No Active Cycles</span>
-                              </div>
-                            ) : (
-                              freqs.map(freq => {
-                                const targetDate = asset.pmDates?.[freq] || asset.lastPmDate;
-                                const daysRemaining = calculateDaysRemaining(targetDate, freq);
-                                const isCompletedToday = targetDate === todayStr;
-                                
-                                return (
-                                  <div key={freq} className="flex flex-col text-[10px]">
-                                    <div className="flex justify-between items-center mb-0.5 group">
-                                      <div className="flex items-center space-x-1.5">
-                                        <span className="text-[#005596] font-bold uppercase tracking-wider">{freq}</span>
-                                      </div>
-                                      {isCompletedToday ? (
-                                          <span className="font-bold px-1.5 py-0.5 rounded-sm w-max bg-green-100 text-green-700">
-                                              ✅ Completed Today
-                                          </span>
-                                      ) : daysRemaining !== null ? (
-                                        <span className={`font-bold px-1.5 py-0.5 rounded-sm w-max ${daysRemaining < 0 ? 'bg-red-50 text-red-600' : daysRemaining <= 7 ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                          ⏳ {daysRemaining < 0 ? `Overdue (${Math.abs(daysRemaining)}d)` : `Due in ${daysRemaining}d`}
-                                        </span>
-                                      ) : (
-                                        <span className="font-bold px-1.5 py-0.5 rounded-sm bg-gray-100 text-gray-600">⏳ Needs Baseline</span>
-                                      )}
-                                    </div>
-                                    {targetDate && <span className="text-gray-500 font-mono text-[9px]">Next: {calculateNextPmDate(targetDate, freq)}</span>}
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
                         </td>
                         <td className="px-6 py-4 text-right space-x-3">
                           <button onClick={() => openRegisterForEdit(asset)} className="text-xs font-bold text-gray-600 hover:text-gray-900 transition">Edit</button>

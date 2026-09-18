@@ -27,7 +27,7 @@ export default function useWorkOrders(workOrders, setWorkOrders, currentUser, us
   const [newWo, setNewWo] = useState({
     title: "", description: "", assetId: "", assignedTo: "", priority: "",
     department: "", frequency: "", dueDate: "", remindersEnabled: true,
-    templateId: "", manualId: "", contractorReportId: ""
+    templateId: "", manualId: "", contractorReportId: "", contractorVendor: ""
   });
 
   const handleAddWorkOrder = async (e) => {
@@ -58,7 +58,7 @@ export default function useWorkOrders(workOrders, setWorkOrders, currentUser, us
         setNewWo({
           title: "", description: "", assetId: "", assignedTo: "", priority: "",
           department: "", frequency: "", dueDate: "", remindersEnabled: true,
-          templateId: "", manualId: "", contractorReportId: ""
+          templateId: "", manualId: "", contractorReportId: "", contractorVendor: ""
         });
         triggerModal("Work Order Dispatched", `Task successfully assigned and queued for operator action.`, "success");
 

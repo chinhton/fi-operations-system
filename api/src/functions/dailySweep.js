@@ -14,37 +14,12 @@ const runDailySweep = async () => {
             
             const { resources: workOrders } = await database.container("workorders").items.query("SELECT * FROM c WHERE c.status != 'Completed'").fetchAll();
             const { resources: assets } = await database.container("assets").items.readAll().fetchAll();
-            const { resources: templates } = await database.container("templates").items.readAll().fetchAll();
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const todayStr = today.toLocaleDateString('en-US');
 
             // --- THE FIX: Group by Operator Email ---
-            const userDigests = {}; 
-
-            const calculateNextPmDate = (lastDateStr, freq) => {
-                if (!lastDateStr || !freq) return null;
-                const lastDate = new Date(lastDateStr);
-                let nextDate = new Date(lastDate);
-
-                switch (freq) {
-                    case "Daily": nextDate.setDate(lastDate.getDate() + 1); break;
-                    case "Weekly": nextDate.setDate(lastDate.getDate() + 7); break;
-                    case "Monthly": nextDate.setMonth(lastDate.getMonth() + 1); break;
-                    case "Quarterly": nextDate.setMonth(lastDate.getMonth() + 3); break;
-                    case "Semi-Annually":
-                    case "Calibration (Semi-Annual)": nextDate.setMonth(lastDate.getMonth() + 6); break;
-                    case "Annually":
-                    case "Calibration (Annual)": nextDate.setFullYear(lastDate.getFullYear() + 1); break;
-                    case "2-Year": nextDate.setFullYear(lastDate.getFullYear() + 2); break;
-                    case "3-Year": nextDate.setFullYear(lastDate.getFullYear() + 3); break;
-                    case "4-Year": nextDate.setFullYear(lastDate.getFullYear() + 4); break;
-                    case "5-Year": nextDate.setFullYear(lastDate.getFullYear() + 5); break;
-                    default: return null;
-                }
-                return nextDate;
-            };
+            const userDigests = {};
 
             const categorizeItem = (itemName, itemId, targetDate, isCriticalStatus, assignedToEmail) => {
                 let diffDays;
@@ -80,26 +55,12 @@ const runDailySweep = async () => {
                 }
             }
 
+            // SOPs no longer carry a schedule/category, so asset-side reminders are driven purely
+            // by directly-flagged critical status; scheduled reminders come from work-order due dates above.
             for (const asset of assets) {
                 const isCriticalStatus = ["Maintenance Due", "Out of Calibration", "Corrective Action", "Overdue"].includes(asset.status);
-                const assetTemplates = templates.filter(t => t.targetCategory === "Global" || t.targetCategory === asset.category);
-                const freqs = [...new Set(assetTemplates.map(t => t.interval))];
-
-                let nextActionDate = null;
-                freqs.forEach(freq => {
-                    const explicitLastDone = asset.pmDates?.[freq];
-                    if (explicitLastDone === todayStr) return; 
-
-                    const baselineDate = explicitLastDone || asset.lastPmDate || todayStr;
-                    const calculatedNextDate = calculateNextPmDate(baselineDate, freq);
-                    
-                    if (calculatedNextDate && (nextActionDate === null || calculatedNextDate < nextActionDate)) {
-                        nextActionDate = calculatedNextDate;
-                    }
-                });
-
-                if (isCriticalStatus || nextActionDate !== null) {
-                    categorizeItem(asset.name, asset.serial || asset.id, nextActionDate || new Date(), isCriticalStatus, asset.operatorEmail);
+                if (isCriticalStatus) {
+                    categorizeItem(asset.name, asset.serial || asset.id, new Date(), true, asset.operatorEmail);
                 }
             }
 

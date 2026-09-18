@@ -33,7 +33,7 @@ export default function TopHeader({
             </div>
             <span className="hidden sm:block h-10 w-px bg-gray-200"></span>
             <div className="min-w-0">
-              <h1 className="text-sm sm:text-xl lg:text-2xl font-bold tracking-tight text-[#005596] m-0 font-sans truncate">
+              <h1 className="text-sm sm:text-2xl lg:text-3xl xl:text-4xl font-bold tracking-tight text-[#005596] m-0 font-sans truncate">
                 <span className="hidden sm:inline">FI-Maintenance Management System</span>
                 <span className="sm:hidden">FI-MMS</span>
               </h1>

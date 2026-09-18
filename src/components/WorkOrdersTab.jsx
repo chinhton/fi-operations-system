@@ -166,6 +166,16 @@ export default function WorkOrdersTab({
                 {manuals.filter(m => m.docType === 'contractor').map(m => <option key={m.id} value={m.id}>{m.fileName}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-xs font-bold text-amber-600 uppercase tracking-wider mb-2">Assign Contractor / Vendor (Optional)</label>
+              <input
+                type="text"
+                value={newWo.contractorVendor || ""}
+                onChange={(e) => setNewWo({...newWo, contractorVendor: e.target.value})}
+                placeholder="e.g. ACME HVAC Services..."
+                className="w-full text-xs rounded border-amber-200 shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 p-2.5 border bg-amber-50/30 outline-none"
+              />
+            </div>
 
             <div className="md:col-span-2">
               <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Job Description & Notes</label>
@@ -236,6 +246,7 @@ export default function WorkOrdersTab({
                       <span className="text-[9px] text-gray-400 font-mono mt-0.5 block">
                         {wo.id} • Created: {new Date(wo.timestamp).toLocaleDateString()} by <span className="font-bold text-[#005596]">{wo.createdBy || 'System'}</span>
                         {wo.dueDate && <> • Due: <span className="font-bold text-gray-600">{new Date(wo.dueDate).toLocaleDateString()}</span></>}
+                        {wo.contractorVendor && <> • Vendor: <span className="font-bold text-amber-600">{wo.contractorVendor}</span></>}
                       </span>
                       {(wo.manualId || wo.contractorReportId) && (
                         <span className="flex items-center gap-3 mt-1">

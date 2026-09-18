@@ -49,13 +49,8 @@ export default function PmExecutionModal({
     handlePmSubmit(e);
   };
 
-  // Support for the new Array structure in Target Categories from the hybrid update
-  const availableTemplates = pmTemplates.filter(t => {
-      if (t.executionMode === 'route') return false; // Hides master routes from individual asset execution
-      if (!t.targetCategory || t.targetCategory === "Global") return true;
-      if (Array.isArray(t.targetCategory)) return t.targetCategory.includes(selectedPmAsset.category);
-      return t.targetCategory === selectedPmAsset.category;
-  });
+  // SOPs no longer carry a target category — list every non-route protocol
+  const availableTemplates = pmTemplates.filter(t => t.executionMode !== 'route');
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4 backdrop-blur-sm animate-entrance">
@@ -95,7 +90,7 @@ export default function PmExecutionModal({
                   >
                     <option value="">-- Choose Assigned SOP Template --</option>
                     {availableTemplates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name} ({t.interval})</option>
+                      <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                 </div>
